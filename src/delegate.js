@@ -28,23 +28,33 @@ IMPORTANT INSTRUCTIONS:
 6. Write all comments in Indonesian language
 7. Be specific and constructive
 
-After reviewing, respond with:
+After reviewing, you MUST respond with this EXACT format:
 DECISION: [APPROVE or REQUEST_CHANGES]
-MESSAGE: [Your summary message in Indonesian for the PR review]
+MESSAGE: [Your summary message in Indonesian explaining what you found]
 
-Example:
+Example 1 (if issues found):
+DECISION: REQUEST_CHANGES
+MESSAGE: Ditemukan beberapa masalah: 1) Potensi SQL injection di query user, 2) Missing error handling di fungsi payment, 3) Variabel tidak digunakan di line 45.
+
+Example 2 (if no issues):
 DECISION: APPROVE
-MESSAGE: Kode sudah baik, tidak ada masalah yang ditemukan.
+MESSAGE: Kode sudah baik, tidak ada masalah yang ditemukan. Semua best practices sudah diikuti.
 
 Your response:`;
 
     logger.info(`Adding review comments for PR #${pr.number}`);
     process.chdir(repoDir);
-    const result = await execa('gemini', ['-p', prompt], { stdio: 'pipe' });
+    const result = await execa('gemini', ['-p', prompt], { stdio: 'inherit' });
     
-    const output = result.stdout.trim();
+    const output = result.stdout?.trim() || '';
+    logger.info(`Gemini response:\n${output}`);
+    
     const decisionMatch = output.match(/DECISION:\s*(APPROVE|REQUEST_CHANGES)/i);
-    const messageMatch = output.match(/MESSAGE:\s*(.+)/i);
+    const messageMatch = output.match(/MESSAGE:\s*(.+)/is);
+    
+    if (!decisionMatch || !messageMatch) {
+      logger.warn('Gemini response does not match expected format. Using fallback.');
+    }
     
     const decision = decisionMatch ? decisionMatch[1].toUpperCase() : 'REQUEST_CHANGES';
     const message = messageMatch ? messageMatch[1].trim() : 'Review telah dilakukan. Silakan periksa komentar yang diberikan untuk detail lebih lanjut.';

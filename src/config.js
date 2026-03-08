@@ -11,5 +11,8 @@ export const config = {
   dryRun: process.argv.includes('--dry-run'),
   excludeRepoOwners: process.env.EXCLUDE_REPO_OWNERS 
     ? process.env.EXCLUDE_REPO_OWNERS.split(',').map(o => o.trim())
-    : []
+    : [],
+  prScope: process.env.PR_SCOPE 
+    ? process.env.PR_SCOPE.split(',').map(s => s.trim())
+    : ['authored', 'assigned', 'review-requested']
 };

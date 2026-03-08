@@ -31,6 +31,7 @@ REVIEW_INTERVAL=600     # Seconds between checks (continuous mode)
 LOG_LEVEL=info          # info, warn, or error
 WORKSPACE_DIR=./workspace  # Directory for cloning repositories
 EXCLUDE_REPO_OWNERS=    # Comma-separated list of repo owners to exclude (e.g., owner1,owner2)
+PR_SCOPE=authored,assigned,review-requested  # Comma-separated: authored, assigned, review-requested
 ```
 
 ## Review Guidelines
@@ -38,6 +39,16 @@ EXCLUDE_REPO_OWNERS=    # Comma-separated list of repo owners to exclude (e.g., 
 Edit `agents.md` to customize review instructions for the AI agent.
 
 ## Usage
+
+### Review Specific PR
+
+Review a specific PR by number:
+
+```bash
+yarn review 112
+```
+
+This will review only PR #112 instead of all open PRs.
 
 ### Run Once
 

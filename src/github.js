@@ -6,23 +6,33 @@ import { config } from './config.js';
 
 export async function fetchOpenPRs() {
   try {
-    logger.info('Fetching PRs authored by @me...');
-    const { stdout: authoredPRs } = await execa('gh', ['search', 'prs', '--state=open', '--author=@me', '--json', 'number,title,repository,url,updatedAt']);
-    const authored = JSON.parse(authoredPRs);
-    logger.info(`Found ${authored.length} authored PRs`);
+    const allPRs = [];
     
-    logger.info('Fetching PRs assigned to @me...');
-    const { stdout: assignedPRs } = await execa('gh', ['search', 'prs', '--state=open', '--assignee=@me', '--json', 'number,title,repository,url,updatedAt']);
-    const assigned = JSON.parse(assignedPRs);
-    logger.info(`Found ${assigned.length} assigned PRs`);
+    if (config.prScope.includes('authored')) {
+      logger.info('Fetching PRs authored by @me...');
+      const { stdout: authoredPRs } = await execa('gh', ['search', 'prs', '--state=open', '--author=@me', '--json', 'number,title,repository,url,updatedAt']);
+      const authored = JSON.parse(authoredPRs);
+      logger.info(`Found ${authored.length} authored PRs`);
+      allPRs.push(...authored);
+    }
     
-    logger.info('Fetching PRs with review requested from @me...');
-    const { stdout: reviewPRs } = await execa('gh', ['search', 'prs', '--state=open', '--review-requested=@me', '--json', 'number,title,repository,url,updatedAt']);
-    const review = JSON.parse(reviewPRs);
-    logger.info(`Found ${review.length} review-requested PRs`);
+    if (config.prScope.includes('assigned')) {
+      logger.info('Fetching PRs assigned to @me...');
+      const { stdout: assignedPRs } = await execa('gh', ['search', 'prs', '--state=open', '--assignee=@me', '--json', 'number,title,repository,url,updatedAt']);
+      const assigned = JSON.parse(assignedPRs);
+      logger.info(`Found ${assigned.length} assigned PRs`);
+      allPRs.push(...assigned);
+    }
+    
+    if (config.prScope.includes('review-requested')) {
+      logger.info('Fetching PRs with review requested from @me...');
+      const { stdout: reviewPRs } = await execa('gh', ['search', 'prs', '--state=open', '--review-requested=@me', '--json', 'number,title,repository,url,updatedAt']);
+      const review = JSON.parse(reviewPRs);
+      logger.info(`Found ${review.length} review-requested PRs`);
+      allPRs.push(...review);
+    }
     
     // Merge and deduplicate by PR URL
-    const allPRs = [...authored, ...assigned, ...review];
     const uniquePRs = Array.from(new Map(allPRs.map(pr => [pr.url, pr])).values());
     logger.info(`Total unique PRs: ${uniquePRs.length}`);
     
