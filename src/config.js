@@ -14,5 +14,6 @@ export const config = {
     : [],
   prScope: process.env.PR_SCOPE 
     ? process.env.PR_SCOPE.split(',').map(s => s.trim())
-    : ['authored', 'assigned', 'review-requested']
+    : ['authored', 'assigned', 'review-requested'],
+  geminiYolo: process.env.GEMINI_YOLO === 'true'
 };

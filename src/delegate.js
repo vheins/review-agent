@@ -28,7 +28,7 @@ IMPORTANT INSTRUCTIONS:
 6. Write all comments in Indonesian language
 7. Be specific and constructive
 
-After reviewing, you MUST respond with this EXACT format:
+After reviewing, you MUST respond with this EXACT format at the END of your response:
 DECISION: [APPROVE or REQUEST_CHANGES]
 MESSAGE: [Your summary message in Indonesian explaining what you found]
 
@@ -43,11 +43,27 @@ MESSAGE: Kode sudah baik, tidak ada masalah yang ditemukan. Semua best practices
 Your response:`;
 
     logger.info(`Adding review comments for PR #${pr.number}`);
-    process.chdir(repoDir);
-    const result = await execa('gemini', ['-p', prompt], { stdio: 'inherit' });
     
-    const output = result.stdout?.trim() || '';
-    logger.info(`Gemini response:\n${output}`);
+    console.log('\n--- PROMPT TO GEMINI ---');
+    console.log(prompt);
+    console.log('--- END PROMPT ---\n');
+    
+    process.chdir(repoDir);
+    
+    // Capture output while also displaying it
+    const geminiArgs = ['-p', prompt];
+    if (config.geminiYolo) {
+      geminiArgs.push('-y');
+      logger.info('YOLO mode enabled - auto-approving all actions');
+    }
+    
+    const result = await execa('gemini', geminiArgs);
+    
+    const output = result.stdout.trim();
+    
+    console.log('\n--- GEMINI OUTPUT ---');
+    console.log(output);
+    console.log('--- END OUTPUT ---\n');
     
     const decisionMatch = output.match(/DECISION:\s*(APPROVE|REQUEST_CHANGES)/i);
     const messageMatch = output.match(/MESSAGE:\s*(.+)/is);
@@ -58,6 +74,9 @@ Your response:`;
     
     const decision = decisionMatch ? decisionMatch[1].toUpperCase() : 'REQUEST_CHANGES';
     const message = messageMatch ? messageMatch[1].trim() : 'Review telah dilakukan. Silakan periksa komentar yang diberikan untuk detail lebih lanjut.';
+    
+    logger.info(`Decision: ${decision}`);
+    logger.info(`Message: ${message}`);
     
     return { decision, message };
     
@@ -120,8 +139,20 @@ IMPORTANT INSTRUCTIONS:
 Fix the code now.`;
 
     logger.info(`Fixing issues in PR #${pr.number}`);
+    
+    console.log('\n--- PROMPT TO GEMINI ---');
+    console.log(prompt);
+    console.log('--- END PROMPT ---\n');
+    
     process.chdir(repoDir);
-    await execa('gemini', ['-p', prompt], { stdio: 'inherit' });
+    
+    const geminiArgs = ['-p', prompt];
+    if (config.geminiYolo) {
+      geminiArgs.push('-y');
+      logger.info('YOLO mode enabled - auto-approving all actions');
+    }
+    
+    await execa('gemini', geminiArgs, { stdio: 'inherit' });
     
   } finally {
     process.chdir(originalDir);

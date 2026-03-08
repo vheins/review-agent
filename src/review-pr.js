@@ -24,7 +24,7 @@ async function reviewSpecificPR() {
       const searchResult = await execa('gh', [
         'search', 'prs',
         '--author=@me',
-        '--json', 'number,title,headRefName,headRepository,headRepositoryOwner'
+        '--json', 'number,title,repository'
       ], { stdio: 'pipe' });
       allPRs.push(...JSON.parse(searchResult.stdout));
     }
@@ -33,7 +33,7 @@ async function reviewSpecificPR() {
       const searchResult = await execa('gh', [
         'search', 'prs',
         '--assignee=@me',
-        '--json', 'number,title,headRefName,headRepository,headRepositoryOwner'
+        '--json', 'number,title,repository'
       ], { stdio: 'pipe' });
       allPRs.push(...JSON.parse(searchResult.stdout));
     }
@@ -42,7 +42,7 @@ async function reviewSpecificPR() {
       const searchResult = await execa('gh', [
         'search', 'prs',
         '--review-requested=@me',
-        '--json', 'number,title,headRefName,headRepository,headRepositoryOwner'
+        '--json', 'number,title,repository'
       ], { stdio: 'pipe' });
       allPRs.push(...JSON.parse(searchResult.stdout));
     }
@@ -54,20 +54,26 @@ async function reviewSpecificPR() {
       process.exit(1);
     }
 
-    // Build repository object similar to fetchOpenPRs
-    const repository = {
-      nameWithOwner: `${pr.headRepositoryOwner.login}/${pr.headRepository.name}`
-    };
-
+    logger.info(`Found PR #${pr.number}: ${pr.title}`);
+    logger.info(`Repository: ${pr.repository.nameWithOwner}`);
+    
+    // Fetch detailed PR info including branch name
+    logger.info('Fetching PR details...');
+    const detailResult = await execa('gh', [
+      'pr', 'view', pr.number.toString(),
+      '--repo', pr.repository.nameWithOwner,
+      '--json', 'number,title,headRefName'
+    ], { stdio: 'pipe' });
+    
+    const prDetail = JSON.parse(detailResult.stdout);
+    
     const prData = {
       number: pr.number,
       title: pr.title,
-      headRefName: pr.headRefName,
-      repository: repository
+      headRefName: prDetail.headRefName,
+      repository: pr.repository
     };
     
-    logger.info(`Found PR #${prData.number}: ${prData.title}`);
-    logger.info(`Repository: ${repository.nameWithOwner}`);
     logger.info(`Branch: ${prData.headRefName}`);
 
     if (config.delegate || config.dryRun) {
@@ -76,14 +82,14 @@ async function reviewSpecificPR() {
         logger.info(`Workspace directory: ${config.workspaceDir}`);
       }
 
-      logger.info(`Processing PR #${prData.number} from ${repository.nameWithOwner}`);
+      logger.info(`Processing PR #${prData.number} from ${pr.repository.nameWithOwner}`);
       
       let repoDir;
       if (!config.dryRun) {
         repoDir = await prepareRepository(prData);
       }
       
-      await delegateToGemini(repository.nameWithOwner, prData, repoDir);
+      await delegateToGemini(pr.repository.nameWithOwner, prData, repoDir);
       
       logger.info('PR review completed');
     } else {

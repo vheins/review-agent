@@ -32,6 +32,7 @@ LOG_LEVEL=info          # info, warn, or error
 WORKSPACE_DIR=./workspace  # Directory for cloning repositories
 EXCLUDE_REPO_OWNERS=    # Comma-separated list of repo owners to exclude (e.g., owner1,owner2)
 PR_SCOPE=authored,assigned,review-requested  # Comma-separated: authored, assigned, review-requested
+GEMINI_YOLO=false       # Set to true to auto-approve all Gemini actions (YOLO mode)
 ```
 
 ## Review Guidelines
