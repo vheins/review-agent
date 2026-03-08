@@ -1,0 +1,21 @@
+{
+  "name": "pr-review-agent",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "GitHub Pull Request assistant with optional Gemini delegation",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "once": "node src/index.js --once",
+    "dry-run": "node src/index.js --once --dry-run"
+  },
+  "keywords": ["github", "pr", "review", "automation"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "execa": "^8.0.1",
+    "dotenv": "^16.4.5",
+    "fs-extra": "^11.2.0",
+    "chalk": "^5.3.0"
+  }
+}
