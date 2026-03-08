@@ -19,43 +19,37 @@ async function reviewSpecificPR() {
   try {
     const allPRs = [];
     
-    // Search in all configured scopes
-    if (config.prScope.includes('authored')) {
-      const searchResult = await execa('gh', [
-        'search', 'prs',
-        '--author=@me',
-        '--json', 'number,title,repository'
-      ], { stdio: 'pipe' });
-      allPRs.push(...JSON.parse(searchResult.stdout));
-    }
+    // Search in all scopes (open PRs only) to allow re-review
+    const scopes = ['authored', 'assigned', 'review-requested'];
     
-    if (config.prScope.includes('assigned')) {
-      const searchResult = await execa('gh', [
-        'search', 'prs',
-        '--assignee=@me',
-        '--json', 'number,title,repository'
-      ], { stdio: 'pipe' });
-      allPRs.push(...JSON.parse(searchResult.stdout));
-    }
-    
-    if (config.prScope.includes('review-requested')) {
-      const searchResult = await execa('gh', [
-        'search', 'prs',
-        '--review-requested=@me',
-        '--json', 'number,title,repository'
-      ], { stdio: 'pipe' });
-      allPRs.push(...JSON.parse(searchResult.stdout));
+    for (const scope of scopes) {
+      try {
+        const flag = scope === 'authored' ? '--author=@me' 
+                   : scope === 'assigned' ? '--assignee=@me'
+                   : '--review-requested=@me';
+        
+        const searchResult = await execa('gh', [
+          'search', 'prs',
+          flag,
+          '--state=open',
+          '--json', 'number,title,repository,state'
+        ], { stdio: 'pipe' });
+        allPRs.push(...JSON.parse(searchResult.stdout));
+      } catch (error) {
+        // Continue if one scope fails
+      }
     }
 
     const pr = allPRs.find(p => p.number === parseInt(prNumber));
 
     if (!pr) {
-      logger.error(`PR #${prNumber} not found in your PRs (scope: ${config.prScope.join(', ')})`);
+      logger.error(`PR #${prNumber} not found in any of your PRs`);
       process.exit(1);
     }
 
     logger.info(`Found PR #${pr.number}: ${pr.title}`);
     logger.info(`Repository: ${pr.repository.nameWithOwner}`);
+    logger.info(`State: ${pr.state}`);
     
     // Fetch detailed PR info including branch name
     logger.info('Fetching PR details...');
