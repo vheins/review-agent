@@ -74,11 +74,9 @@ async function executeAIReview(prompt, repoDir, mode = 'review') {
       }
 
       // Add non-interactive mode for automation
-      kiroArgs.push('--no-interactive');
+      kiroArgs.push('--no-interactive', '--trust-all-tools');
 
-      // YOLO mode uses --trust-all-tools flag
       if (config.kiroYolo) {
-        kiroArgs.push('--trust-all-tools');
         logger.info('YOLO mode enabled - trusting all tools');
       }
 
