@@ -9,11 +9,12 @@ export const config = {
   logLevel: process.env.LOG_LEVEL || 'info',
   workspaceDir: process.env.WORKSPACE_DIR || './workspace',
   dryRun: process.argv.includes('--dry-run'),
-  excludeRepoOwners: process.env.EXCLUDE_REPO_OWNERS 
+  excludeRepoOwners: process.env.EXCLUDE_REPO_OWNERS
     ? process.env.EXCLUDE_REPO_OWNERS.split(',').map(o => o.trim())
     : [],
-  prScope: process.env.PR_SCOPE 
+  prScope: process.env.PR_SCOPE
     ? process.env.PR_SCOPE.split(',').map(s => s.trim())
     : ['authored', 'assigned', 'review-requested'],
-  geminiYolo: process.env.GEMINI_YOLO === 'true'
+  geminiYolo: process.env.GEMINI_YOLO === 'true',
+  autoMerge: process.env.AUTO_MERGE === 'true'
 };

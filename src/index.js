@@ -6,7 +6,7 @@ import fs from 'fs-extra';
 
 async function run(once = false) {
   logger.info('Starting PR review check...');
-  
+
   const prs = await fetchOpenPRs();
   logger.info(`Found ${prs.length} open PRs`);
 
@@ -32,15 +32,15 @@ async function run(once = false) {
 
     for (const pr of prsToProcess) {
       logger.info(`Processing PR #${pr.number} from ${pr.repository.nameWithOwner}`);
-      
+
       let repoDir;
       if (!config.dryRun) {
         repoDir = await prepareRepository(pr);
       }
-      
+
       await delegateToGemini(pr.repository.nameWithOwner, pr, repoDir);
     }
-    
+
     logger.info('All PRs processed');
   } else {
     logger.info('Delegation disabled (DELEGATE=false)');
@@ -59,8 +59,7 @@ async function main() {
   } else {
     while (true) {
       await run(false);
-      logger.info(`Waiting ${config.reviewInterval} seconds...`);
-      await new Promise(resolve => setTimeout(resolve, config.reviewInterval * 1000));
+      await logger.countdown(config.reviewInterval);
     }
   }
 }
