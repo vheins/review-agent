@@ -69,79 +69,87 @@
       <main class="content">
         <!-- Dashboard Tab -->
         <div class="tab-content active" id="dashboard">
-          <div class="card">
-            <h2>Control Panel</h2>
-            <div class="control-buttons">
-              <button class="btn btn-primary" id="startBtn">
-                <span class="icon">▶️</span>
-                Start Review
-              </button>
-              <button class="btn btn-secondary" id="startOnceBtn">
-                <span class="icon">⏯️</span>
-                Run Once
-              </button>
-              <button class="btn btn-warning" id="executeNowBtn" disabled>
-                <span class="icon">⚡</span>
-                Execute Now
-              </button>
-              <button class="btn btn-danger" id="stopBtn" disabled>
-                <span class="icon">⏹️</span>
-                Stop
-              </button>
-            </div>
-            
-            <div class="last-log-container" id="lastLogContainer">
-              <div class="last-log-label">Last Log:</div>
-              <div class="last-log-content" id="lastLogContent">
-                <span class="empty-log">No logs yet</span>
+          <div class="dashboard-grid">
+            <!-- Left Column: Control Panel + Stats -->
+            <div class="dashboard-left">
+              <div class="card">
+                <h2>Control Panel</h2>
+                <div class="control-buttons">
+                  <button class="btn btn-primary" id="startBtn">
+                    <span class="icon">▶️</span>
+                    Start Review
+                  </button>
+                  <button class="btn btn-secondary" id="startOnceBtn">
+                    <span class="icon">⏯️</span>
+                    Run Once
+                  </button>
+                  <button class="btn btn-warning" id="executeNowBtn" disabled>
+                    <span class="icon">⚡</span>
+                    Execute Now
+                  </button>
+                  <button class="btn btn-danger" id="stopBtn" disabled>
+                    <span class="icon">⏹️</span>
+                    Stop
+                  </button>
+                </div>
+                
+                <div class="last-log-container" id="lastLogContainer">
+                  <div class="last-log-label">Last Log:</div>
+                  <div class="last-log-content" id="lastLogContent">
+                    <span class="empty-log">No logs yet</span>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
 
-          <div class="card">
-            <h2>AI Executor Info</h2>
-            <div class="executor-info">
-              <div class="executor-item">
-                <span class="executor-label">Active Executor:</span>
-                <span class="executor-value" id="activeExecutor">-</span>
+              <div class="card">
+                <h2>AI Executor Info</h2>
+                <div class="executor-info">
+                  <div class="executor-item">
+                    <span class="executor-label">Active Executor:</span>
+                    <span class="executor-value" id="activeExecutor">-</span>
+                  </div>
+                  <div class="executor-item">
+                    <span class="executor-label">Model:</span>
+                    <span class="executor-value" id="activeModel">-</span>
+                  </div>
+                  <div class="executor-item">
+                    <span class="executor-label">YOLO Mode:</span>
+                    <span class="executor-value" id="activeYolo">-</span>
+                  </div>
+                </div>
               </div>
-              <div class="executor-item">
-                <span class="executor-label">Model:</span>
-                <span class="executor-value" id="activeModel">-</span>
-              </div>
-              <div class="executor-item">
-                <span class="executor-label">YOLO Mode:</span>
-                <span class="executor-value" id="activeYolo">-</span>
+
+              <div class="card">
+                <h2>Quick Stats</h2>
+                <div class="stats-grid">
+                  <div class="stat-card">
+                    <div class="stat-value" id="totalPRs">0</div>
+                    <div class="stat-label">Total PRs</div>
+                  </div>
+                  <div class="stat-card">
+                    <div class="stat-value" id="approved">0</div>
+                    <div class="stat-label">Approved</div>
+                  </div>
+                  <div class="stat-card">
+                    <div class="stat-value" id="changesRequested">0</div>
+                    <div class="stat-label">Changes Requested</div>
+                  </div>
+                  <div class="stat-card">
+                    <div class="stat-value" id="manualMerge">0</div>
+                    <div class="stat-label">Manual Merge</div>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div class="card">
-            <h2>Quick Stats</h2>
-            <div class="stats-grid">
-              <div class="stat-card">
-                <div class="stat-value" id="totalPRs">0</div>
-                <div class="stat-label">Total PRs</div>
+            <!-- Right Column: Recent Activity -->
+            <div class="dashboard-right">
+              <div class="card">
+                <h2>Recent Activity</h2>
+                <div class="activity-list" id="activityList">
+                  <div class="empty-state">No activity yet. Start a review to see activity.</div>
+                </div>
               </div>
-              <div class="stat-card">
-                <div class="stat-value" id="approved">0</div>
-                <div class="stat-label">Approved</div>
-              </div>
-              <div class="stat-card">
-                <div class="stat-value" id="changesRequested">0</div>
-                <div class="stat-label">Changes Requested</div>
-              </div>
-              <div class="stat-card">
-                <div class="stat-value" id="manualMerge">0</div>
-                <div class="stat-label">Manual Merge</div>
-              </div>
-            </div>
-          </div>
-
-          <div class="card">
-            <h2>Recent Activity</h2>
-            <div class="activity-list" id="activityList">
-              <div class="empty-state">No activity yet. Start a review to see activity.</div>
             </div>
           </div>
         </div>

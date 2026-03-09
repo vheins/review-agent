@@ -164,6 +164,29 @@ body {
     display: block;
 }
 
+/* Dashboard Grid Layout */
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 1.5rem;
+}
+
+.dashboard-left,
+.dashboard-right {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.dashboard-right .card {
+    height: 100%;
+}
+
+.dashboard-right .activity-list {
+    max-height: none;
+    height: calc(100vh - 250px);
+}
+
 /* Card */
 .card {
     background: #161b22;
@@ -189,9 +212,9 @@ body {
 
 /* Buttons */
 .control-buttons {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
     gap: 1rem;
-    flex-wrap: wrap;
 }
 
 .btn {
@@ -947,12 +970,20 @@ body.light-theme .mobile-menu-toggle span {
         padding: 1rem;
     }
 
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .dashboard-right .activity-list {
+        height: 400px;
+    }
+
     .card {
         padding: 1rem;
     }
 
     .control-buttons {
-        flex-direction: column;
+        grid-template-columns: repeat(2, 1fr);
     }
 
     .btn {
@@ -1048,9 +1079,14 @@ body.light-theme .mobile-menu-toggle span {
         margin-bottom: 0.75rem;
     }
 
+    .control-buttons {
+        grid-template-columns: 1fr;
+    }
+
     .btn {
         padding: 0.6rem 1rem;
         font-size: 0.8rem;
+        width: 100%;
     }
 
     .btn .icon {
