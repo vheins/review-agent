@@ -1,0 +1,15 @@
+{
+    "watch": [
+        "electron/**/*"
+    ],
+    "ext": "js,cjs,html,css",
+    "ignore": [
+        "node_modules/**/*",
+        ".git/**/*"
+    ],
+    "delay": 500,
+    "verbose": false,
+    "execMap": {
+        "cjs": "electron"
+    }
+}

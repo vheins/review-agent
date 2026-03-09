@@ -10,7 +10,8 @@
     "dry-run": "node src/index.js --once --dry-run",
     "review": "node src/review-pr.js",
     "app": "electron electron/main.cjs",
-    "app:dev": "NODE_ENV=development electron electron/main.cjs",
+    "app:dev": "NODE_ENV=development nodemon --watch electron --exec electron electron/main.cjs",
+    "app:dev:win": "set NODE_ENV=development && nodemon --watch electron --exec electron electron/main.cjs",
     "build": "electron-builder",
     "build:win": "electron-builder --win",
     "build:mac": "electron-builder --mac",
@@ -31,9 +32,11 @@
     "dotenv": "^16.4.5",
     "electron": "^40.8.0",
     "electron-builder": "^26.8.1",
+    "electron-reload": "^2.0.0-alpha.1",
     "execa": "^8.0.1",
     "fs-extra": "^11.2.0",
     "node-notifier": "^10.0.1",
+    "nodemon": "^3.1.14",
     "ora": "^9.3.0",
     "terminal-link": "^5.0.0"
   }

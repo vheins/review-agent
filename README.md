@@ -252,7 +252,12 @@ This will show what prompts would be sent to Gemini without executing them.
 Run the desktop app with GUI:
 
 ```bash
-yarn app:dev
+# Development mode with hot reload
+yarn app:dev          # Linux/Mac
+yarn app:dev:win      # Windows
+
+# Production mode
+yarn app
 ```
 
 Features:
@@ -262,6 +267,21 @@ Features:
 - Context file editor (prompts and guidelines)
 - Dark/Light theme
 - Mobile responsive
+- **Hot reload in development** - Auto-reload on file changes
+
+### Hot Reload Development
+
+The desktop app supports hot reload for faster development:
+
+1. **Nodemon** watches `electron/` directory
+   - Auto-restarts on main process changes
+   - Watches: `.js`, `.cjs`, `.html`, `.css`
+
+2. **Electron-Reload** reloads renderer
+   - Auto-reloads window on renderer changes
+   - No full restart needed
+
+See `electron/README.md` for detailed development guide.
 
 ## Notes
 

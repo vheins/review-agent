@@ -3,6 +3,24 @@ const path = require('path');
 const { spawn } = require('child_process');
 const fs = require('fs');
 
+// Enable hot reload in development
+if (process.env.NODE_ENV === 'development') {
+    try {
+        require('electron-reload')(__dirname, {
+            electron: path.join(__dirname, '..', 'node_modules', '.bin', 'electron'),
+            hardResetMethod: 'exit',
+            ignored: /node_modules|[\/\\]\./,
+            awaitWriteFinish: {
+                stabilityThreshold: 100,
+                pollInterval: 100
+            }
+        });
+        console.log('✓ Hot reload enabled for renderer files');
+    } catch (err) {
+        console.log('⚠ electron-reload not found, install with: yarn add electron-reload');
+    }
+}
+
 let mainWindow;
 let reviewProcess = null;
 

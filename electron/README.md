@@ -1,89 +1,101 @@
-# PR Review Agent - Desktop App
+# Electron Desktop App
 
-Modern desktop application for automated GitHub Pull Request reviews powered by Gemini AI.
+Desktop application for PR Review Agent with hot reload support.
 
-## Features
+## Development
 
-- 🎨 **Modern UI** - Beautiful dark-themed interface
-- 📊 **Dashboard** - Real-time stats and activity monitoring
-- ⚙️ **Configuration** - Easy-to-use settings panel
-- 📝 **Live Logs** - Monitor review process in real-time
-- 🔔 **Notifications** - Desktop notifications for important events
-- 🚀 **One-Click Start** - Start/stop reviews with a single click
+### Install Dependencies
 
-## Running the App
+```bash
+yarn install
+```
 
-### Development Mode
+### Run with Hot Reload
+
+**Linux/Mac:**
 ```bash
 yarn app:dev
 ```
 
-### Production Mode
+**Windows:**
 ```bash
-yarn app
+yarn app:dev:win
 ```
 
-## Building the App
+### Hot Reload Features
 
-### Build for all platforms
-```bash
-yarn build
-```
+1. **Nodemon** - Watches for changes in `electron/` directory
+   - Automatically restarts Electron when main process files change
+   - Watches: `.js`, `.cjs`, `.html`, `.css` files
+   - Delay: 500ms after file change
 
-### Build for specific platform
-```bash
-yarn build:win    # Windows
-yarn build:mac    # macOS
-yarn build:linux  # Linux
-```
+2. **Electron-Reload** - Reloads renderer process
+   - Automatically reloads window when renderer files change
+   - No need to restart entire app
+   - Faster development cycle
 
-## Screenshots
+### What Gets Reloaded?
 
-### Dashboard
-- Control panel with start/stop buttons
-- Real-time statistics (Total PRs, Approved, Changes Requested, Manual Merge)
-- Recent activity feed
+**Full Restart (Nodemon):**
+- `electron/main.cjs` - Main process
+- `electron/preload.cjs` - Preload script
+
+**Window Reload (Electron-Reload):**
+- `electron/index.html` - HTML structure
+- `electron/styles.css` - Styles
+- `electron/renderer.js` - Renderer JavaScript
 
 ### Configuration
-- Enable/disable delegation
-- Review mode (Comment/Fix)
-- Review interval
-- Auto-merge settings
-- Gemini YOLO mode
-- PR scope configuration
-- Log level
 
-### Logs
-- Live log streaming
-- Color-coded log levels
-- Auto-scroll
-- Clear logs button
-
-## Tech Stack
-
-- **Electron** - Desktop app framework
-- **Node.js** - Backend runtime
-- **HTML/CSS/JS** - Frontend
-- **IPC** - Inter-process communication
-
-## Architecture
-
-```
-electron/
-├── main.js       # Main process (Node.js)
-├── preload.js    # Preload script (bridge)
-├── renderer.js   # Renderer process (UI logic)
-├── index.html    # UI structure
-└── styles.css    # UI styling
+**nodemon.json:**
+```json
+{
+  "watch": ["electron/**/*"],
+  "ext": "js,cjs,html,css",
+  "delay": 500
+}
 ```
 
-## Configuration
+**electron-reload in main.cjs:**
+```javascript
+require('electron-reload')(__dirname, {
+  electron: path.join(__dirname, '..', 'node_modules', '.bin', 'electron'),
+  hardResetMethod: 'exit',
+  awaitWriteFinish: {
+    stabilityThreshold: 100,
+    pollInterval: 100
+  }
+});
+```
 
-The app reads configuration from `.env` file in the root directory. You can edit settings through the UI or manually edit the `.env` file.
+## Production Build
 
-## Notes
+```bash
+# Build for current platform
+yarn build
 
-- The app runs the CLI review agent in the background
-- All CLI features are available through the UI
-- Logs are displayed in real-time
-- Desktop notifications work on all platforms
+# Build for specific platform
+yarn build:win
+yarn build:mac
+yarn build:linux
+```
+
+## Tips
+
+1. **Save files** - Changes are detected on file save
+2. **Wait for reload** - Give it 500ms after saving
+3. **Check console** - Look for "Hot reload enabled" message
+4. **DevTools** - Press `Ctrl+Shift+I` (or `Cmd+Option+I` on Mac)
+
+## Troubleshooting
+
+**Hot reload not working?**
+1. Check if `electron-reload` is installed: `yarn list electron-reload`
+2. Make sure `NODE_ENV=development` is set
+3. Check console for error messages
+4. Try manual restart: `Ctrl+C` and run `yarn app:dev` again
+
+**App crashes on reload?**
+1. Check for syntax errors in your code
+2. Look at terminal output for error messages
+3. Try running without hot reload: `yarn app`
