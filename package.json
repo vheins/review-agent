@@ -26,6 +26,7 @@
     "execa": "^8.0.1",
     "fs-extra": "^11.2.0",
     "node-notifier": "^10.0.1",
-    "ora": "^9.3.0"
+    "ora": "^9.3.0",
+    "terminal-link": "^5.0.0"
   }
 }

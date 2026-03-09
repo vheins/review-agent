@@ -2,6 +2,7 @@ import chalk from 'chalk';
 import ora from 'ora';
 import notifier from 'node-notifier';
 import boxen from 'boxen';
+import terminalLink from 'terminal-link';
 import { config } from './config.js';
 
 const levels = { info: 0, warn: 1, error: 2 };
@@ -79,21 +80,11 @@ export const logger = {
       activeSpinner = null;
     }
 
-    activeSpinner = ora({
-      text: `Waiting ${chalk.yellow(seconds)} seconds...`,
-      color: 'blue',
-      spinner: 'dots',
-      discardStdin: false,
-      hideCursor: true
-    }).start();
-
     for (let i = seconds; i > 0; i--) {
-      activeSpinner.text = `Waiting ${chalk.yellow(i)} seconds...`;
+      process.stdout.write(`\r${chalk.blue('ℹ')} Waiting ${chalk.yellow(i)} seconds...`);
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
-
-    activeSpinner.succeed(chalk.green('Waiting done!'));
-    activeSpinner = null;
+    process.stdout.write(`\r${chalk.green('✔')} Waiting ${chalk.green('done!')}          \n`);
   },
 
   spinner: (text) => {
@@ -161,11 +152,16 @@ export const logger = {
 };
 
 export const notify = {
-  manualMerge: (prNumber, repository, reason = 'Merge conflicts detected') => {
+  manualMerge: (prNumber, repository, reason = 'Merge conflicts detected', prUrl = null) => {
     // Stop any active spinner first
     if (activeSpinner) {
       activeSpinner.stop();
       activeSpinner = null;
+    }
+
+    // Generate PR URL if not provided
+    if (!prUrl) {
+      prUrl = `https://github.com/${repository}/pull/${prNumber}`;
     }
 
     // Windows notification
@@ -177,13 +173,19 @@ export const notify = {
       timeout: 10
     });
 
+    // Create clickable link
+    const prLink = terminalLink(`#${prNumber}`, prUrl, {
+      fallback: (text, url) => `${text} (${url})`
+    });
+
     // Big CLI box notification
     const message = boxen(
       chalk.bold.red('⚠️  MANUAL MERGE REQUIRED  ⚠️\n\n') +
       chalk.yellow(`Repository: ${chalk.white(repository)}\n`) +
-      chalk.yellow(`PR Number: ${chalk.white(`#${prNumber}`)}\n`) +
+      chalk.yellow(`PR Number: ${chalk.white(prLink)}\n`) +
       chalk.yellow(`Reason: ${chalk.white(reason)}\n\n`) +
-      chalk.cyan('Please resolve the conflicts manually and push the changes.'),
+      chalk.cyan('Please resolve the conflicts manually and push the changes.\n') +
+      chalk.gray(`Link: ${prUrl}`),
       {
         padding: 1,
         margin: 1,
@@ -196,11 +198,16 @@ export const notify = {
     console.log('\n' + message + '\n');
   },
 
-  success: (prNumber, repository, message = 'PR approved and merged') => {
+  success: (prNumber, repository, message = 'PR approved and merged', prUrl = null) => {
     // Stop any active spinner first
     if (activeSpinner) {
       activeSpinner.stop();
       activeSpinner = null;
+    }
+
+    // Generate PR URL if not provided
+    if (!prUrl) {
+      prUrl = `https://github.com/${repository}/pull/${prNumber}`;
     }
 
     // Windows notification
@@ -212,12 +219,18 @@ export const notify = {
       timeout: 5
     });
 
+    // Create clickable link
+    const prLink = terminalLink(`#${prNumber}`, prUrl, {
+      fallback: (text, url) => `${text} (${url})`
+    });
+
     // CLI box notification
     const boxMessage = boxen(
       chalk.bold.green('✅  SUCCESS  ✅\n\n') +
       chalk.cyan(`Repository: ${chalk.white(repository)}\n`) +
-      chalk.cyan(`PR Number: ${chalk.white(`#${prNumber}`)}\n`) +
-      chalk.cyan(`Status: ${chalk.white(message)}`),
+      chalk.cyan(`PR Number: ${chalk.white(prLink)}\n`) +
+      chalk.cyan(`Status: ${chalk.white(message)}\n\n`) +
+      chalk.gray(`Link: ${prUrl}`),
       {
         padding: 1,
         margin: 1,
@@ -230,11 +243,16 @@ export const notify = {
     console.log('\n' + boxMessage + '\n');
   },
 
-  requestChanges: (prNumber, repository, issuesCount) => {
+  requestChanges: (prNumber, repository, issuesCount, prUrl = null) => {
     // Stop any active spinner first
     if (activeSpinner) {
       activeSpinner.stop();
       activeSpinner = null;
+    }
+
+    // Generate PR URL if not provided
+    if (!prUrl) {
+      prUrl = `https://github.com/${repository}/pull/${prNumber}`;
     }
 
     // Windows notification
@@ -246,13 +264,19 @@ export const notify = {
       timeout: 5
     });
 
+    // Create clickable link
+    const prLink = terminalLink(`#${prNumber}`, prUrl, {
+      fallback: (text, url) => `${text} (${url})`
+    });
+
     // CLI box notification
     const boxMessage = boxen(
       chalk.bold.yellow('🔍  CHANGES REQUESTED  🔍\n\n') +
       chalk.cyan(`Repository: ${chalk.white(repository)}\n`) +
-      chalk.cyan(`PR Number: ${chalk.white(`#${prNumber}`)}\n`) +
+      chalk.cyan(`PR Number: ${chalk.white(prLink)}\n`) +
       chalk.cyan(`Issues Found: ${chalk.white(issuesCount)}\n\n`) +
-      chalk.yellow('Please review the comments and make necessary changes.'),
+      chalk.yellow('Please review the comments and make necessary changes.\n') +
+      chalk.gray(`Link: ${prUrl}`),
       {
         padding: 1,
         margin: 1,

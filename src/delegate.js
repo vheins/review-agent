@@ -32,7 +32,12 @@ async function addReviewComments(repository, pr, repoDir) {
       logger.info('YOLO mode enabled - auto-approving all actions');
     }
 
+    const spinner = logger.spinner('Executing Gemini review...');
+    spinner.start();
+
     const result = await execa('gemini', geminiArgs);
+
+    spinner.succeed('Gemini review completed');
 
     const output = result.stdout.trim();
 
@@ -141,7 +146,12 @@ async function fixPR(repository, pr, repoDir) {
       logger.info('YOLO mode enabled - auto-approving all actions');
     }
 
+    const spinner = logger.spinner('Executing Gemini fix...');
+    spinner.start();
+
     await execa('gemini', geminiArgs, { stdio: 'inherit' });
+
+    spinner.succeed('Gemini fix completed');
 
   } finally {
     process.chdir(originalDir);
