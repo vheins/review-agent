@@ -154,6 +154,57 @@ export async function delegateToGemini(repository, pr, repoDir) {
     return;
   }
 
+  // Check if PR targets master/main branch
+  const isMasterBranch = pr.baseRefName === 'master' || pr.baseRefName === 'main';
+  const originalMode = config.reviewMode;
+
+  if (isMasterBranch) {
+    logger.warn(`PR #${pr.number} targets protected branch: ${pr.baseRefName}`);
+    logger.warn('Forcing COMMENT mode and disabling AUTO_MERGE for safety');
+
+    // Override config for this PR
+    config.reviewMode = 'comment';
+    const originalAutoMerge = config.autoMerge;
+    config.autoMerge = false;
+
+    try {
+      if (originalMode === 'fix') {
+        logger.info('Original mode was FIX, but switching to COMMENT for master branch');
+      }
+
+      const { decision, message, hasPostedComments } = await addReviewComments(repository, pr, repoDir);
+
+      if (hasPostedComments) {
+        logger.info('Gemini already posted review comments, skipping duplicate summary comment');
+      } else {
+        logger.info('Gemini did not post comments, posting summary via gh CLI');
+        if (decision === 'APPROVE') {
+          await approvePR(repository, pr, message);
+        } else {
+          await rejectPR(repository, pr, message);
+        }
+      }
+
+      // For master branch, always require manual merge
+      if (decision === 'APPROVE') {
+        notify.manualMerge(
+          pr.number,
+          repository,
+          `PR targets protected branch '${pr.baseRefName}' - Manual merge required for safety`
+        );
+      } else {
+        const issuesCount = (message.match(/\d+\./g) || []).length;
+        notify.requestChanges(pr.number, repository, issuesCount);
+      }
+    } finally {
+      // Restore original config
+      config.reviewMode = originalMode;
+      config.autoMerge = originalAutoMerge;
+    }
+    return;
+  }
+
+  // Normal flow for non-master branches
   try {
     if (config.reviewMode === 'comment') {
       const { decision, message, hasPostedComments } = await addReviewComments(repository, pr, repoDir);

@@ -7,7 +7,7 @@ import { config } from './config.js';
 export async function fetchOpenPRs() {
   try {
     const allPRs = [];
-    
+
     if (config.prScope.includes('authored')) {
       logger.info('Fetching PRs authored by @me...');
       const { stdout: authoredPRs } = await execa('gh', ['search', 'prs', '--state=open', '--author=@me', '--json', 'number,title,repository,url,updatedAt']);
@@ -15,7 +15,7 @@ export async function fetchOpenPRs() {
       logger.info(`Found ${authored.length} authored PRs`);
       allPRs.push(...authored);
     }
-    
+
     if (config.prScope.includes('assigned')) {
       logger.info('Fetching PRs assigned to @me...');
       const { stdout: assignedPRs } = await execa('gh', ['search', 'prs', '--state=open', '--assignee=@me', '--json', 'number,title,repository,url,updatedAt']);
@@ -23,7 +23,7 @@ export async function fetchOpenPRs() {
       logger.info(`Found ${assigned.length} assigned PRs`);
       allPRs.push(...assigned);
     }
-    
+
     if (config.prScope.includes('review-requested')) {
       logger.info('Fetching PRs with review requested from @me...');
       const { stdout: reviewPRs } = await execa('gh', ['search', 'prs', '--state=open', '--review-requested=@me', '--json', 'number,title,repository,url,updatedAt']);
@@ -31,33 +31,34 @@ export async function fetchOpenPRs() {
       logger.info(`Found ${review.length} review-requested PRs`);
       allPRs.push(...review);
     }
-    
+
     // Merge and deduplicate by PR URL
     const uniquePRs = Array.from(new Map(allPRs.map(pr => [pr.url, pr])).values());
     logger.info(`Total unique PRs: ${uniquePRs.length}`);
-    
+
     // Filter out excluded repo owners
     const filteredPRs = uniquePRs.filter(pr => {
       const owner = pr.repository.nameWithOwner.split('/')[0];
       return !config.excludeRepoOwners.includes(owner);
     });
-    
+
     if (filteredPRs.length < uniquePRs.length) {
       logger.info(`Filtered out ${uniquePRs.length - filteredPRs.length} PRs from excluded owners`);
     }
-    
+
     // Sort by updatedAt (oldest first)
     filteredPRs.sort((a, b) => new Date(a.updatedAt) - new Date(b.updatedAt));
-    
+
     // Fetch branch name for each PR
     logger.info('Fetching branch details for each PR...');
     for (const pr of filteredPRs) {
-      const { stdout: detailJson } = await execa('gh', ['pr', 'view', pr.number.toString(), '--repo', pr.repository.nameWithOwner, '--json', 'headRefName']);
+      const { stdout: detailJson } = await execa('gh', ['pr', 'view', pr.number.toString(), '--repo', pr.repository.nameWithOwner, '--json', 'headRefName,baseRefName']);
       const detail = JSON.parse(detailJson);
       pr.headRefName = detail.headRefName;
-      logger.info(`PR #${pr.number} (${pr.repository.nameWithOwner}): branch ${pr.headRefName}`);
+      pr.baseRefName = detail.baseRefName;
+      logger.info(`PR #${pr.number} (${pr.repository.nameWithOwner}): ${pr.headRefName} → ${pr.baseRefName}`);
     }
-    
+
     return filteredPRs;
   } catch (error) {
     logger.error(`Failed to fetch PRs: ${error.message}`);
@@ -68,7 +69,7 @@ export async function fetchOpenPRs() {
 export async function prepareRepository(pr) {
   const repoName = pr.repository.nameWithOwner;
   const repoDir = path.join(config.workspaceDir, repoName.replace('/', '-'));
-  
+
   try {
     if (await fs.pathExists(repoDir)) {
       logger.info(`Repository ${repoName} exists, checking out branch ${pr.headRefName}`);

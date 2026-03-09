@@ -7,7 +7,7 @@ import fs from 'fs-extra';
 
 async function reviewSpecificPR() {
   const prNumber = process.argv[2];
-  
+
   if (!prNumber) {
     console.error('Usage: yarn review <PR_NUMBER>');
     console.error('Example: yarn review 112');
@@ -18,16 +18,16 @@ async function reviewSpecificPR() {
 
   try {
     const allPRs = [];
-    
+
     // Search in all scopes (open PRs only) to allow re-review
     const scopes = ['authored', 'assigned', 'review-requested'];
-    
+
     for (const scope of scopes) {
       try {
-        const flag = scope === 'authored' ? '--author=@me' 
-                   : scope === 'assigned' ? '--assignee=@me'
-                   : '--review-requested=@me';
-        
+        const flag = scope === 'authored' ? '--author=@me'
+          : scope === 'assigned' ? '--assignee=@me'
+            : '--review-requested=@me';
+
         const searchResult = await execa('gh', [
           'search', 'prs',
           flag,
@@ -50,25 +50,26 @@ async function reviewSpecificPR() {
     logger.info(`Found PR #${pr.number}: ${pr.title}`);
     logger.info(`Repository: ${pr.repository.nameWithOwner}`);
     logger.info(`State: ${pr.state}`);
-    
+
     // Fetch detailed PR info including branch name
     logger.info('Fetching PR details...');
     const detailResult = await execa('gh', [
       'pr', 'view', pr.number.toString(),
       '--repo', pr.repository.nameWithOwner,
-      '--json', 'number,title,headRefName'
+      '--json', 'number,title,headRefName,baseRefName'
     ], { stdio: 'pipe' });
-    
+
     const prDetail = JSON.parse(detailResult.stdout);
-    
+
     const prData = {
       number: pr.number,
       title: pr.title,
       headRefName: prDetail.headRefName,
+      baseRefName: prDetail.baseRefName,
       repository: pr.repository
     };
-    
-    logger.info(`Branch: ${prData.headRefName}`);
+
+    logger.info(`Branch: ${prData.headRefName} → ${prData.baseRefName}`);
 
     if (config.delegate || config.dryRun) {
       if (!config.dryRun) {
@@ -77,14 +78,14 @@ async function reviewSpecificPR() {
       }
 
       logger.info(`Processing PR #${prData.number} from ${pr.repository.nameWithOwner}`);
-      
+
       let repoDir;
       if (!config.dryRun) {
         repoDir = await prepareRepository(prData);
       }
-      
+
       await delegateToGemini(pr.repository.nameWithOwner, prData, repoDir);
-      
+
       logger.info('PR review completed');
     } else {
       logger.info('Delegation disabled (DELEGATE=false)');
