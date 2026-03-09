@@ -191,11 +191,13 @@ body {
 .control-buttons {
     display: flex;
     gap: 1rem;
+    flex-wrap: wrap;
 }
 
 .btn {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 0.5rem;
     padding: 0.75rem 1.5rem;
     border: none;
@@ -204,6 +206,8 @@ body {
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s;
+    white-space: nowrap;
+    min-width: 120px;
 }
 
 .btn:disabled {
@@ -1066,6 +1070,16 @@ body.light-theme .mobile-menu-toggle span {
         padding: 0.4rem;
     }
 
+    .severity-grid {
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+    }
+
+    .severity-info {
+        padding: 0.75rem;
+        font-size: 0.8rem;
+    }
+
     .context-selector {
         gap: 0.25rem;
     }
@@ -1252,9 +1266,38 @@ body.light-theme .mobile-menu-toggle span {
     font-style: italic;
 }
 
+/* Severity Grid */
+.severity-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.severity-info {
+    background: #1c2128;
+    border: 1px solid #f85149;
+    border-radius: 6px;
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+    font-size: 0.875rem;
+    color: #f85149;
+}
+
+.severity-info strong {
+    display: block;
+    margin-bottom: 0.5rem;
+}
+
 /* Light Theme - Agent Tab */
 body.light-theme .agent-selector {
     border-bottom-color: #d0d7de;
+}
+
+body.light-theme .severity-info {
+    background: #fff8f8;
+    border-color: #d1242f;
+    color: #d1242f;
 }
 
 body.light-theme .agent-tab {

@@ -206,6 +206,44 @@
                 </select>
               </div>
 
+              <h3 style="margin-top: 2rem; margin-bottom: 1rem; color: #58a6ff;">Severity Scoring</h3>
+              
+              <div class="form-group">
+                <label for="severityThreshold">Severity Threshold (max points for approve)</label>
+                <input type="number" id="severityThreshold" name="SEVERITY_THRESHOLD" min="1" value="10">
+                <small class="form-hint">PR dengan total severity score >= threshold akan di-reject</small>
+              </div>
+
+              <div class="severity-grid">
+                <div class="form-group">
+                  <label for="severityCritical">Critical (points)</label>
+                  <input type="number" id="severityCritical" name="SEVERITY_CRITICAL" min="1" value="5">
+                  <small class="form-hint">Security vulnerabilities, data loss</small>
+                </div>
+
+                <div class="form-group">
+                  <label for="severityHigh">High (points)</label>
+                  <input type="number" id="severityHigh" name="SEVERITY_HIGH" min="1" value="3">
+                  <small class="form-hint">Logic errors, critical bugs</small>
+                </div>
+
+                <div class="form-group">
+                  <label for="severityMedium">Medium (points)</label>
+                  <input type="number" id="severityMedium" name="SEVERITY_MEDIUM" min="1" value="2">
+                  <small class="form-hint">Code quality, minor bugs</small>
+                </div>
+
+                <div class="form-group">
+                  <label for="severityLow">Low (points)</label>
+                  <input type="number" id="severityLow" name="SEVERITY_LOW" min="1" value="1">
+                  <small class="form-hint">Code style, documentation</small>
+                </div>
+              </div>
+
+              <div class="severity-info">
+                <strong>⚠️ Important:</strong> Any CRITICAL or HIGH severity issues will always result in REQUEST_CHANGES, regardless of total score.
+              </div>
+
               <button type="submit" class="btn btn-primary">Save Configuration</button>
             </form>
           </div>
