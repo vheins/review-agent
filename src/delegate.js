@@ -1,6 +1,6 @@
 import { execa } from 'execa';
 import fs from 'fs-extra';
-import { logger } from './logger.js';
+import { logger, notify } from './logger.js';
 import { config } from './config.js';
 
 async function addReviewComments(repository, pr, repoDir) {
@@ -172,7 +172,22 @@ export async function delegateToGemini(repository, pr, repoDir) {
       // Auto merge if approved and AUTO_MERGE is enabled
       if (decision === 'APPROVE' && config.autoMerge) {
         logger.info('AUTO_MERGE enabled and PR approved, attempting to merge...');
-        await mergePR(repository, pr);
+        try {
+          await mergePR(repository, pr);
+          notify.success(pr.number, repository, 'PR approved and merged successfully');
+        } catch (error) {
+          if (error.message.includes('conflict') || error.message.includes('mergeable')) {
+            notify.manualMerge(pr.number, repository, 'Merge conflicts detected - cannot auto-merge');
+          } else {
+            logger.error(`Merge failed: ${error.message}`);
+          }
+        }
+      } else if (decision === 'APPROVE') {
+        notify.success(pr.number, repository, 'PR approved');
+      } else {
+        // Count issues from message
+        const issuesCount = (message.match(/\d+\./g) || []).length;
+        notify.requestChanges(pr.number, repository, issuesCount);
       }
     } else if (config.reviewMode === 'fix') {
       await fixPR(repository, pr, repoDir);
