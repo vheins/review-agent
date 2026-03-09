@@ -151,6 +151,9 @@
                   <option value="gemini">Gemini CLI</option>
                   <option value="copilot">GitHub Copilot CLI</option>
                   <option value="kiro">Kiro CLI</option>
+                  <option value="claude">Claude Code CLI</option>
+                  <option value="codex">Codex CLI</option>
+                  <option value="opencode">OpenCode CLI</option>
                 </select>
               </div>
 
@@ -204,6 +207,18 @@
               <button class="agent-tab" data-agent="kiro">
                 <span class="agent-icon">🥷</span>
                 Kiro
+              </button>
+              <button class="agent-tab" data-agent="claude">
+                <span class="agent-icon">🎭</span>
+                Claude
+              </button>
+              <button class="agent-tab" data-agent="codex">
+                <span class="agent-icon">📝</span>
+                Codex
+              </button>
+              <button class="agent-tab" data-agent="opencode">
+                <span class="agent-icon">🔓</span>
+                OpenCode
               </button>
             </div>
 
@@ -339,6 +354,130 @@
                     <option value="false">Disabled</option>
                   </select>
                   <small class="form-hint">Auto-approve all Kiro actions without confirmation</small>
+                </div>
+              </div>
+
+              <!-- Claude Config -->
+              <div class="agent-config" id="claude-config">
+                <div class="agent-header">
+                  <h3>Claude Code CLI Configuration</h3>
+                  <div class="agent-status" id="claudeStatus">
+                    <span class="status-indicator"></span>
+                    <span class="status-text">Disabled</span>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="agentClaudeEnabled">Enable Claude</label>
+                  <select id="agentClaudeEnabled" name="CLAUDE_ENABLED">
+                    <option value="true">Enabled</option>
+                    <option value="false">Disabled</option>
+                  </select>
+                  <small class="form-hint">Enable or disable Claude Code CLI as an executor option</small>
+                </div>
+
+                <div class="form-group">
+                  <label for="agentClaudeModel">Model</label>
+                  <select id="agentClaudeModel" name="CLAUDE_MODEL">
+                    <option value="sonnet">Sonnet (Latest, Default)</option>
+                    <option value="opus">Opus (Latest)</option>
+                    <option value="claude-sonnet-4-5-20250929">Claude Sonnet 4.5 (Specific)</option>
+                  </select>
+                  <small class="form-hint">Select the Claude model (aliases or full names)</small>
+                </div>
+
+                <div class="form-group">
+                  <label for="agentClaudeAgent">Agent (Optional)</label>
+                  <input type="text" id="agentClaudeAgent" name="CLAUDE_AGENT" placeholder="Leave empty for default">
+                  <small class="form-hint">Custom agent name (optional)</small>
+                </div>
+
+                <div class="form-group">
+                  <label for="agentClaudeYolo">YOLO Mode</label>
+                  <select id="agentClaudeYolo" name="CLAUDE_YOLO">
+                    <option value="true">Enabled</option>
+                    <option value="false">Disabled</option>
+                  </select>
+                  <small class="form-hint">Skip all permission checks (dangerous)</small>
+                </div>
+              </div>
+
+              <!-- Codex Config -->
+              <div class="agent-config" id="codex-config">
+                <div class="agent-header">
+                  <h3>Codex CLI Configuration</h3>
+                  <div class="agent-status" id="codexStatus">
+                    <span class="status-indicator"></span>
+                    <span class="status-text">Disabled</span>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="agentCodexEnabled">Enable Codex</label>
+                  <select id="agentCodexEnabled" name="CODEX_ENABLED">
+                    <option value="true">Enabled</option>
+                    <option value="false">Disabled</option>
+                  </select>
+                  <small class="form-hint">Enable or disable Codex CLI as an executor option</small>
+                </div>
+
+                <div class="form-group">
+                  <label for="agentCodexModel">Model</label>
+                  <select id="agentCodexModel" name="CODEX_MODEL">
+                    <option value="auto">Auto (Recommended)</option>
+                    <option value="o3">O3 (Latest)</option>
+                  </select>
+                  <small class="form-hint">Select the Codex model</small>
+                </div>
+
+                <div class="form-group">
+                  <label for="agentCodexYolo">YOLO Mode</label>
+                  <select id="agentCodexYolo" name="CODEX_YOLO">
+                    <option value="true">Enabled</option>
+                    <option value="false">Disabled</option>
+                  </select>
+                  <small class="form-hint">Bypass all approvals and sandbox (extremely dangerous)</small>
+                </div>
+              </div>
+
+              <!-- OpenCode Config -->
+              <div class="agent-config" id="opencode-config">
+                <div class="agent-header">
+                  <h3>OpenCode CLI Configuration</h3>
+                  <div class="agent-status" id="opencodeStatus">
+                    <span class="status-indicator"></span>
+                    <span class="status-text">Disabled</span>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="agentOpencodeEnabled">Enable OpenCode</label>
+                  <select id="agentOpencodeEnabled" name="OPENCODE_ENABLED">
+                    <option value="true">Enabled</option>
+                    <option value="false">Disabled</option>
+                  </select>
+                  <small class="form-hint">Enable or disable OpenCode CLI as an executor option</small>
+                </div>
+
+                <div class="form-group">
+                  <label for="agentOpencodeModel">Model</label>
+                  <input type="text" id="agentOpencodeModel" name="OPENCODE_MODEL" placeholder="auto or provider/model">
+                  <small class="form-hint">Model in format: provider/model (e.g., anthropic/claude-3-sonnet)</small>
+                </div>
+
+                <div class="form-group">
+                  <label for="agentOpencodeAgent">Agent (Optional)</label>
+                  <input type="text" id="agentOpencodeAgent" name="OPENCODE_AGENT" placeholder="Leave empty for default">
+                  <small class="form-hint">Custom agent name (optional)</small>
+                </div>
+
+                <div class="form-group">
+                  <label for="agentOpencodeYolo">YOLO Mode</label>
+                  <select id="agentOpencodeYolo" name="OPENCODE_YOLO">
+                    <option value="true">Enabled</option>
+                    <option value="false">Disabled</option>
+                  </select>
+                  <small class="form-hint">Auto-approve all OpenCode actions</small>
                 </div>
               </div>
 

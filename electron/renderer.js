@@ -91,43 +91,13 @@ async function loadConfig() {
             }
         });
 
-        // Toggle AI executor specific fields
-        toggleAIExecutorFields(config.AI_EXECUTOR || 'gemini');
+        // No need to toggle fields anymore - all config moved to Agent tab
     }
 }
 
-// Toggle AI Executor Fields
-function toggleAIExecutorFields(executor) {
-    const geminiEnabledGroup = document.getElementById('geminiEnabledGroup');
-    const geminiYoloGroup = document.getElementById('geminiYoloGroup');
-    const copilotEnabledGroup = document.getElementById('copilotEnabledGroup');
-    const copilotModelGroup = document.getElementById('copilotModelGroup');
-    const copilotYoloGroup = document.getElementById('copilotYoloGroup');
-
-    if (executor === 'copilot') {
-        // Show all fields when copilot is selected
-        geminiEnabledGroup.style.display = 'block';
-        geminiYoloGroup.style.display = 'block';
-        copilotEnabledGroup.style.display = 'block';
-        copilotModelGroup.style.display = 'block';
-        copilotYoloGroup.style.display = 'block';
-    } else {
-        // Show only gemini fields when gemini is selected
-        geminiEnabledGroup.style.display = 'block';
-        geminiYoloGroup.style.display = 'block';
-        copilotEnabledGroup.style.display = 'block';
-        copilotModelGroup.style.display = 'none';
-        copilotYoloGroup.style.display = 'none';
-    }
-}
-
-// AI Executor Change Handler
+// AI Executor Change Handler - removed (config moved to Agent tab)
 const aiExecutorSelect = document.getElementById('aiExecutor');
-if (aiExecutorSelect) {
-    aiExecutorSelect.addEventListener('change', (e) => {
-        toggleAIExecutorFields(e.target.value);
-    });
-}
+// No toggle needed anymore
 
 // Save Config
 configForm.addEventListener('submit', async (e) => {
@@ -492,10 +462,41 @@ async function loadAgentConfig() {
         if (kiroAgent) kiroAgent.value = config.KIRO_AGENT || 'auto';
         if (kiroYolo) kiroYolo.value = config.KIRO_YOLO || 'false';
 
+        // Claude config
+        const claudeEnabled = document.getElementById('agentClaudeEnabled');
+        const claudeModel = document.getElementById('agentClaudeModel');
+        const claudeAgent = document.getElementById('agentClaudeAgent');
+        const claudeYolo = document.getElementById('agentClaudeYolo');
+        if (claudeEnabled) claudeEnabled.value = config.CLAUDE_ENABLED || 'false';
+        if (claudeModel) claudeModel.value = config.CLAUDE_MODEL || 'sonnet';
+        if (claudeAgent) claudeAgent.value = config.CLAUDE_AGENT || '';
+        if (claudeYolo) claudeYolo.value = config.CLAUDE_YOLO || 'false';
+
+        // Codex config
+        const codexEnabled = document.getElementById('agentCodexEnabled');
+        const codexModel = document.getElementById('agentCodexModel');
+        const codexYolo = document.getElementById('agentCodexYolo');
+        if (codexEnabled) codexEnabled.value = config.CODEX_ENABLED || 'false';
+        if (codexModel) codexModel.value = config.CODEX_MODEL || 'auto';
+        if (codexYolo) codexYolo.value = config.CODEX_YOLO || 'false';
+
+        // OpenCode config
+        const opencodeEnabled = document.getElementById('agentOpencodeEnabled');
+        const opencodeModel = document.getElementById('agentOpencodeModel');
+        const opencodeAgent = document.getElementById('agentOpencodeAgent');
+        const opencodeYolo = document.getElementById('agentOpencodeYolo');
+        if (opencodeEnabled) opencodeEnabled.value = config.OPENCODE_ENABLED || 'false';
+        if (opencodeModel) opencodeModel.value = config.OPENCODE_MODEL || 'auto';
+        if (opencodeAgent) opencodeAgent.value = config.OPENCODE_AGENT || '';
+        if (opencodeYolo) opencodeYolo.value = config.OPENCODE_YOLO || 'false';
+
         // Update status indicators
         updateAgentStatus('gemini', config.GEMINI_ENABLED === 'true');
         updateAgentStatus('copilot', config.COPILOT_ENABLED === 'true');
         updateAgentStatus('kiro', config.KIRO_ENABLED === 'true');
+        updateAgentStatus('claude', config.CLAUDE_ENABLED === 'true');
+        updateAgentStatus('codex', config.CODEX_ENABLED === 'true');
+        updateAgentStatus('opencode', config.OPENCODE_ENABLED === 'true');
     }
 }
 
@@ -534,6 +535,9 @@ if (agentForm) {
             updateAgentStatus('gemini', config.GEMINI_ENABLED === 'true');
             updateAgentStatus('copilot', config.COPILOT_ENABLED === 'true');
             updateAgentStatus('kiro', config.KIRO_ENABLED === 'true');
+            updateAgentStatus('claude', config.CLAUDE_ENABLED === 'true');
+            updateAgentStatus('codex', config.CODEX_ENABLED === 'true');
+            updateAgentStatus('opencode', config.OPENCODE_ENABLED === 'true');
 
             // Reload main config to sync
             loadConfig();
@@ -552,6 +556,18 @@ document.getElementById('agentCopilotEnabled')?.addEventListener('change', (e) =
 
 document.getElementById('agentKiroEnabled')?.addEventListener('change', (e) => {
     updateAgentStatus('kiro', e.target.value === 'true');
+});
+
+document.getElementById('agentClaudeEnabled')?.addEventListener('change', (e) => {
+    updateAgentStatus('claude', e.target.value === 'true');
+});
+
+document.getElementById('agentCodexEnabled')?.addEventListener('change', (e) => {
+    updateAgentStatus('codex', e.target.value === 'true');
+});
+
+document.getElementById('agentOpencodeEnabled')?.addEventListener('change', (e) => {
+    updateAgentStatus('opencode', e.target.value === 'true');
 });
 
 // Load agent config on startup
