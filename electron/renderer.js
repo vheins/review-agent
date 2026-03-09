@@ -189,6 +189,22 @@ stopBtn.addEventListener('click', async () => {
     }
 });
 
+// Execute Now
+const executeNowBtn = document.getElementById('executeNowBtn');
+executeNowBtn.addEventListener('click', async () => {
+    const result = await window.electronAPI.executeNow();
+    if (result.success) {
+        addLog('info', 'Execute now signal sent - bypassing countdown');
+        addActivity('⚡', 'Execute Now', 'Countdown bypassed, executing immediately');
+        window.electronAPI.showNotification({
+            title: 'Execute Now',
+            body: 'Review will execute immediately'
+        });
+    } else {
+        addLog('error', result.message);
+    }
+});
+
 // Clear Logs
 clearLogsBtn.addEventListener('click', () => {
     logsContainer.innerHTML = '<div class="empty-state">No logs yet. Start a review to see logs.</div>';
@@ -203,12 +219,14 @@ function updateStatus(running) {
         statusText.textContent = 'Running';
         startBtn.disabled = true;
         startOnceBtn.disabled = true;
+        executeNowBtn.disabled = false;
         stopBtn.disabled = false;
     } else {
         statusBadge.classList.remove('running');
         statusText.textContent = 'Stopped';
         startBtn.disabled = false;
         startOnceBtn.disabled = false;
+        executeNowBtn.disabled = true;
         stopBtn.disabled = true;
     }
 }

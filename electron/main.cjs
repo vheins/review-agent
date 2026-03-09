@@ -108,6 +108,15 @@ ipcMain.handle('stop-review', async () => {
     return { success: false, message: 'No review running' };
 });
 
+ipcMain.handle('execute-now', async () => {
+    if (reviewProcess) {
+        // Send SIGUSR1 signal to trigger immediate execution
+        reviewProcess.kill('SIGUSR1');
+        return { success: true, message: 'Execute now signal sent' };
+    }
+    return { success: false, message: 'No review running' };
+});
+
 ipcMain.handle('get-config', async () => {
     try {
         const envPath = path.join(__dirname, '..', '.env');

@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('electronAPI', {
     startReview: (config) => ipcRenderer.invoke('start-review', config),
     stopReview: () => ipcRenderer.invoke('stop-review'),
+    executeNow: () => ipcRenderer.invoke('execute-now'),
     getConfig: () => ipcRenderer.invoke('get-config'),
     saveConfig: (config) => ipcRenderer.invoke('save-config', config),
     showNotification: (data) => ipcRenderer.invoke('show-notification', data),

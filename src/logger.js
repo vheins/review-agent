@@ -80,10 +80,24 @@ export const logger = {
       activeSpinner = null;
     }
 
+    let interrupted = false;
+    const interruptHandler = () => {
+      interrupted = true;
+    };
+
+    process.once('SIGUSR1', interruptHandler);
+
     for (let i = seconds; i > 0; i--) {
+      if (interrupted) {
+        process.stdout.write(`\r${chalk.yellow('⚡')} Countdown interrupted - executing now!          \n`);
+        process.removeListener('SIGUSR1', interruptHandler);
+        return;
+      }
       process.stdout.write(`\r${chalk.blue('ℹ')} Waiting ${chalk.yellow(i)} seconds...`);
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
+
+    process.removeListener('SIGUSR1', interruptHandler);
     process.stdout.write(`\r${chalk.green('✔')} Waiting ${chalk.green('done!')}          \n`);
   },
 
