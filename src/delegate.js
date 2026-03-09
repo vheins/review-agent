@@ -82,9 +82,10 @@ async function executeAIReview(prompt, repoDir, mode = 'review') {
         kiroArgs.unshift('--agent', config.kiroAgent);
       }
 
+      // Note: Kiro CLI doesn't support --yolo flag
+      // YOLO mode is informational only for Kiro
       if (config.kiroYolo) {
-        kiroArgs.push('--yolo');
-        logger.info('YOLO mode enabled - auto-approving all actions');
+        logger.info('YOLO mode enabled (Kiro will use default approval behavior)');
       }
 
       result = await execa('kiro-cli', kiroArgs);
@@ -193,8 +194,6 @@ async function addReviewComments(repository, pr, repoDir) {
       .replace(/\{\{guidelines\}\}/g, guidelines);
 
     logger.info(`Adding review comments for PR #${pr.number} using ${config.aiExecutor.toUpperCase()}`);
-
-    const output = await executeAIReview(prompt, repoDir, 'review');
 
     const output = await executeAIReview(prompt, repoDir, 'review');
 

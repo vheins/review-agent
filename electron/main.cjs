@@ -133,7 +133,27 @@ ipcMain.handle('get-config', async () => {
 ipcMain.handle('save-config', async (event, config) => {
     try {
         const envPath = path.join(__dirname, '..', '.env');
-        const envContent = Object.entries(config)
+
+        // Read existing .env file
+        let existingConfig = {};
+        if (fs.existsSync(envPath)) {
+            const existingContent = fs.readFileSync(envPath, 'utf-8');
+            existingContent.split('\n').forEach(line => {
+                const trimmed = line.trim();
+                if (trimmed && !trimmed.startsWith('#')) {
+                    const [key, ...valueParts] = trimmed.split('=');
+                    if (key) {
+                        existingConfig[key.trim()] = valueParts.join('=').trim();
+                    }
+                }
+            });
+        }
+
+        // Merge with new config (new values override existing)
+        const mergedConfig = { ...existingConfig, ...config };
+
+        // Write merged config back
+        const envContent = Object.entries(mergedConfig)
             .map(([key, value]) => `${key}=${value}`)
             .join('\n');
 
