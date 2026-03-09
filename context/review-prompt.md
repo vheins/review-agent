@@ -123,7 +123,7 @@ gh api repos/{{repository}}/pulls/{{pr.number}}/reviews \
   -f comments[][line]=67 \
   -f comments[][body]="Variabel 'unused' tidak digunakan. Hapus untuk clean code."
 
-STEP 7: Focus on these issues:
+STEP 7: Focus on these issues and ASSIGN SEVERITY LEVELS:
 - MERGE CONFLICTS - Check and resolve any conflict markers first
 - Security vulnerabilities (SQL injection, XSS, etc) - USE SECURITY MCP TOOLS
 - Vulnerable dependencies - USE osvScanner
@@ -135,7 +135,72 @@ STEP 7: Focus on these issues:
 - Best practices violations
 - Inconsistencies with project patterns
 
-STEP 8: Write comments in Indonesian
+SEVERITY CLASSIFICATION (MANDATORY):
+For EACH issue found, you MUST assign a severity level:
+
+- CRITICAL ({{severityCritical}} points): 
+  * Security vulnerabilities (SQL injection, XSS, RCE, authentication bypass)
+  * Data loss or corruption risks
+  * System crashes or complete service outage
+  * Exposed secrets or credentials
+  
+- HIGH ({{severityHigh}} points):
+  * Logic errors that break core functionality
+  * Performance issues causing significant degradation
+  * Missing critical error handling
+  * Vulnerable dependencies with known exploits
+  
+- MEDIUM ({{severityMedium}} points):
+  * Code quality issues affecting maintainability
+  * Minor bugs that don't break core features
+  * Missing non-critical error handling
+  * Inconsistent patterns or style violations
+  
+- LOW ({{severityLow}} points):
+  * Code style issues
+  * Unused variables or imports
+  * Minor optimization opportunities
+  * Documentation improvements
+
+SEVERITY SCORING SYSTEM:
+- Calculate total severity score: (Critical × {{severityCritical}}) + (High × {{severityHigh}}) + (Medium × {{severityMedium}}) + (Low × {{severityLow}})
+- Threshold for approval: {{severityThreshold}} points
+
+DECISION RULES (MANDATORY):
+1. If ANY CRITICAL or HIGH severity issues found: ALWAYS REQUEST_CHANGES (regardless of total score)
+2. If NO CRITICAL or HIGH issues:
+   - If total score < {{severityThreshold}}: APPROVE
+   - If total score >= {{severityThreshold}}: REQUEST_CHANGES
+
+CRITICAL/HIGH OVERRIDE RULE:
+Even if total score is low (e.g., 1 Critical = {{severityCritical}} points < {{severityThreshold}}), 
+the presence of CRITICAL or HIGH severity issues ALWAYS results in REQUEST_CHANGES.
+This ensures security vulnerabilities and critical bugs are NEVER approved.
+
+Example calculations:
+Scenario 1 - REJECT due to Critical (even though score < threshold):
+- 1 Critical issue = 1 × {{severityCritical}} = {{severityCritical}} points
+- 0 other issues
+Total = {{severityCritical}} points (< {{severityThreshold}}) → REQUEST_CHANGES (has Critical)
+
+Scenario 2 - REJECT due to High (even though score < threshold):
+- 1 High issue = 1 × {{severityHigh}} = {{severityHigh}} points
+- 2 Low issues = 2 × {{severityLow}} = {{severityLow * 2}} points
+Total = {{severityHigh + (severityLow * 2)}} points (< {{severityThreshold}}) → REQUEST_CHANGES (has High)
+
+Scenario 3 - REJECT due to total score:
+- 0 Critical/High issues
+- 6 Medium issues = 6 × {{severityMedium}} = {{severityMedium * 6}} points
+Total = {{severityMedium * 6}} points (>= {{severityThreshold}}) → REQUEST_CHANGES (score >= threshold)
+
+Scenario 4 - APPROVE (no Critical/High, score below threshold):
+- 0 Critical/High issues
+- 3 Medium issues = 3 × {{severityMedium}} = {{severityMedium * 3}} points
+- 2 Low issues = 2 × {{severityLow}} = {{severityLow * 2}} points
+Total = {{(severityMedium * 3) + (severityLow * 2)}} points (< {{severityThreshold}}) → APPROVE
+
+STEP 8: Write comments in Indonesian with SEVERITY LABEL
+- Start each comment with severity: [CRITICAL], [HIGH], [MEDIUM], or [LOW]
 - Be specific about the issue
 - Explain why it's a problem
 - Suggest how to fix it
@@ -144,21 +209,68 @@ STEP 8: Write comments in Indonesian
 - Keep each comment ATOMIC and FOCUSED on one issue
 - Include security severity if found by security tools
 
+Example comment format:
+"[HIGH] Potensi SQL injection pada query user. Gunakan prepared statements untuk mencegah serangan SQL injection."
+
 STEP 9: Store findings in memory for future reference
 - Use memory-store to save important patterns or recurring issues
 - Use memory-update to update existing knowledge
 - This helps maintain consistency across reviews
 
 STEP 10: After adding all ATOMIC comments, respond with:
-DECISION: [APPROVE or REQUEST_CHANGES]
-MESSAGE: [Summary in Indonesian listing all issues found with file names and line numbers]
+SEVERITY_SCORE: [total_score]
+SEVERITY_BREAKDOWN: Critical: [count], High: [count], Medium: [count], Low: [count]
+DECISION: [APPROVE or REQUEST_CHANGES based on decision rules]
+MESSAGE: [Summary in Indonesian listing all issues found with severity levels, file names and line numbers]
 
-Example MESSAGE format:
-Ditemukan beberapa masalah yang perlu diperbaiki:
-1. deploy-dev.sh:45 - Potensi SQL injection pada query user
-2. deploy-dev.sh:120 - Missing error handling untuk API call
-3. utils.ts:67 - Variabel 'unused' tidak digunakan
-4. package.json - Vulnerable dependency: lodash@4.17.15 (CVE-2021-23337)
+Example MESSAGE formats:
+
+Example 1 - REJECT due to Critical (override rule):
+SEVERITY_SCORE: 5
+SEVERITY_BREAKDOWN: Critical: 1, High: 0, Medium: 0, Low: 0
+DECISION: REQUEST_CHANGES
+MESSAGE: Ditemukan issue CRITICAL yang harus diperbaiki (Total Severity: 5 points):
+1. [CRITICAL] deploy-dev.sh:45 - Potensi SQL injection pada query user (5 points)
+
+⚠️ PR ini di-REJECT karena mengandung issue CRITICAL, meskipun total score (5) di bawah threshold ({{severityThreshold}}). Issue CRITICAL/HIGH harus diperbaiki terlebih dahulu.
+
+Example 2 - REJECT due to High (override rule):
+SEVERITY_SCORE: 5
+SEVERITY_BREAKDOWN: Critical: 0, High: 1, Medium: 0, Low: 2
+DECISION: REQUEST_CHANGES
+MESSAGE: Ditemukan issue HIGH yang harus diperbaiki (Total Severity: 5 points):
+1. [HIGH] auth.ts:89 - Authentication bypass vulnerability (3 points)
+2. [LOW] utils.ts:67 - Variabel 'unused' tidak digunakan (1 point)
+3. [LOW] index.ts:12 - Missing JSDoc comment (1 point)
+
+⚠️ PR ini di-REJECT karena mengandung issue HIGH, meskipun total score (5) di bawah threshold ({{severityThreshold}}). Issue CRITICAL/HIGH harus diperbaiki terlebih dahulu.
+
+Example 3 - REJECT due to total score:
+SEVERITY_SCORE: 12
+SEVERITY_BREAKDOWN: Critical: 0, High: 0, Medium: 6, Low: 0
+DECISION: REQUEST_CHANGES
+MESSAGE: Ditemukan beberapa masalah yang perlu diperbaiki (Total Severity: 12 points):
+1. [MEDIUM] utils.ts:67 - Variabel 'unused' tidak digunakan (2 points)
+2. [MEDIUM] index.ts:12 - Missing error handling (2 points)
+3. [MEDIUM] api.ts:45 - Inconsistent naming (2 points)
+4. [MEDIUM] helper.ts:89 - Code duplication (2 points)
+5. [MEDIUM] service.ts:120 - Missing validation (2 points)
+6. [MEDIUM] model.ts:34 - Inefficient query (2 points)
+
+PR ini di-REJECT karena total severity score (12) melebihi threshold ({{severityThreshold}}).
+
+Example 4 - APPROVE (no Critical/High, score below threshold):
+SEVERITY_SCORE: 8
+SEVERITY_BREAKDOWN: Critical: 0, High: 0, Medium: 3, Low: 2
+DECISION: APPROVE
+MESSAGE: Ditemukan beberapa masalah minor yang bisa diperbaiki (Total Severity: 8 points):
+1. [MEDIUM] utils.ts:67 - Variabel 'unused' tidak digunakan (2 points)
+2. [MEDIUM] index.ts:12 - Missing JSDoc comment (2 points)
+3. [MEDIUM] api.ts:45 - Code style inconsistency (2 points)
+4. [LOW] package.json - Outdated dependency (1 point)
+5. [LOW] README.md - Typo in documentation (1 point)
+
+✅ PR ini di-APPROVE karena tidak ada issue CRITICAL/HIGH dan total severity score (8) di bawah threshold ({{severityThreshold}}). Issue yang ditemukan bersifat minor dan bisa diperbaiki di PR berikutnya.
 
 Note: Jika ada suggestion dari gemini-code-assist yang kurang tepat, sebutkan juga dalam summary.
 

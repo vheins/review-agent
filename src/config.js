@@ -36,5 +36,11 @@ export const config = {
   opencodeEnabled: process.env.OPENCODE_ENABLED === 'true',
   opencodeModel: process.env.OPENCODE_MODEL || 'auto',
   opencodeAgent: process.env.OPENCODE_AGENT || '',
-  opencodeYolo: process.env.OPENCODE_YOLO === 'true'
+  opencodeYolo: process.env.OPENCODE_YOLO === 'true',
+  // Severity scoring configuration
+  severityThreshold: parseInt(process.env.SEVERITY_THRESHOLD || '10', 10),
+  severityCritical: parseInt(process.env.SEVERITY_CRITICAL || '5', 10),
+  severityHigh: parseInt(process.env.SEVERITY_HIGH || '3', 10),
+  severityMedium: parseInt(process.env.SEVERITY_MEDIUM || '2', 10),
+  severityLow: parseInt(process.env.SEVERITY_LOW || '1', 10)
 };

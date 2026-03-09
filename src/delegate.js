@@ -176,12 +176,20 @@ async function addReviewComments(repository, pr, repoDir) {
       .replace(/\{\{repository\}\}/g, repository)
       .replace(/\{\{pr\.number\}\}/g, pr.number)
       .replace(/\{\{pr\.title\}\}/g, pr.title)
-      .replace(/\{\{guidelines\}\}/g, guidelines);
+      .replace(/\{\{guidelines\}\}/g, guidelines)
+      .replace(/\{\{severityThreshold\}\}/g, config.severityThreshold)
+      .replace(/\{\{severityCritical\}\}/g, config.severityCritical)
+      .replace(/\{\{severityHigh\}\}/g, config.severityHigh)
+      .replace(/\{\{severityMedium\}\}/g, config.severityMedium)
+      .replace(/\{\{severityLow\}\}/g, config.severityLow);
 
     logger.info(`Adding review comments for PR #${pr.number} using ${config.aiExecutor.toUpperCase()}`);
+    logger.info(`Severity threshold: ${config.severityThreshold} (Critical:${config.severityCritical}, High:${config.severityHigh}, Medium:${config.severityMedium}, Low:${config.severityLow})`);
 
     const output = await executeAIReview(prompt, repoDir, 'review');
 
+    const severityScoreMatch = output.match(/SEVERITY_SCORE:\s*(\d+)/i);
+    const severityBreakdownMatch = output.match(/SEVERITY_BREAKDOWN:\s*(.+)/i);
     const decisionMatch = output.match(/DECISION:\s*(APPROVE|REQUEST_CHANGES)/i);
     const messageMatch = output.match(/MESSAGE:\s*(.+)/is);
 
@@ -189,16 +197,37 @@ async function addReviewComments(repository, pr, repoDir) {
       logger.warn(`${config.aiExecutor.toUpperCase()} response does not match expected format. Using fallback.`);
     }
 
-    const decision = decisionMatch ? decisionMatch[1].toUpperCase() : 'REQUEST_CHANGES';
+    const severityScore = severityScoreMatch ? parseInt(severityScoreMatch[1], 10) : 0;
+    const severityBreakdown = severityBreakdownMatch ? severityBreakdownMatch[1].trim() : 'N/A';
+
+    // Parse severity breakdown to check for Critical/High issues
+    let hasCritical = false;
+    let hasHigh = false;
+    if (severityBreakdownMatch) {
+      const criticalMatch = severityBreakdown.match(/Critical:\s*(\d+)/i);
+      const highMatch = severityBreakdown.match(/High:\s*(\d+)/i);
+      hasCritical = criticalMatch && parseInt(criticalMatch[1], 10) > 0;
+      hasHigh = highMatch && parseInt(highMatch[1], 10) > 0;
+    }
+
+    let decision = decisionMatch ? decisionMatch[1].toUpperCase() : 'REQUEST_CHANGES';
     const message = messageMatch ? messageMatch[1].trim() : 'Review telah dilakukan. Silakan periksa komentar yang diberikan untuk detail lebih lanjut.';
+
+    // Override decision if Critical or High issues found
+    if ((hasCritical || hasHigh) && decision === 'APPROVE') {
+      logger.warn(`Overriding APPROVE decision due to ${hasCritical ? 'CRITICAL' : 'HIGH'} severity issues`);
+      decision = 'REQUEST_CHANGES';
+    }
 
     // Check if AI already posted comments by looking for gh commands in output
     const hasPostedComments = output.includes('gh pr review') ||
       output.includes('gh api') ||
       output.includes('review submitted') ||
       output.includes('comment added');
-
-    logger.info(`Decision: ${decision}`);
+    logger.info(`Severity Score: ${severityScore} (Threshold: ${config.severityThreshold})`);
+    logger.info(`Severity Breakdown: ${severityBreakdown}`);
+    logger.info(`Has Critical: ${hasCritical}, Has High: ${hasHigh}`);
+    logger.info(`Decision: ${decision}${(hasCritical || hasHigh) && decisionMatch && decisionMatch[1].toUpperCase() === 'APPROVE' ? ' (OVERRIDDEN due to Critical/High issues)' : ''}`);
     logger.info(`Message: ${message}`);
     logger.info(`${config.aiExecutor.toUpperCase()} already posted comments: ${hasPostedComments}`);
 
