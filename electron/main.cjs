@@ -3,6 +3,28 @@ const path = require('path');
 const { spawn } = require('child_process');
 const fs = require('fs');
 
+// Single instance lock - prevent multiple instances
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+    console.log('⚠ Another instance is already running. Exiting...');
+    app.quit();
+} else {
+    app.on('second-instance', (event, commandLine, workingDirectory) => {
+        // Someone tried to run a second instance, focus our window instead
+        if (mainWindow) {
+            if (mainWindow.isMinimized()) mainWindow.restore();
+            mainWindow.focus();
+
+            // Show notification
+            new Notification({
+                title: 'Agentic Bunshin',
+                body: 'Application is already running!'
+            }).show();
+        }
+    });
+}
+
 // Enable hot reload in development
 if (process.env.NODE_ENV === 'development') {
     try {
