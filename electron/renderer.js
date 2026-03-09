@@ -614,5 +614,39 @@ document.getElementById('agentOpencodeEnabled')?.addEventListener('change', (e) 
     updateAgentStatus('opencode', e.target.value === 'true');
 });
 
+// Test Agent Button
+const testAgentBtn = document.getElementById('testAgentBtn');
+if (testAgentBtn) {
+    testAgentBtn.addEventListener('click', async () => {
+        testAgentBtn.disabled = true;
+        testAgentBtn.textContent = 'Testing...';
+
+        addActivity('🧪', 'Testing Agent', 'Running test prompt: "Haloo"');
+        addLog('info', 'Testing agent with prompt: "Haloo"');
+
+        const result = await window.electronAPI.testAgent();
+
+        if (result.success) {
+            addLog('info', `Agent test completed successfully`);
+            addLog('info', `Output: ${result.output.substring(0, 200)}...`);
+            addActivity('✅', 'Agent Test Success', 'Test completed successfully');
+            window.electronAPI.showNotification({
+                title: 'Agent Test Success',
+                body: 'Test prompt executed successfully'
+            });
+        } else {
+            addLog('error', `Agent test failed: ${result.error}`);
+            addActivity('❌', 'Agent Test Failed', result.error);
+            window.electronAPI.showNotification({
+                title: 'Agent Test Failed',
+                body: result.error
+            });
+        }
+
+        testAgentBtn.disabled = false;
+        testAgentBtn.textContent = 'Test Agent';
+    });
+}
+
 // Load agent config on startup
 loadAgentConfig();

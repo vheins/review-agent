@@ -72,10 +72,13 @@ async function executeAIReview(prompt, repoDir, mode = 'review') {
         kiroArgs.unshift('--agent', config.kiroAgent);
       }
 
-      // Note: Kiro CLI doesn't support --yolo flag
-      // YOLO mode is informational only for Kiro
+      // Add non-interactive mode for automation
+      kiroArgs.push('--no-interactive');
+
+      // YOLO mode uses --trust-all-tools flag
       if (config.kiroYolo) {
-        logger.info('YOLO mode enabled (Kiro will use default approval behavior)');
+        kiroArgs.push('--trust-all-tools');
+        logger.info('YOLO mode enabled - trusting all tools');
       }
 
       result = await execa('kiro-cli', kiroArgs);
@@ -274,6 +277,8 @@ async function fixPR(repository, pr, repoDir) {
     throw error;
   }
 }
+
+export { executeAIReview };
 
 export async function delegateToGemini(repository, pr, repoDir) {
   if (config.dryRun) {

@@ -201,3 +201,19 @@ ipcMain.handle('write-context-file', async (event, { fileName, content }) => {
         return { success: false, error: error.message };
     }
 });
+
+ipcMain.handle('test-agent', async (event) => {
+    try {
+        const delegatePath = path.join(__dirname, '..', 'src', 'delegate.js');
+        const { executeAIReview } = await import(delegatePath);
+
+        const repoDir = path.join(__dirname, '..');
+        const testPrompt = 'Haloo';
+
+        const output = await executeAIReview(testPrompt, repoDir, 'review');
+
+        return { success: true, output };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});

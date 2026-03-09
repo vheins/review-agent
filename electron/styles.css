@@ -375,6 +375,16 @@ body {
     border-color: #58a6ff;
 }
 
+.form-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 2rem;
+}
+
+.form-actions .btn {
+    flex: 1;
+}
+
 /* Logs */
 .logs-container {
     background: #0d1117;
@@ -1031,6 +1041,11 @@ body.light-theme .mobile-menu-toggle span {
     .form-group select {
         padding: 0.6rem;
         font-size: 0.8rem;
+    }
+
+    .form-actions {
+        flex-direction: column;
+        gap: 0.75rem;
     }
 
     .logs-container {
