@@ -3,9 +3,88 @@ import fs from 'fs-extra';
 import { logger, notify } from './logger.js';
 import { config } from './config.js';
 
-async function addReviewComments(repository, pr, repoDir) {
+async function executeAIReview(prompt, repoDir, mode = 'review') {
   const originalDir = process.cwd();
 
+  try {
+    process.chdir(repoDir);
+
+    const executor = config.aiExecutor.toLowerCase();
+
+    // Check if executor is enabled
+    if (executor === 'gemini' && !config.geminiEnabled) {
+      throw new Error('Gemini executor is disabled. Enable GEMINI_ENABLED=true in .env');
+    }
+
+    if (executor === 'copilot' && !config.copilotEnabled) {
+      throw new Error('Copilot executor is disabled. Enable COPILOT_ENABLED=true in .env');
+    }
+
+    const spinnerText = executor === 'copilot' ? 'Executing Copilot review...' : 'Executing Gemini review...';
+
+    console.log(`\n--- PROMPT TO ${executor.toUpperCase()} ---`);
+    console.log(prompt);
+    console.log('--- END PROMPT ---\n');
+
+    const spinner = logger.spinner(spinnerText);
+    spinner.start();
+
+    let result;
+
+    if (executor === 'copilot') {
+      // GitHub Copilot CLI execution
+      const copilotArgs = ['-p', prompt];
+
+      if (config.copilotYolo) {
+        copilotArgs.push('--yolo');
+        logger.info('YOLO mode enabled - auto-approving all actions');
+      } else {
+        copilotArgs.push('--allow-all-tools');
+      }
+
+      // Add model selection
+      copilotArgs.push('--model', config.copilotModel);
+
+      // Silent mode for cleaner output
+      if (mode === 'review') {
+        copilotArgs.push('--silent');
+      }
+
+      result = await execa('copilot', copilotArgs);
+
+    } else {
+      // Gemini CLI execution (default)
+      const geminiArgs = ['-p', prompt];
+
+      // Add model selection if not auto
+      if (config.geminiModel && !config.geminiModel.startsWith('auto')) {
+        geminiArgs.push('--model', config.geminiModel);
+      }
+
+      if (config.geminiYolo) {
+        geminiArgs.push('-y');
+        logger.info('YOLO mode enabled - auto-approving all actions');
+      }
+
+      result = await execa('gemini', geminiArgs);
+    }
+
+    spinner.succeed(`${executor === 'copilot' ? 'Copilot' : 'Gemini'} ${mode} completed`);
+
+    const output = result.stdout.trim();
+
+    console.log(`\n--- ${executor.toUpperCase()} OUTPUT ---`);
+    console.log(output);
+    console.log('--- END OUTPUT ---\n');
+
+    return output;
+
+  } finally {
+    process.chdir(originalDir);
+  }
+}
+
+async function addReviewComments(repository, pr, repoDir) {
   try {
     const guidelines = await fs.readFile('agents.md', 'utf-8');
     const promptTemplate = await fs.readFile('context/review-prompt.md', 'utf-8');
@@ -17,45 +96,23 @@ async function addReviewComments(repository, pr, repoDir) {
       .replace(/\{\{pr\.title\}\}/g, pr.title)
       .replace(/\{\{guidelines\}\}/g, guidelines);
 
-    logger.info(`Adding review comments for PR #${pr.number}`);
+    logger.info(`Adding review comments for PR #${pr.number} using ${config.aiExecutor.toUpperCase()}`);
 
-    console.log('\n--- PROMPT TO GEMINI ---');
-    console.log(prompt);
-    console.log('--- END PROMPT ---\n');
+    const output = await executeAIReview(prompt, repoDir, 'review');
 
-    process.chdir(repoDir);
-
-    // Capture output while also displaying it
-    const geminiArgs = ['-p', prompt];
-    if (config.geminiYolo) {
-      geminiArgs.push('-y');
-      logger.info('YOLO mode enabled - auto-approving all actions');
-    }
-
-    const spinner = logger.spinner('Executing Gemini review...');
-    spinner.start();
-
-    const result = await execa('gemini', geminiArgs);
-
-    spinner.succeed('Gemini review completed');
-
-    const output = result.stdout.trim();
-
-    console.log('\n--- GEMINI OUTPUT ---');
-    console.log(output);
-    console.log('--- END OUTPUT ---\n');
+    const output = await executeAIReview(prompt, repoDir, 'review');
 
     const decisionMatch = output.match(/DECISION:\s*(APPROVE|REQUEST_CHANGES)/i);
     const messageMatch = output.match(/MESSAGE:\s*(.+)/is);
 
     if (!decisionMatch || !messageMatch) {
-      logger.warn('Gemini response does not match expected format. Using fallback.');
+      logger.warn(`${config.aiExecutor.toUpperCase()} response does not match expected format. Using fallback.`);
     }
 
     const decision = decisionMatch ? decisionMatch[1].toUpperCase() : 'REQUEST_CHANGES';
     const message = messageMatch ? messageMatch[1].trim() : 'Review telah dilakukan. Silakan periksa komentar yang diberikan untuk detail lebih lanjut.';
 
-    // Check if Gemini already posted comments by looking for gh commands in output
+    // Check if AI already posted comments by looking for gh commands in output
     const hasPostedComments = output.includes('gh pr review') ||
       output.includes('gh api') ||
       output.includes('review submitted') ||
@@ -63,12 +120,13 @@ async function addReviewComments(repository, pr, repoDir) {
 
     logger.info(`Decision: ${decision}`);
     logger.info(`Message: ${message}`);
-    logger.info(`Gemini already posted comments: ${hasPostedComments}`);
+    logger.info(`${config.aiExecutor.toUpperCase()} already posted comments: ${hasPostedComments}`);
 
     return { decision, message, hasPostedComments };
 
-  } finally {
-    process.chdir(originalDir);
+  } catch (error) {
+    logger.error(`Failed to execute AI review: ${error.message}`);
+    throw error;
   }
 }
 
@@ -118,8 +176,6 @@ async function mergePR(repository, pr) {
 }
 
 async function fixPR(repository, pr, repoDir) {
-  const originalDir = process.cwd();
-
   try {
     const guidelines = await fs.readFile('agents.md', 'utf-8');
     const promptTemplate = await fs.readFile('context/fix-prompt.md', 'utf-8');
@@ -132,29 +188,13 @@ async function fixPR(repository, pr, repoDir) {
       .replace(/\{\{pr\.headRefName\}\}/g, pr.headRefName)
       .replace(/\{\{guidelines\}\}/g, guidelines);
 
-    logger.info(`Fixing issues in PR #${pr.number}`);
+    logger.info(`Fixing issues in PR #${pr.number} using ${config.aiExecutor.toUpperCase()}`);
 
-    console.log('\n--- PROMPT TO GEMINI ---');
-    console.log(prompt);
-    console.log('--- END PROMPT ---\n');
+    await executeAIReview(prompt, repoDir, 'fix');
 
-    process.chdir(repoDir);
-
-    const geminiArgs = ['-p', prompt];
-    if (config.geminiYolo) {
-      geminiArgs.push('-y');
-      logger.info('YOLO mode enabled - auto-approving all actions');
-    }
-
-    const spinner = logger.spinner('Executing Gemini fix...');
-    spinner.start();
-
-    await execa('gemini', geminiArgs, { stdio: 'inherit' });
-
-    spinner.succeed('Gemini fix completed');
-
-  } finally {
-    process.chdir(originalDir);
+  } catch (error) {
+    logger.error(`Failed to fix PR: ${error.message}`);
+    throw error;
   }
 }
 

@@ -90,7 +90,43 @@ async function loadConfig() {
                 input.value = value;
             }
         });
+
+        // Toggle AI executor specific fields
+        toggleAIExecutorFields(config.AI_EXECUTOR || 'gemini');
     }
+}
+
+// Toggle AI Executor Fields
+function toggleAIExecutorFields(executor) {
+    const geminiEnabledGroup = document.getElementById('geminiEnabledGroup');
+    const geminiYoloGroup = document.getElementById('geminiYoloGroup');
+    const copilotEnabledGroup = document.getElementById('copilotEnabledGroup');
+    const copilotModelGroup = document.getElementById('copilotModelGroup');
+    const copilotYoloGroup = document.getElementById('copilotYoloGroup');
+
+    if (executor === 'copilot') {
+        // Show all fields when copilot is selected
+        geminiEnabledGroup.style.display = 'block';
+        geminiYoloGroup.style.display = 'block';
+        copilotEnabledGroup.style.display = 'block';
+        copilotModelGroup.style.display = 'block';
+        copilotYoloGroup.style.display = 'block';
+    } else {
+        // Show only gemini fields when gemini is selected
+        geminiEnabledGroup.style.display = 'block';
+        geminiYoloGroup.style.display = 'block';
+        copilotEnabledGroup.style.display = 'block';
+        copilotModelGroup.style.display = 'none';
+        copilotYoloGroup.style.display = 'none';
+    }
+}
+
+// AI Executor Change Handler
+const aiExecutorSelect = document.getElementById('aiExecutor');
+if (aiExecutorSelect) {
+    aiExecutorSelect.addEventListener('change', (e) => {
+        toggleAIExecutorFields(e.target.value);
+    });
 }
 
 // Save Config
@@ -406,3 +442,103 @@ function updateLastLog(type, message) {
     lastLogContent.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
     lastLogContent.className = `last-log-content ${type}`;
 }
+
+
+// Agent Tab Functionality
+const agentForm = document.getElementById('agentForm');
+
+// Agent Tab Switching
+document.querySelectorAll('.agent-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+        const agent = tab.dataset.agent;
+
+        // Update tabs
+        document.querySelectorAll('.agent-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+
+        // Update config sections
+        document.querySelectorAll('.agent-config').forEach(c => c.classList.remove('active'));
+        document.getElementById(`${agent}-config`).classList.add('active');
+    });
+});
+
+// Load Agent Config
+async function loadAgentConfig() {
+    const result = await window.electronAPI.getConfig();
+    if (result.success) {
+        const config = result.config;
+
+        // Gemini config
+        const geminiEnabled = document.getElementById('agentGeminiEnabled');
+        const geminiModel = document.getElementById('agentGeminiModel');
+        const geminiYolo = document.getElementById('agentGeminiYolo');
+        if (geminiEnabled) geminiEnabled.value = config.GEMINI_ENABLED || 'true';
+        if (geminiModel) geminiModel.value = config.GEMINI_MODEL || 'auto-3';
+        if (geminiYolo) geminiYolo.value = config.GEMINI_YOLO || 'false';
+
+        // Copilot config
+        const copilotEnabled = document.getElementById('agentCopilotEnabled');
+        const copilotModel = document.getElementById('agentCopilotModel');
+        const copilotYolo = document.getElementById('agentCopilotYolo');
+        if (copilotEnabled) copilotEnabled.value = config.COPILOT_ENABLED || 'false';
+        if (copilotModel) copilotModel.value = config.COPILOT_MODEL || 'claude-haiku-4.5';
+        if (copilotYolo) copilotYolo.value = config.COPILOT_YOLO || 'false';
+
+        // Update status indicators
+        updateAgentStatus('gemini', config.GEMINI_ENABLED === 'true');
+        updateAgentStatus('copilot', config.COPILOT_ENABLED === 'true');
+    }
+}
+
+// Update Agent Status Indicator
+function updateAgentStatus(agent, enabled) {
+    const statusElement = document.getElementById(`${agent}Status`);
+    if (statusElement) {
+        const statusText = statusElement.querySelector('.status-text');
+        if (enabled) {
+            statusElement.classList.add('enabled');
+            statusText.textContent = 'Enabled';
+        } else {
+            statusElement.classList.remove('enabled');
+            statusText.textContent = 'Disabled';
+        }
+    }
+}
+
+// Save Agent Config
+if (agentForm) {
+    agentForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const formData = new FormData(agentForm);
+        const config = Object.fromEntries(formData);
+
+        const result = await window.electronAPI.saveConfig(config);
+        if (result.success) {
+            addActivity('🤖', 'Agent Configuration Saved', 'AI executor settings have been updated');
+            window.electronAPI.showNotification({
+                title: 'Agent Configuration Saved',
+                body: 'Your AI executor settings have been updated'
+            });
+
+            // Update status indicators
+            updateAgentStatus('gemini', config.GEMINI_ENABLED === 'true');
+            updateAgentStatus('copilot', config.COPILOT_ENABLED === 'true');
+
+            // Reload main config to sync
+            loadConfig();
+        }
+    });
+}
+
+// Real-time status update on change
+document.getElementById('agentGeminiEnabled')?.addEventListener('change', (e) => {
+    updateAgentStatus('gemini', e.target.value === 'true');
+});
+
+document.getElementById('agentCopilotEnabled')?.addEventListener('change', (e) => {
+    updateAgentStatus('copilot', e.target.value === 'true');
+});
+
+// Load agent config on startup
+loadAgentConfig();

@@ -50,6 +50,10 @@
             <span class="icon">⚙️</span>
             Configuration
           </button>
+          <button class="nav-item" data-tab="agent">
+            <span class="icon">🤖</span>
+            Agent
+          </button>
           <button class="nav-item" data-tab="logs">
             <span class="icon">📝</span>
             Logs
@@ -142,6 +146,14 @@
               </div>
 
               <div class="form-group">
+                <label for="aiExecutor">AI Executor</label>
+                <select id="aiExecutor" name="AI_EXECUTOR">
+                  <option value="gemini">Gemini CLI</option>
+                  <option value="copilot">GitHub Copilot CLI</option>
+                </select>
+              </div>
+
+              <div class="form-group">
                 <label for="reviewInterval">Review Interval (seconds)</label>
                 <input type="number" id="reviewInterval" name="REVIEW_INTERVAL" min="60" value="600">
               </div>
@@ -149,14 +161,6 @@
               <div class="form-group">
                 <label for="autoMerge">Auto Merge</label>
                 <select id="autoMerge" name="AUTO_MERGE">
-                  <option value="true">Enabled</option>
-                  <option value="false">Disabled</option>
-                </select>
-              </div>
-
-              <div class="form-group">
-                <label for="geminiYolo">Gemini YOLO Mode</label>
-                <select id="geminiYolo" name="GEMINI_YOLO">
                   <option value="true">Enabled</option>
                   <option value="false">Disabled</option>
                 </select>
@@ -177,6 +181,123 @@
               </div>
 
               <button type="submit" class="btn btn-primary">Save Configuration</button>
+            </form>
+          </div>
+        </div>
+
+        <!-- Agent Tab -->
+        <div class="tab-content" id="agent">
+          <div class="card">
+            <h2>AI Agent Configuration</h2>
+            <p class="card-description">Configure AI executors for code review and auto-fix.</p>
+            
+            <div class="agent-selector">
+              <button class="agent-tab active" data-agent="gemini">
+                <span class="agent-icon">💎</span>
+                Gemini
+              </button>
+              <button class="agent-tab" data-agent="copilot">
+                <span class="agent-icon">🤖</span>
+                Copilot
+              </button>
+            </div>
+
+            <form id="agentForm">
+              <!-- Gemini Config -->
+              <div class="agent-config active" id="gemini-config">
+                <div class="agent-header">
+                  <h3>Gemini CLI Configuration</h3>
+                  <div class="agent-status" id="geminiStatus">
+                    <span class="status-indicator"></span>
+                    <span class="status-text">Disabled</span>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="agentGeminiEnabled">Enable Gemini</label>
+                  <select id="agentGeminiEnabled" name="GEMINI_ENABLED">
+                    <option value="true">Enabled</option>
+                    <option value="false">Disabled</option>
+                  </select>
+                  <small class="form-hint">Enable or disable Gemini CLI as an executor option</small>
+                </div>
+
+                <div class="form-group">
+                  <label for="agentGeminiModel">Model</label>
+                  <select id="agentGeminiModel" name="GEMINI_MODEL">
+                    <option value="auto-3">Auto (Gemini 3) - Recommended</option>
+                    <option value="auto-2.5">Auto (Gemini 2.5)</option>
+                    <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro Preview</option>
+                    <option value="gemini-3-flash-preview">Gemini 3 Flash Preview</option>
+                    <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                    <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                    <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</option>
+                  </select>
+                  <small class="form-hint">Select the Gemini model (Auto lets CLI choose the best model)</small>
+                </div>
+
+                <div class="form-group">
+                  <label for="agentGeminiYolo">YOLO Mode</label>
+                  <select id="agentGeminiYolo" name="GEMINI_YOLO">
+                    <option value="true">Enabled</option>
+                    <option value="false">Disabled</option>
+                  </select>
+                  <small class="form-hint">Auto-approve all Gemini actions without confirmation</small>
+                </div>
+              </div>
+
+              <!-- Copilot Config -->
+              <div class="agent-config" id="copilot-config">
+                <div class="agent-header">
+                  <h3>GitHub Copilot CLI Configuration</h3>
+                  <div class="agent-status" id="copilotStatus">
+                    <span class="status-indicator"></span>
+                    <span class="status-text">Disabled</span>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="agentCopilotEnabled">Enable Copilot</label>
+                  <select id="agentCopilotEnabled" name="COPILOT_ENABLED">
+                    <option value="true">Enabled</option>
+                    <option value="false">Disabled</option>
+                  </select>
+                  <small class="form-hint">Enable or disable GitHub Copilot CLI as an executor option</small>
+                </div>
+
+                <div class="form-group">
+                  <label for="agentCopilotModel">Model</label>
+                  <select id="agentCopilotModel" name="COPILOT_MODEL">
+                    <option value="claude-haiku-4.5">Claude Haiku 4.5 (Fast, Default) - 0.33x</option>
+                    <option value="claude-sonnet-4.6">Claude Sonnet 4.6 - 1x</option>
+                    <option value="claude-sonnet-4.5">Claude Sonnet 4.5 - 1x</option>
+                    <option value="claude-sonnet-4">Claude Sonnet 4 - 1x</option>
+                    <option value="claude-opus-4.6">Claude Opus 4.6 - 3x</option>
+                    <option value="claude-opus-4.5">Claude Opus 4.5 - 3x</option>
+                    <option value="gemini-3-pro-preview">Gemini 3 Pro (Preview) - 1x</option>
+                    <option value="gpt-5.4">GPT-5.4 - 1x</option>
+                    <option value="gpt-5.3-codex">GPT-5.3-Codex - 1x</option>
+                    <option value="gpt-5.2-codex">GPT-5.2-Codex - 1x</option>
+                    <option value="gpt-5.2">GPT-5.2 - 1x</option>
+                    <option value="gpt-5.1-codex-max">GPT-5.1-Codex-Max - 1x</option>
+                    <option value="gpt-5.1-codex">GPT-5.1-Codex - 1x</option>
+                    <option value="gpt-5.1">GPT-5.1 - 1x</option>
+                    <option value="gpt-5.1-codex-mini">GPT-5.1-Codex-Mini (Preview) - 0.33x</option>
+                  </select>
+                  <small class="form-hint">Select the AI model for Copilot (cost multiplier shown)</small>
+                </div>
+
+                <div class="form-group">
+                  <label for="agentCopilotYolo">YOLO Mode</label>
+                  <select id="agentCopilotYolo" name="COPILOT_YOLO">
+                    <option value="true">Enabled</option>
+                    <option value="false">Disabled</option>
+                  </select>
+                  <small class="form-hint">Auto-approve all Copilot actions without confirmation</small>
+                </div>
+              </div>
+
+              <button type="submit" class="btn btn-primary">Save Agent Configuration</button>
             </form>
           </div>
         </div>
