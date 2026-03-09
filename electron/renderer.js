@@ -91,8 +91,49 @@ async function loadConfig() {
             }
         });
 
+        // Update executor info display
+        updateExecutorInfo(config);
+
         // No need to toggle fields anymore - all config moved to Agent tab
     }
+}
+
+// Update Executor Info Display
+function updateExecutorInfo(config) {
+    const executor = config.AI_EXECUTOR || 'gemini';
+    const executorName = executor.charAt(0).toUpperCase() + executor.slice(1);
+
+    document.getElementById('activeExecutor').textContent = executorName;
+
+    // Get model based on executor
+    let model = '-';
+    let yolo = 'Disabled';
+
+    if (executor === 'gemini') {
+        model = config.GEMINI_MODEL || 'auto-3';
+        yolo = config.GEMINI_YOLO === 'true' ? 'Enabled' : 'Disabled';
+    } else if (executor === 'copilot') {
+        model = config.COPILOT_MODEL || 'claude-haiku-4.5';
+        yolo = config.COPILOT_YOLO === 'true' ? 'Enabled' : 'Disabled';
+    } else if (executor === 'kiro') {
+        model = config.KIRO_AGENT || 'auto';
+        yolo = config.KIRO_YOLO === 'true' ? 'Enabled' : 'Disabled';
+    } else if (executor === 'claude') {
+        model = config.CLAUDE_MODEL || 'sonnet';
+        yolo = config.CLAUDE_YOLO === 'true' ? 'Enabled' : 'Disabled';
+    } else if (executor === 'codex') {
+        model = config.CODEX_MODEL || 'auto';
+        yolo = config.CODEX_YOLO === 'true' ? 'Enabled' : 'Disabled';
+    } else if (executor === 'opencode') {
+        model = config.OPENCODE_MODEL || 'auto';
+        yolo = config.OPENCODE_YOLO === 'true' ? 'Enabled' : 'Disabled';
+    }
+
+    document.getElementById('activeModel').textContent = model;
+
+    const yoloElement = document.getElementById('activeYolo');
+    yoloElement.textContent = yolo;
+    yoloElement.className = 'executor-value ' + (yolo === 'Enabled' ? 'yolo-enabled' : 'yolo-disabled');
 }
 
 // AI Executor Change Handler - removed (config moved to Agent tab)
@@ -113,6 +154,9 @@ configForm.addEventListener('submit', async (e) => {
             title: 'Configuration Saved',
             body: 'Your settings have been updated'
         });
+
+        // Reload config to update executor info
+        loadConfig();
     }
 });
 
