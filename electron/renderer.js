@@ -248,17 +248,29 @@ function addLog(type, message) {
 }
 
 // Add Activity
-function addActivity(icon, title, meta) {
+function addActivity(icon, title, meta, prUrl = null, decision = null) {
     if (activityList.querySelector('.empty-state')) {
         activityList.innerHTML = '';
     }
 
     const activityItem = document.createElement('div');
     activityItem.className = 'activity-item';
+
+    let decisionBadge = '';
+    if (decision) {
+        const badgeClass = decision === 'APPROVE' ? 'badge-success' : 'badge-danger';
+        const badgeText = decision === 'APPROVE' ? 'Approved' : 'Rejected';
+        decisionBadge = `<span class="decision-badge ${badgeClass}">${badgeText}</span>`;
+    }
+
+    const titleContent = prUrl
+        ? `<a href="${prUrl}" target="_blank" class="activity-link">${title}</a>`
+        : title;
+
     activityItem.innerHTML = `
     <div class="activity-icon">${icon}</div>
     <div class="activity-content">
-      <div class="activity-title">${title}</div>
+      <div class="activity-title">${titleContent} ${decisionBadge}</div>
       <div class="activity-meta">${meta} • ${new Date().toLocaleTimeString()}</div>
     </div>
   `;
@@ -270,6 +282,49 @@ function addActivity(icon, title, meta) {
     }
 }
 
+// Load History from Database
+async function loadHistory() {
+    const result = await window.electronAPI.getHistory(10);
+    if (result.success && result.reviews.length > 0) {
+        activityList.innerHTML = '';
+        result.reviews.forEach(review => {
+            const icon = review.decision === 'APPROVE' ? '✅' : '🔍';
+            const title = `PR #${review.pr_number}: ${review.pr_title}`;
+            const meta = `${review.repository} • Score: ${review.severity_score}`;
+            const date = new Date(review.reviewed_at);
+
+            const activityItem = document.createElement('div');
+            activityItem.className = 'activity-item';
+
+            const badgeClass = review.decision === 'APPROVE' ? 'badge-success' : 'badge-danger';
+            const badgeText = review.decision === 'APPROVE' ? 'Approved' : 'Rejected';
+
+            activityItem.innerHTML = `
+                <div class="activity-icon">${icon}</div>
+                <div class="activity-content">
+                    <div class="activity-title">
+                        <a href="${review.pr_url}" target="_blank" class="activity-link">${title}</a>
+                        <span class="decision-badge ${badgeClass}">${badgeText}</span>
+                    </div>
+                    <div class="activity-meta">${meta} • ${date.toLocaleString()}</div>
+                </div>
+            `;
+            activityList.appendChild(activityItem);
+        });
+    }
+}
+
+// Update Stats from Database
+async function updateStatsFromDB() {
+    const result = await window.electronAPI.getStats();
+    if (result.success) {
+        stats.totalPRs = result.stats.total || 0;
+        stats.approved = result.stats.approved || 0;
+        stats.changesRequested = result.stats.rejected || 0;
+        updateStats();
+    }
+}
+
 // Update Stats
 function updateStats() {
     document.getElementById('totalPRs').textContent = stats.totalPRs;
@@ -277,7 +332,6 @@ function updateStats() {
     document.getElementById('changesRequested').textContent = stats.changesRequested;
     document.getElementById('manualMerge').textContent = stats.manualMerge;
 }
-
 // Parse Log Output
 function parseLogOutput(message) {
     // Detect PR events
@@ -319,7 +373,8 @@ window.electronAPI.onReviewStopped((data) => {
 
 // Initialize
 loadConfig();
-updateStats();
+loadHistory();
+updateStatsFromDB();
 
 // Load initial context file
 setTimeout(() => {

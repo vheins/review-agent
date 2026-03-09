@@ -10,6 +10,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     readContextFile: (fileName) => ipcRenderer.invoke('read-context-file', fileName),
     writeContextFile: (data) => ipcRenderer.invoke('write-context-file', data),
     testAgent: () => ipcRenderer.invoke('test-agent'),
+    getHistory: (limit) => ipcRenderer.invoke('get-history', limit),
+    getStats: () => ipcRenderer.invoke('get-stats'),
     onLogOutput: (callback) => ipcRenderer.on('log-output', (event, data) => callback(data)),
     onReviewStopped: (callback) => ipcRenderer.on('review-stopped', (event, data) => callback(data))
 });

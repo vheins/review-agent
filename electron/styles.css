@@ -351,6 +351,40 @@ body {
 .activity-title {
     font-weight: 500;
     margin-bottom: 0.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.activity-link {
+    color: #58a6ff;
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+.activity-link:hover {
+    color: #79c0ff;
+    text-decoration: underline;
+}
+
+.decision-badge {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.badge-success {
+    background: #238636;
+    color: #ffffff;
+}
+
+.badge-danger {
+    background: #da3633;
+    color: #ffffff;
 }
 
 .activity-meta {
@@ -712,6 +746,14 @@ body.light-theme .stat-label {
 body.light-theme .activity-item {
     background: #ffffff;
     border-color: #d0d7de;
+}
+
+body.light-theme .activity-link {
+    color: #0969da;
+}
+
+body.light-theme .activity-link:hover {
+    color: #0550ae;
 }
 
 body.light-theme .form-group input,

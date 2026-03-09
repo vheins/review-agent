@@ -2,6 +2,7 @@ import { execa } from 'execa';
 import fs from 'fs-extra';
 import { logger, notify } from './logger.js';
 import { config } from './config.js';
+import { prReviewDB } from './database.js';
 
 async function executeAIReview(prompt, repoDir, mode = 'review') {
   const originalDir = process.cwd();
@@ -231,7 +232,24 @@ async function addReviewComments(repository, pr, repoDir) {
     logger.info(`Message: ${message}`);
     logger.info(`${config.aiExecutor.toUpperCase()} already posted comments: ${hasPostedComments}`);
 
-    return { decision, message, hasPostedComments };
+    // Save review to database
+    try {
+      prReviewDB.addReview({
+        repository,
+        pr_number: pr.number,
+        pr_title: pr.title,
+        pr_url: `https://github.com/${repository}/pull/${pr.number}`,
+        decision,
+        severity_score: severityScore,
+        severity_breakdown: severityBreakdown,
+        message: message.substring(0, 500) // Limit message length
+      });
+      logger.info('Review saved to database');
+    } catch (dbError) {
+      logger.warn(`Failed to save review to database: ${dbError.message}`);
+    }
+
+    return { decision, message, hasPostedComments, severityScore, severityBreakdown };
 
   } catch (error) {
     logger.error(`Failed to execute AI review: ${error.message}`);

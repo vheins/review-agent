@@ -226,3 +226,27 @@ ipcMain.handle('test-agent', async (event) => {
         return { success: false, error: error.message };
     }
 });
+
+ipcMain.handle('get-history', async (event, limit = 50) => {
+    try {
+        const dbPath = path.join(__dirname, '..', 'src', 'database.js');
+        const { prReviewDB } = await import(dbPath);
+
+        const reviews = prReviewDB.getRecentReviews(limit);
+        return { success: true, reviews };
+    } catch (error) {
+        return { success: false, error: error.message, reviews: [] };
+    }
+});
+
+ipcMain.handle('get-stats', async (event) => {
+    try {
+        const dbPath = path.join(__dirname, '..', 'src', 'database.js');
+        const { prReviewDB } = await import(dbPath);
+
+        const stats = prReviewDB.getStats();
+        return { success: true, stats };
+    } catch (error) {
+        return { success: false, error: error.message, stats: { total: 0, approved: 0, rejected: 0 } };
+    }
+});
