@@ -4,15 +4,24 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'">
-  <title>PR Review Agent</title>
+  <title>🥷 Agentic Bunshin 🥷</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <!-- Mobile Overlay -->
+  <div class="mobile-overlay" id="mobileOverlay"></div>
+
   <div class="container">
     <!-- Header -->
     <header class="header">
       <div class="header-content">
-        <h1>🥷 Vheins - Agentic Bunshin</h1>
+        <!-- Mobile Menu Toggle -->
+        <button class="mobile-menu-toggle" id="mobileMenuToggle">
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+        <h1>🥷 Agentic Bunshin 🥷</h1>
         <div class="header-right">
           <button class="theme-toggle" id="themeToggle" title="Toggle theme">
             <span class="theme-icon">🌙</span>
@@ -29,6 +38,9 @@
     <div class="main-content">
       <!-- Sidebar -->
       <aside class="sidebar">
+        <div class="sidebar-header">
+          <button class="sidebar-close" id="sidebarClose">✕</button>
+        </div>
         <nav class="nav">
           <button class="nav-item active" data-tab="dashboard">
             <span class="icon">📊</span>
