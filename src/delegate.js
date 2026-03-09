@@ -36,19 +36,9 @@ async function executeAIReview(prompt, repoDir, mode = 'review') {
       throw new Error('OpenCode executor is disabled. Enable OPENCODE_ENABLED=true in .env');
     }
 
-    const spinnerText = executor === 'copilot' ? 'Executing Copilot review...' :
-      executor === 'kiro' ? 'Executing Kiro CLI review...' :
-        executor === 'claude' ? 'Executing Claude Code review...' :
-          executor === 'codex' ? 'Executing Codex review...' :
-            executor === 'opencode' ? 'Executing OpenCode review...' :
-              'Executing Gemini review...';
-
     console.log(`\n--- PROMPT TO ${executor.toUpperCase()} ---`);
     console.log(prompt);
     console.log('--- END PROMPT ---\n');
-
-    const spinner = logger.spinner(spinnerText);
-    spinner.start();
 
     let result;
 
@@ -159,14 +149,6 @@ async function executeAIReview(prompt, repoDir, mode = 'review') {
 
       result = await execa('gemini', geminiArgs);
     }
-
-    const executorName = executor === 'copilot' ? 'Copilot' :
-      executor === 'kiro' ? 'Kiro' :
-        executor === 'claude' ? 'Claude' :
-          executor === 'codex' ? 'Codex' :
-            executor === 'opencode' ? 'OpenCode' :
-              'Gemini';
-    spinner.succeed(`${executorName} ${mode} completed`);
 
     const output = result.stdout.trim();
 
