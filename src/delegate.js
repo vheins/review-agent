@@ -20,7 +20,28 @@ async function executeAIReview(prompt, repoDir, mode = 'review') {
       throw new Error('Copilot executor is disabled. Enable COPILOT_ENABLED=true in .env');
     }
 
-    const spinnerText = executor === 'copilot' ? 'Executing Copilot review...' : 'Executing Gemini review...';
+    if (executor === 'kiro' && !config.kiroEnabled) {
+      throw new Error('Kiro executor is disabled. Enable KIRO_ENABLED=true in .env');
+    }
+
+    if (executor === 'claude' && !config.claudeEnabled) {
+      throw new Error('Claude executor is disabled. Enable CLAUDE_ENABLED=true in .env');
+    }
+
+    if (executor === 'codex' && !config.codexEnabled) {
+      throw new Error('Codex executor is disabled. Enable CODEX_ENABLED=true in .env');
+    }
+
+    if (executor === 'opencode' && !config.opencodeEnabled) {
+      throw new Error('OpenCode executor is disabled. Enable OPENCODE_ENABLED=true in .env');
+    }
+
+    const spinnerText = executor === 'copilot' ? 'Executing Copilot review...' :
+      executor === 'kiro' ? 'Executing Kiro CLI review...' :
+        executor === 'claude' ? 'Executing Claude Code review...' :
+          executor === 'codex' ? 'Executing Codex review...' :
+            executor === 'opencode' ? 'Executing OpenCode review...' :
+              'Executing Gemini review...';
 
     console.log(`\n--- PROMPT TO ${executor.toUpperCase()} ---`);
     console.log(prompt);
@@ -52,6 +73,75 @@ async function executeAIReview(prompt, repoDir, mode = 'review') {
 
       result = await execa('copilot', copilotArgs);
 
+    } else if (executor === 'kiro') {
+      // Kiro CLI execution
+      const kiroArgs = ['chat', prompt];
+
+      // Add agent selection if not auto
+      if (config.kiroAgent && config.kiroAgent !== 'auto') {
+        kiroArgs.unshift('--agent', config.kiroAgent);
+      }
+
+      if (config.kiroYolo) {
+        kiroArgs.push('--yolo');
+        logger.info('YOLO mode enabled - auto-approving all actions');
+      }
+
+      result = await execa('kiro-cli', kiroArgs);
+
+    } else if (executor === 'claude') {
+      // Claude Code CLI execution
+      const claudeArgs = ['--print', prompt];
+
+      // Add model selection
+      if (config.claudeModel) {
+        claudeArgs.push('--model', config.claudeModel);
+      }
+
+      // Add agent if specified
+      if (config.claudeAgent) {
+        claudeArgs.push('--agent', config.claudeAgent);
+      }
+
+      if (config.claudeYolo) {
+        claudeArgs.push('--dangerously-skip-permissions');
+        logger.info('YOLO mode enabled - skipping all permissions');
+      }
+
+      result = await execa('claude', claudeArgs);
+
+    } else if (executor === 'codex') {
+      // Codex CLI execution
+      const codexArgs = ['exec', prompt];
+
+      // Add model selection
+      if (config.codexModel && config.codexModel !== 'auto') {
+        codexArgs.push('--model', config.codexModel);
+      }
+
+      if (config.codexYolo) {
+        codexArgs.push('--dangerously-bypass-approvals-and-sandbox');
+        logger.info('YOLO mode enabled - bypassing all approvals');
+      }
+
+      result = await execa('codex', codexArgs);
+
+    } else if (executor === 'opencode') {
+      // OpenCode CLI execution
+      const opencodeArgs = ['run', prompt];
+
+      // Add model selection
+      if (config.opencodeModel && config.opencodeModel !== 'auto') {
+        opencodeArgs.push('--model', config.opencodeModel);
+      }
+
+      // Add agent if specified
+      if (config.opencodeAgent) {
+        opencodeArgs.push('--agent', config.opencodeAgent);
+      }
+
+      result = await execa('opencode', opencodeArgs);
+
     } else {
       // Gemini CLI execution (default)
       const geminiArgs = ['-p', prompt];
@@ -69,7 +159,13 @@ async function executeAIReview(prompt, repoDir, mode = 'review') {
       result = await execa('gemini', geminiArgs);
     }
 
-    spinner.succeed(`${executor === 'copilot' ? 'Copilot' : 'Gemini'} ${mode} completed`);
+    const executorName = executor === 'copilot' ? 'Copilot' :
+      executor === 'kiro' ? 'Kiro' :
+        executor === 'claude' ? 'Claude' :
+          executor === 'codex' ? 'Codex' :
+            executor === 'opencode' ? 'OpenCode' :
+              'Gemini';
+    spinner.succeed(`${executorName} ${mode} completed`);
 
     const output = result.stdout.trim();
 

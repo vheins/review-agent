@@ -9,6 +9,10 @@ GitHub Pull Request assistant with optional Gemini CLI delegation.
 - AI Executor (choose one):
   - Gemini CLI (default)
   - GitHub Copilot CLI
+  - Kiro CLI
+  - Claude Code CLI
+  - Codex CLI
+  - OpenCode CLI
 
 ## Installation
 
@@ -37,18 +41,44 @@ PR_SCOPE=authored,assigned,review-requested  # Comma-separated: authored, assign
 AUTO_MERGE=false        # Auto-merge approved PRs (only in comment mode)
 
 # AI Executor Configuration
-AI_EXECUTOR=gemini      # gemini or copilot
-GEMINI_ENABLED=true     # Enable/disable Gemini executor
-GEMINI_MODEL=auto-3     # Gemini model selection (default: auto-3)
-GEMINI_YOLO=false       # Auto-approve all Gemini actions
-COPILOT_ENABLED=false   # Enable/disable Copilot executor
-COPILOT_MODEL=claude-haiku-4.5  # Copilot model selection (default: claude-haiku-4.5)
-COPILOT_YOLO=false      # Auto-approve all Copilot actions
+AI_EXECUTOR=gemini      # gemini, copilot, kiro, claude, codex, or opencode
+
+# Gemini CLI
+GEMINI_ENABLED=true
+GEMINI_MODEL=auto-3
+GEMINI_YOLO=false
+
+# GitHub Copilot CLI
+COPILOT_ENABLED=false
+COPILOT_MODEL=claude-haiku-4.5
+COPILOT_YOLO=false
+
+# Kiro CLI
+KIRO_ENABLED=false
+KIRO_AGENT=auto
+KIRO_YOLO=false
+
+# Claude Code CLI
+CLAUDE_ENABLED=false
+CLAUDE_MODEL=sonnet
+CLAUDE_AGENT=
+CLAUDE_YOLO=false
+
+# Codex CLI
+CODEX_ENABLED=false
+CODEX_MODEL=auto
+CODEX_YOLO=false
+
+# OpenCode CLI
+OPENCODE_ENABLED=false
+OPENCODE_MODEL=auto
+OPENCODE_AGENT=
+OPENCODE_YOLO=false
 ```
 
 ### AI Executor Options
 
-#### Gemini CLI (Default)
+#### 💎 Gemini CLI (Default)
 - Fast and efficient
 - Requires Gemini CLI installation
 - Set `AI_EXECUTOR=gemini` and `GEMINI_ENABLED=true`
@@ -64,16 +94,71 @@ Available Gemini models:
 - `gemini-2.5-flash` - Fast Gemini 2.5
 - `gemini-2.5-flash-lite` - Lightweight Gemini 2.5
 
-#### GitHub Copilot CLI
+#### 🤖 GitHub Copilot CLI
 - Multiple model options (Claude, GPT, Gemini)
 - Requires GitHub Copilot CLI installation
 - Set `AI_EXECUTOR=copilot` and `COPILOT_ENABLED=true`
 - Choose model with `COPILOT_MODEL`
 - Use `COPILOT_YOLO=true` for auto-approval
 
+#### 🥷 Kiro CLI
+- Native Kiro integration
+- Requires Kiro CLI installation
+- Set `AI_EXECUTOR=kiro` and `KIRO_ENABLED=true`
+- Choose agent with `KIRO_AGENT`
+- Use `KIRO_YOLO=true` for auto-approval
+
+Available Kiro agents:
+- `auto` (default, recommended) - Let Kiro choose the best agent
+- `general-task-execution` - General-purpose agent
+- `context-gatherer` - Context analysis agent
+- `custom-agent-creator` - Custom agent creation
+
+#### 🎭 Claude Code CLI
+- Anthropic's official CLI
+- Requires Claude Code installation
+- Set `AI_EXECUTOR=claude` and `CLAUDE_ENABLED=true`
+- Choose model with `CLAUDE_MODEL`
+- Optional agent with `CLAUDE_AGENT`
+- Use `CLAUDE_YOLO=true` to skip permissions
+
+Available Claude models:
+- `sonnet` (default) - Latest Sonnet (alias)
+- `opus` - Latest Opus (alias)
+- `claude-sonnet-4-5-20250929` - Specific Sonnet version
+- Full model names supported
+
+#### 📝 Codex CLI
+- Advanced code generation
+- Requires Codex CLI installation
+- Set `AI_EXECUTOR=codex` and `CODEX_ENABLED=true`
+- Choose model with `CODEX_MODEL`
+- Use `CODEX_YOLO=true` to bypass approvals
+
+Available Codex models:
+- `auto` (default) - Let Codex choose
+- `o3` - Latest O3 model
+- Custom models via config
+
+#### 🔓 OpenCode CLI
+- Open source code assistant
+- Requires OpenCode installation
+- Set `AI_EXECUTOR=opencode` and `OPENCODE_ENABLED=true`
+- Choose model with `OPENCODE_MODEL`
+- Optional agent with `OPENCODE_AGENT`
+
+Available OpenCode models:
+- `auto` (default) - Auto-select model
+- Provider/model format (e.g., `anthropic/claude-3-sonnet`)
+- Supports multiple providers
+
 #### Enable/Disable Executors
 - `GEMINI_ENABLED=true/false` - Control Gemini availability
 - `COPILOT_ENABLED=true/false` - Control Copilot availability
+- `KIRO_ENABLED=true/false` - Control Kiro availability
+- `CLAUDE_ENABLED=true/false` - Control Claude availability
+- `CODEX_ENABLED=true/false` - Control Codex availability
+- `OPENCODE_ENABLED=true/false` - Control OpenCode availability
 - Both can be enabled simultaneously for flexibility
 - The active executor is determined by `AI_EXECUTOR`
 - If selected executor is disabled, an error will be thrown
@@ -180,7 +265,7 @@ Features:
 
 ## Notes
 
-- Supports both Gemini CLI and GitHub Copilot CLI
+- Supports 6 AI executors: Gemini CLI, GitHub Copilot CLI, Kiro CLI, Claude Code CLI, Codex CLI, and OpenCode CLI
 - Master/main branch protection (forces comment mode, no auto-merge)
 - Atomic comments (one comment per issue)
 - Merge conflict detection

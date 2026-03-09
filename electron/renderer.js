@@ -484,9 +484,18 @@ async function loadAgentConfig() {
         if (copilotModel) copilotModel.value = config.COPILOT_MODEL || 'claude-haiku-4.5';
         if (copilotYolo) copilotYolo.value = config.COPILOT_YOLO || 'false';
 
+        // Kiro config
+        const kiroEnabled = document.getElementById('agentKiroEnabled');
+        const kiroAgent = document.getElementById('agentKiroAgent');
+        const kiroYolo = document.getElementById('agentKiroYolo');
+        if (kiroEnabled) kiroEnabled.value = config.KIRO_ENABLED || 'false';
+        if (kiroAgent) kiroAgent.value = config.KIRO_AGENT || 'auto';
+        if (kiroYolo) kiroYolo.value = config.KIRO_YOLO || 'false';
+
         // Update status indicators
         updateAgentStatus('gemini', config.GEMINI_ENABLED === 'true');
         updateAgentStatus('copilot', config.COPILOT_ENABLED === 'true');
+        updateAgentStatus('kiro', config.KIRO_ENABLED === 'true');
     }
 }
 
@@ -524,6 +533,7 @@ if (agentForm) {
             // Update status indicators
             updateAgentStatus('gemini', config.GEMINI_ENABLED === 'true');
             updateAgentStatus('copilot', config.COPILOT_ENABLED === 'true');
+            updateAgentStatus('kiro', config.KIRO_ENABLED === 'true');
 
             // Reload main config to sync
             loadConfig();
@@ -538,6 +548,10 @@ document.getElementById('agentGeminiEnabled')?.addEventListener('change', (e) =>
 
 document.getElementById('agentCopilotEnabled')?.addEventListener('change', (e) => {
     updateAgentStatus('copilot', e.target.value === 'true');
+});
+
+document.getElementById('agentKiroEnabled')?.addEventListener('change', (e) => {
+    updateAgentStatus('kiro', e.target.value === 'true');
 });
 
 // Load agent config on startup

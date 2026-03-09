@@ -150,6 +150,7 @@
                 <select id="aiExecutor" name="AI_EXECUTOR">
                   <option value="gemini">Gemini CLI</option>
                   <option value="copilot">GitHub Copilot CLI</option>
+                  <option value="kiro">Kiro CLI</option>
                 </select>
               </div>
 
@@ -199,6 +200,10 @@
               <button class="agent-tab" data-agent="copilot">
                 <span class="agent-icon">🤖</span>
                 Copilot
+              </button>
+              <button class="agent-tab" data-agent="kiro">
+                <span class="agent-icon">🥷</span>
+                Kiro
               </button>
             </div>
 
@@ -294,6 +299,46 @@
                     <option value="false">Disabled</option>
                   </select>
                   <small class="form-hint">Auto-approve all Copilot actions without confirmation</small>
+                </div>
+              </div>
+
+              <!-- Kiro Config -->
+              <div class="agent-config" id="kiro-config">
+                <div class="agent-header">
+                  <h3>Kiro CLI Configuration</h3>
+                  <div class="agent-status" id="kiroStatus">
+                    <span class="status-indicator"></span>
+                    <span class="status-text">Disabled</span>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="agentKiroEnabled">Enable Kiro</label>
+                  <select id="agentKiroEnabled" name="KIRO_ENABLED">
+                    <option value="true">Enabled</option>
+                    <option value="false">Disabled</option>
+                  </select>
+                  <small class="form-hint">Enable or disable Kiro CLI as an executor option</small>
+                </div>
+
+                <div class="form-group">
+                  <label for="agentKiroAgent">Agent</label>
+                  <select id="agentKiroAgent" name="KIRO_AGENT">
+                    <option value="auto">Auto (Let Kiro choose)</option>
+                    <option value="general-task-execution">General Task Execution</option>
+                    <option value="context-gatherer">Context Gatherer</option>
+                    <option value="custom-agent-creator">Custom Agent Creator</option>
+                  </select>
+                  <small class="form-hint">Select the Kiro agent to use (Auto recommended)</small>
+                </div>
+
+                <div class="form-group">
+                  <label for="agentKiroYolo">YOLO Mode</label>
+                  <select id="agentKiroYolo" name="KIRO_YOLO">
+                    <option value="true">Enabled</option>
+                    <option value="false">Disabled</option>
+                  </select>
+                  <small class="form-hint">Auto-approve all Kiro actions without confirmation</small>
                 </div>
               </div>
 
