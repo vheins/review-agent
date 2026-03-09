@@ -471,8 +471,16 @@ applyTheme(currentTheme);
 
 // Update Last Log
 function updateLastLog(type, message) {
-    lastLogContent.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+    const maxLength = 150;
+    let displayMessage = message;
+
+    if (message.length > maxLength) {
+        displayMessage = message.substring(0, maxLength) + '...';
+    }
+
+    lastLogContent.textContent = `[${new Date().toLocaleTimeString()}] ${displayMessage}`;
     lastLogContent.className = `last-log-content ${type}`;
+    lastLogContent.title = message; // Show full message on hover
 }
 
 
