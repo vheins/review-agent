@@ -4,6 +4,7 @@ workspace/*
 !workspace/.gitkeep
 data/*
 dist/*
+electron/dist
 logs/*
 !logs/.gitkeep
 playwright-report

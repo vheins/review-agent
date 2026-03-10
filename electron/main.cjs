@@ -110,21 +110,30 @@ function parseJsonField(value, fallback = null) {
 }
 
 function createWindow() {
+    const rendererEntry = process.env.VITE_DEV_SERVER_URL || path.join(__dirname, 'dist', 'index.html');
+
     mainWindow = new BrowserWindow({
         width: 1440,
         height: 960,
-        minWidth: 1120,
-        minHeight: 700,
+        minWidth: 375,
+        minHeight: 640,
         backgroundColor: '#020617',
         autoHideMenuBar: true,
+        minimizable: true,
+        resizable: true,
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
+            sandbox: false,
             preload: path.join(__dirname, 'preload.cjs')
         }
     });
 
-    mainWindow.loadFile(path.join(__dirname, 'index.html'));
+    if (process.env.VITE_DEV_SERVER_URL) {
+        mainWindow.loadURL(rendererEntry);
+    } else {
+        mainWindow.loadFile(rendererEntry);
+    }
 
     // Open DevTools in development
     if (process.env.NODE_ENV === 'development') {

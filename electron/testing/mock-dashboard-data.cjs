@@ -19,7 +19,7 @@ const snapshot = {
         { github_pr_id: 842, title: 'Refine Tailwind dashboard shell', is_blocking: true, repository: 'acme/platform', author: 'rheza', priority_score: 95, health_score: 78 },
         { github_pr_id: 839, title: 'Stabilize retry policy for webhook jobs', is_blocking: false, repository: 'acme/platform', author: 'mira', priority_score: 72, health_score: 88 }
     ],
-    activityFeed: [
+    recentActivity: [
         { title: 'Auto-fix completed', description: 'SQL injection warning resolved in repository rule set.', created_at: now, status: 'success' },
         { title: 'Review queued', description: 'PR #842 promoted due to health score drop.', created_at: now, status: 'warn' }
     ],

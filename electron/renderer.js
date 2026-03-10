@@ -2,6 +2,7 @@ const state = {
     running: false,
     selectedTab: 'overview',
     rangeDays: 30,
+    themeMode: 'system',
     runtimeConfig: null,
     repositories: [],
     prs: [],
@@ -19,6 +20,7 @@ const elements = {
     navTabs: document.getElementById('navTabs'),
     toolbarTitle: document.getElementById('toolbarTitle'),
     globalRange: document.getElementById('globalRange'),
+    themeMode: document.getElementById('themeMode'),
     refreshAllBtn: document.getElementById('refreshAllBtn'),
     startBtn: document.getElementById('startBtn'),
     startOnceBtn: document.getElementById('startOnceBtn'),
@@ -70,6 +72,29 @@ function escapeHtml(value) {
         .replaceAll('>', '&gt;')
         .replaceAll('"', '&quot;')
         .replaceAll("'", '&#39;');
+}
+
+function getStoredThemeMode() {
+    const stored = window.localStorage.getItem('agentic-bunshin-theme');
+    return ['system', 'dark', 'light'].includes(stored) ? stored : 'system';
+}
+
+function resolveTheme(mode) {
+    if (mode === 'dark' || mode === 'light') {
+        return mode;
+    }
+
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+function applyTheme(mode) {
+    const resolvedTheme = resolveTheme(mode);
+    state.themeMode = mode;
+    document.body.dataset.themeMode = mode;
+    document.body.dataset.theme = resolvedTheme;
+    document.documentElement.style.colorScheme = resolvedTheme;
+    elements.themeMode.value = mode;
+    window.localStorage.setItem('agentic-bunshin-theme', mode);
 }
 
 function formatDuration(seconds) {
@@ -155,6 +180,33 @@ function addLog(type, message) {
 
     while (elements.logsContainer.children.length > 200) {
         elements.logsContainer.removeChild(elements.logsContainer.lastChild);
+    }
+}
+
+function prependActivityItem(title, description, tone = 'default') {
+    const activity = document.createElement('article');
+    activity.className = surfaceCardClass('list-item grid gap-3');
+    activity.innerHTML = `
+        <div class="card-row flex flex-wrap items-center gap-3">
+          <strong>${escapeHtml(tone === 'health' ? 'Health alert' : 'Live event')}</strong>
+          <span class="${badgeClass(tone === 'health' ? 'danger' : tone === 'warn' ? 'warn' : 'default')}">${escapeHtml(tone)}</span>
+        </div>
+        <div class="text-base font-semibold text-white">${escapeHtml(title)}</div>
+        <div class="meta-row flex flex-wrap items-center gap-3 text-sm text-slate-400">
+          <span>${escapeHtml(description)}</span>
+          <span>${escapeHtml(formatRelativeTime(new Date().toISOString()))}</span>
+        </div>
+    `;
+
+    const emptyState = elements.activityFeed.querySelector('.empty-state');
+    if (emptyState) {
+        emptyState.remove();
+    }
+
+    elements.activityFeed.prepend(activity);
+
+    while (elements.activityFeed.children.length > 8) {
+        elements.activityFeed.removeChild(elements.activityFeed.lastChild);
     }
 }
 
@@ -851,6 +903,7 @@ function connectWebSocket() {
 async function handleSocketMessage(data) {
     if (data.type === 'auth_success') {
         addLog('info', 'WebSocket authenticated');
+        prependActivityItem('WebSocket authenticated', 'Realtime subscription channel is ready.', 'default');
         state.ws.send(JSON.stringify({
             type: 'subscribe',
             channel: 'dashboard'
@@ -860,17 +913,20 @@ async function handleSocketMessage(data) {
 
     if (data.type === 'subscription_success') {
         addLog('info', `Subscribed to ${data.channel}`);
+        prependActivityItem(`Subscribed to ${data.channel}`, 'Dashboard is now listening for live events.', 'default');
         return;
     }
 
     if (data.type === 'review_started' || data.type === 'review_progress' || data.type === 'review_completed' || data.type === 'review_failed') {
         addLog('info', `${data.type}: ${JSON.stringify(data.payload)}`);
+        prependActivityItem(`Review event: ${data.type}`, JSON.stringify(data.payload), data.type === 'review_failed' ? 'warn' : 'default');
         await refreshSnapshot();
         await refreshPRList();
         return;
     }
 
     if (data.type === 'metrics_update' || data.type === 'pr_update') {
+        prependActivityItem(`Realtime update: ${data.type}`, 'Dashboard data refreshed from live event.', 'default');
         await refreshSnapshot();
         await refreshPRList();
         return;
@@ -878,6 +934,7 @@ async function handleSocketMessage(data) {
 
     if (data.type === 'health_alert') {
         addLog('error', `Health alert: ${JSON.stringify(data.payload)}`);
+        prependActivityItem('Health alert received', 'A runtime health warning needs attention.', 'health');
         window.electronAPI.showNotification({
             title: 'Health Alert',
             body: 'A system health alert was received.'
@@ -887,6 +944,7 @@ async function handleSocketMessage(data) {
 }
 
 async function initialize() {
+    applyTheme(getStoredThemeMode());
     const runtimeResult = await window.electronAPI.getRuntimeConfig();
     if (!runtimeResult.success) {
         addLog('error', runtimeResult.error);
@@ -917,6 +975,10 @@ elements.navTabs.addEventListener('click', (event) => {
 elements.globalRange.addEventListener('change', async () => {
     state.rangeDays = Number(elements.globalRange.value);
     await refreshSnapshot();
+});
+
+elements.themeMode.addEventListener('change', () => {
+    applyTheme(elements.themeMode.value);
 });
 
 elements.refreshAllBtn.addEventListener('click', async () => {
@@ -1076,6 +1138,12 @@ elements.resetRuleBtn.addEventListener('click', () => {
 
 elements.clearLogsBtn.addEventListener('click', () => {
     elements.logsContainer.innerHTML = emptyStateMarkup('No logs yet. Start the agent to stream process output.');
+});
+
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    if (state.themeMode === 'system') {
+        applyTheme('system');
+    }
 });
 
 window.electronAPI.onLogOutput((data) => {
