@@ -12,6 +12,9 @@
         ".env.example",
         "node_modules/**/*"
     ],
+    "buildDependenciesFromSource": false,
+    "nodeGypRebuild": false,
+    "npmRebuild": false,
     "win": {
         "target": [
             "nsis"
