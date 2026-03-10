@@ -592,8 +592,16 @@ export async function delegateReview(repository, pr, repoDir) {
         notify.requestChanges(pr.number, repository, issuesCount);
       }
 
+      // Open PR in browser after review is done
+      logger.info('► Opening PR in browser...');
+      await execaVerbose('gh', ['pr', 'view', pr.number, '--repo', repository, '--web'], { allowFail: true });
+
     } else if (config.reviewMode === 'fix') {
       await fixPR(repository, pr, repoDir);
+      
+      // Open PR in browser after fix is done
+      logger.info('► Opening PR in browser...');
+      await execaVerbose('gh', ['pr', 'view', pr.number, '--repo', repository, '--web'], { allowFail: true });
 
     } else {
       logger.error(`Unknown review mode: ${config.reviewMode}`);
