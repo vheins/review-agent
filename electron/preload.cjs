@@ -1,30 +1,34 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
-contextBridge.exposeInMainWorld('electronAPI', {
-    startReview: (config) => ipcRenderer.invoke('start-review', config),
-    stopReview: () => ipcRenderer.invoke('stop-review'),
-    executeNow: () => ipcRenderer.invoke('execute-now'),
-    getConfig: () => ipcRenderer.invoke('get-config'),
-    saveConfig: (config) => ipcRenderer.invoke('save-config', config),
-    showNotification: (data) => ipcRenderer.invoke('show-notification', data),
-    openExternal: (url) => ipcRenderer.invoke('open-external', url),
-    getRuntimeConfig: () => ipcRenderer.invoke('get-runtime-config'),
-    getDashboardSnapshot: (options) => ipcRenderer.invoke('get-dashboard-snapshot', options),
-    listPRs: (filters) => ipcRenderer.invoke('list-prs', filters),
-    getPRDetail: (prId) => ipcRenderer.invoke('get-pr-detail', prId),
-    getTeamSecurityData: () => ipcRenderer.invoke('get-team-security-data'),
-    setDeveloperAvailability: (payload) => ipcRenderer.invoke('set-developer-availability', payload),
-    getRepositoryConfigData: (repositoryId) => ipcRenderer.invoke('get-repository-config-data', repositoryId),
-    saveRepositoryConfigData: (payload) => ipcRenderer.invoke('save-repository-config-data', payload),
-    saveCustomRule: (payload) => ipcRenderer.invoke('save-custom-rule', payload),
-    deleteCustomRule: (ruleId) => ipcRenderer.invoke('delete-custom-rule', ruleId),
-    testCustomRule: (payload) => ipcRenderer.invoke('test-custom-rule', payload),
-    exportMetricsData: (payload) => ipcRenderer.invoke('export-metrics-data', payload),
-    readContextFile: (fileName) => ipcRenderer.invoke('read-context-file', fileName),
-    writeContextFile: (data) => ipcRenderer.invoke('write-context-file', data),
-    testAgent: () => ipcRenderer.invoke('test-agent'),
-    getHistory: (limit) => ipcRenderer.invoke('get-history', limit),
-    getStats: () => ipcRenderer.invoke('get-stats'),
-    onLogOutput: (callback) => ipcRenderer.on('log-output', (event, data) => callback(data)),
-    onReviewStopped: (callback) => ipcRenderer.on('review-stopped', (event, data) => callback(data))
-});
+const electronAPI = process.env.ELECTRON_USE_MOCK_API === '1'
+    ? require('./testing/mock-dashboard-data.cjs').createMockElectronAPI()
+    : {
+        startReview: (config) => ipcRenderer.invoke('start-review', config),
+        stopReview: () => ipcRenderer.invoke('stop-review'),
+        executeNow: () => ipcRenderer.invoke('execute-now'),
+        getConfig: () => ipcRenderer.invoke('get-config'),
+        saveConfig: (config) => ipcRenderer.invoke('save-config', config),
+        showNotification: (data) => ipcRenderer.invoke('show-notification', data),
+        openExternal: (url) => ipcRenderer.invoke('open-external', url),
+        getRuntimeConfig: () => ipcRenderer.invoke('get-runtime-config'),
+        getDashboardSnapshot: (options) => ipcRenderer.invoke('get-dashboard-snapshot', options),
+        listPRs: (filters) => ipcRenderer.invoke('list-prs', filters),
+        getPRDetail: (prId) => ipcRenderer.invoke('get-pr-detail', prId),
+        getTeamSecurityData: () => ipcRenderer.invoke('get-team-security-data'),
+        setDeveloperAvailability: (payload) => ipcRenderer.invoke('set-developer-availability', payload),
+        getRepositoryConfigData: (repositoryId) => ipcRenderer.invoke('get-repository-config-data', repositoryId),
+        saveRepositoryConfigData: (payload) => ipcRenderer.invoke('save-repository-config-data', payload),
+        saveCustomRule: (payload) => ipcRenderer.invoke('save-custom-rule', payload),
+        deleteCustomRule: (ruleId) => ipcRenderer.invoke('delete-custom-rule', ruleId),
+        testCustomRule: (payload) => ipcRenderer.invoke('test-custom-rule', payload),
+        exportMetricsData: (payload) => ipcRenderer.invoke('export-metrics-data', payload),
+        readContextFile: (fileName) => ipcRenderer.invoke('read-context-file', fileName),
+        writeContextFile: (data) => ipcRenderer.invoke('write-context-file', data),
+        testAgent: () => ipcRenderer.invoke('test-agent'),
+        getHistory: (limit) => ipcRenderer.invoke('get-history', limit),
+        getStats: () => ipcRenderer.invoke('get-stats'),
+        onLogOutput: (callback) => ipcRenderer.on('log-output', (event, data) => callback(data)),
+        onReviewStopped: (callback) => ipcRenderer.on('review-stopped', (event, data) => callback(data))
+    };
+
+contextBridge.exposeInMainWorld('electronAPI', electronAPI);

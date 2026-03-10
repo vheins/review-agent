@@ -6,3 +6,5 @@ data/*
 dist/*
 logs/*
 !logs/.gitkeep
+playwright-report
+test-results

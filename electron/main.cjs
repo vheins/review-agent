@@ -4,7 +4,8 @@ const { spawn } = require('child_process');
 const fs = require('fs');
 
 // Single instance lock - prevent multiple instances
-const gotTheLock = app.requestSingleInstanceLock();
+const shouldUseSingleInstanceLock = process.env.ELECTRON_DISABLE_SINGLE_INSTANCE_LOCK !== '1';
+const gotTheLock = shouldUseSingleInstanceLock ? app.requestSingleInstanceLock() : true;
 
 if (!gotTheLock) {
     console.log('⚠ Another instance is already running. Exiting...');
@@ -114,7 +115,7 @@ function createWindow() {
         height: 960,
         minWidth: 1120,
         minHeight: 700,
-        backgroundColor: '#f3efe6',
+        backgroundColor: '#020617',
         autoHideMenuBar: true,
         webPreferences: {
             nodeIntegration: false,

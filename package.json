@@ -11,6 +11,9 @@
     "review": "node src/review-pr.js",
     "test": "vitest run",
     "test:watch": "vitest",
+    "build:tailwind": "tailwindcss -c tailwind.config.cjs -i ./electron/tailwind.input.css -o ./electron/tailwind.css --minify",
+    "tailwind:watch": "tailwindcss -c tailwind.config.cjs -i ./electron/tailwind.input.css -o ./electron/tailwind.css --watch",
+    "test:electron-ui": "playwright test",
     "app": "electron electron/main.cjs",
     "app:dev": "NODE_ENV=development nodemon --watch electron --exec electron electron/main.cjs",
     "app:dev:win": "set NODE_ENV=development && nodemon --watch electron --exec electron electron/main.cjs",
@@ -55,11 +58,13 @@
     "ws": "^8.19.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "electron": "^40.8.0",
     "electron-builder": "^26.8.1",
     "electron-reload": "^2.0.0-alpha.1",
     "fast-check": "^4.6.0",
     "nodemon": "^3.1.14",
+    "tailwindcss": "3.4.17",
     "vitest": "^4.0.18"
   }
 }

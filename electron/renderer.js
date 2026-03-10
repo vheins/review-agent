@@ -111,7 +111,19 @@ function formatRelativeTime(value) {
 
 function setAPIStatus(text, success = true) {
     elements.apiStatus.textContent = text;
-    elements.apiStatus.style.color = success ? 'var(--success)' : 'var(--danger)';
+    elements.apiStatus.className = success ? 'text-emerald-200' : 'text-rose-200';
+}
+
+function setConnectionStatus(element, text, tone = 'default') {
+    const tones = {
+        default: 'text-slate-100',
+        success: 'text-emerald-200',
+        warn: 'text-amber-200',
+        danger: 'text-rose-200'
+    };
+
+    element.textContent = text;
+    element.className = tones[tone] ?? tones.default;
 }
 
 function updateRunningState(running) {
@@ -130,7 +142,13 @@ function addLog(type, message) {
     }
 
     const entry = document.createElement('div');
-    entry.className = `log-entry ${type}`;
+    const logTones = {
+        info: 'border-cyan-400/20 bg-cyan-400/10 text-cyan-50',
+        success: 'border-emerald-400/20 bg-emerald-400/10 text-emerald-50',
+        warn: 'border-amber-400/20 bg-amber-400/10 text-amber-50',
+        error: 'border-rose-400/20 bg-rose-400/10 text-rose-50'
+    };
+    entry.className = `rounded-2xl border px-4 py-3 text-sm leading-6 shadow-lg shadow-slate-950/10 ${logTones[type] ?? logTones.info}`;
     entry.textContent = `[${new Date().toLocaleTimeString()}] ${message.trim()}`;
     elements.logsContainer.prepend(entry);
     state.logCount += 1;
@@ -146,6 +164,25 @@ function openExternalLink(url) {
     }
 
     window.electronAPI.openExternal(url);
+}
+
+function badgeClass(tone = 'default') {
+    const tones = {
+        default: 'badge inline-flex items-center rounded-full border border-white/10 bg-white/10 px-3 py-1 text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-slate-200',
+        success: 'badge success inline-flex items-center rounded-full border border-emerald-300/20 bg-emerald-400/20 px-3 py-1 text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-emerald-100',
+        warn: 'badge warn inline-flex items-center rounded-full border border-amber-300/20 bg-amber-300/20 px-3 py-1 text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-amber-100',
+        danger: 'badge danger inline-flex items-center rounded-full border border-rose-300/20 bg-rose-400/20 px-3 py-1 text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-rose-100'
+    };
+
+    return tones[tone] ?? tones.default;
+}
+
+function surfaceCardClass(extra = '') {
+    return `rounded-[1.6rem] border border-white/10 bg-white/5 p-4 shadow-2xl shadow-slate-950/20 backdrop-blur ${extra}`.trim();
+}
+
+function emptyStateMarkup(message) {
+    return `<div class="empty-state rounded-[1.5rem] border border-dashed border-white/10 bg-white/5 px-4 py-10 text-center text-sm text-slate-400">${escapeHtml(message)}</div>`;
 }
 
 function renderMetricCards(snapshot) {
@@ -173,28 +210,28 @@ function renderMetricCards(snapshot) {
     ];
 
     elements.overviewMetrics.innerHTML = cards.map((card) => `
-        <article class="metric-card">
-          <p class="eyebrow">${escapeHtml(card.label)}</p>
-          <div class="value">${escapeHtml(card.value)}</div>
-          <div class="delta">${escapeHtml(card.delta)}</div>
+        <article class="metric-card rounded-[1.8rem] border border-white/10 bg-gradient-to-br from-white/10 to-slate-900/80 p-5 shadow-glow backdrop-blur">
+          <p class="eyebrow text-[0.65rem] font-semibold uppercase tracking-[0.32em] text-sky-200/70">${escapeHtml(card.label)}</p>
+          <div class="value mt-4 text-4xl font-black tracking-tight text-white">${escapeHtml(card.value)}</div>
+          <div class="delta mt-2 text-sm leading-6 text-slate-300">${escapeHtml(card.delta)}</div>
         </article>
     `).join('');
 }
 
 function renderReviewQueue(snapshot) {
     if (!snapshot.reviewQueue.length) {
-        elements.reviewQueue.innerHTML = '<div class="empty-state">No open pull requests in the queue.</div>';
+        elements.reviewQueue.innerHTML = emptyStateMarkup('No open pull requests in the queue.');
         return;
     }
 
     elements.reviewQueue.innerHTML = snapshot.reviewQueue.map((pr) => `
-        <article class="list-item">
-          <div class="card-row">
+        <article class="${surfaceCardClass('list-item grid gap-3')}">
+          <div class="card-row flex flex-wrap items-center gap-3">
             <strong>#${escapeHtml(pr.github_pr_id)}</strong>
-            <span class="badge ${pr.is_blocking ? 'danger' : 'warn'}">${pr.is_blocking ? 'Blocking' : 'Queued'}</span>
+            <span class="${badgeClass(pr.is_blocking ? 'danger' : 'warn')}">${pr.is_blocking ? 'Blocking' : 'Queued'}</span>
           </div>
-          <div>${escapeHtml(pr.title)}</div>
-          <div class="meta-row">
+          <div class="text-base font-semibold text-white">${escapeHtml(pr.title)}</div>
+          <div class="meta-row flex flex-wrap items-center gap-3 text-sm text-slate-400">
             <span>${escapeHtml(pr.repository)}</span>
             <span>${escapeHtml(pr.author)}</span>
             <span>Priority ${escapeHtml(pr.priority_score ?? 0)}</span>
@@ -206,18 +243,18 @@ function renderReviewQueue(snapshot) {
 
 function renderActivityFeed(snapshot) {
     if (!snapshot.recentActivity.length) {
-        elements.activityFeed.innerHTML = '<div class="empty-state">No recent activity yet.</div>';
+        elements.activityFeed.innerHTML = emptyStateMarkup('No recent activity yet.');
         return;
     }
 
     elements.activityFeed.innerHTML = snapshot.recentActivity.map((activity) => `
-        <article class="list-item">
-          <div class="card-row">
+        <article class="${surfaceCardClass('list-item grid gap-3')}">
+          <div class="card-row flex flex-wrap items-center gap-3">
             <strong>${escapeHtml(activity.source === 'review' ? `PR #${activity.github_pr_id}` : activity.status)}</strong>
-            <span class="badge">${escapeHtml(activity.source)}</span>
+            <span class="${badgeClass()}">${escapeHtml(activity.source)}</span>
           </div>
-          <div>${escapeHtml(activity.title)}</div>
-          <div class="meta-row">
+          <div class="text-base font-semibold text-white">${escapeHtml(activity.title)}</div>
+          <div class="meta-row flex flex-wrap items-center gap-3 text-sm text-slate-400">
             <span>${escapeHtml(activity.repository ?? '')}</span>
             <span>${escapeHtml(formatRelativeTime(activity.occurred_at))}</span>
           </div>
@@ -227,7 +264,7 @@ function renderActivityFeed(snapshot) {
 
 function renderBarList(target, items, formatter) {
     if (!items.length) {
-        target.innerHTML = '<div class="empty-state">No data available.</div>';
+        target.innerHTML = emptyStateMarkup('No data available.');
         return;
     }
 
@@ -235,12 +272,12 @@ function renderBarList(target, items, formatter) {
     target.innerHTML = items.map((item) => {
         const width = Math.max(8, Math.round(((Number(item.value) || 0) / maxValue) * 100));
         return `
-            <div class="bar-item">
-              <div class="card-row">
-                <strong>${escapeHtml(item.label)}</strong>
-                <span class="meta-row">${escapeHtml(formatter(item))}</span>
+            <div class="bar-item grid gap-2">
+              <div class="card-row flex flex-wrap items-center justify-between gap-3">
+                <strong class="text-sm font-semibold text-white">${escapeHtml(item.label)}</strong>
+                <span class="meta-row text-sm text-slate-400">${escapeHtml(formatter(item))}</span>
               </div>
-              <div class="bar-track"><div class="bar-fill" style="width:${width}%"></div></div>
+              <div class="bar-track h-3 overflow-hidden rounded-full bg-white/10"><div class="bar-fill h-full rounded-full bg-gradient-to-r from-sky-400 via-cyan-300 to-emerald-300" style="width:${width}%"></div></div>
             </div>
         `;
     }).join('');
@@ -260,17 +297,17 @@ function renderOverviewWorkload(snapshot) {
 
 function renderConfigSummary(snapshot) {
     if (!snapshot.configSummaries.length) {
-        elements.configSummaryList.innerHTML = '<div class="empty-state">No repositories registered.</div>';
+        elements.configSummaryList.innerHTML = emptyStateMarkup('No repositories registered.');
         return;
     }
 
     elements.configSummaryList.innerHTML = snapshot.configSummaries.map((config) => `
-        <article class="list-item">
-          <div class="card-row">
+        <article class="${surfaceCardClass('list-item grid gap-3')}">
+          <div class="card-row flex flex-wrap items-center gap-3">
             <strong>${escapeHtml(config.repository)}</strong>
-            <span class="badge ${config.autoMerge ? 'success' : 'warn'}">${config.autoMerge ? 'Auto Merge On' : 'Manual Merge'}</span>
+            <span class="${badgeClass(config.autoMerge ? 'success' : 'warn')}">${config.autoMerge ? 'Auto Merge On' : 'Manual Merge'}</span>
           </div>
-          <div class="meta-row">
+          <div class="meta-row flex flex-wrap items-center gap-3 text-sm text-slate-400">
             <span>Executor ${escapeHtml(config.aiExecutor)}</span>
             <span>Interval ${escapeHtml(config.reviewInterval)}s</span>
             <span>SLA ${escapeHtml(config.slaHours)}h</span>
@@ -301,21 +338,21 @@ function renderRepositoryOptions(repositories, prs = []) {
 
 function renderPRList() {
     if (!state.prs.length) {
-        elements.prList.innerHTML = '<div class="empty-state">No pull requests match the current filters.</div>';
+        elements.prList.innerHTML = emptyStateMarkup('No pull requests match the current filters.');
         return;
     }
 
     elements.prList.innerHTML = state.prs.map((pr) => `
-        <article class="pr-card ${state.selectedPrId === pr.id ? 'active' : ''}" data-pr-id="${escapeHtml(pr.id)}">
-          <div class="card-row">
-            <strong>#${escapeHtml(pr.github_pr_id)} ${escapeHtml(pr.title)}</strong>
+        <article class="${surfaceCardClass(`pr-card grid cursor-pointer gap-3 transition hover:border-sky-300/40 hover:bg-white/10 ${state.selectedPrId === pr.id ? 'active' : ''}`)}" data-pr-id="${escapeHtml(pr.id)}">
+          <div class="card-row flex flex-wrap items-center gap-3">
+            <strong class="text-base font-semibold text-white">#${escapeHtml(pr.github_pr_id)} ${escapeHtml(pr.title)}</strong>
           </div>
-          <div class="badge-row">
-            <span class="badge">${escapeHtml(pr.status)}</span>
-            <span class="badge ${pr.latest_outcome === 'approved' ? 'success' : pr.latest_outcome ? 'warn' : ''}">${escapeHtml(pr.latest_outcome ?? 'pending')}</span>
-            <span class="badge">${escapeHtml(pr.review_level ?? 'unassigned')}</span>
+          <div class="badge-row flex flex-wrap gap-2">
+            <span class="${badgeClass()}">${escapeHtml(pr.status)}</span>
+            <span class="${badgeClass(pr.latest_outcome === 'approved' ? 'success' : pr.latest_outcome ? 'warn' : 'default')}">${escapeHtml(pr.latest_outcome ?? 'pending')}</span>
+            <span class="${badgeClass()}">${escapeHtml(pr.review_level ?? 'unassigned')}</span>
           </div>
-          <div class="meta-row">
+          <div class="meta-row flex flex-wrap items-center gap-3 text-sm text-slate-400">
             <span>${escapeHtml(pr.repository)}</span>
             <span>${escapeHtml(pr.author)}</span>
             <span>Priority ${escapeHtml(pr.priority_score ?? 0)}</span>
@@ -339,113 +376,113 @@ function renderPRDetail(detail) {
 
     const reviewBlocks = reviews.length
         ? reviews.map((review) => `
-            <article class="list-item">
-              <div class="card-row">
-                <strong>${escapeHtml(review.executor_type)}</strong>
-                <span class="badge ${review.outcome === 'approved' ? 'success' : review.outcome ? 'warn' : ''}">${escapeHtml(review.outcome ?? review.status)}</span>
+            <article class="${surfaceCardClass('list-item grid gap-3')}">
+              <div class="card-row flex flex-wrap items-center gap-3">
+                <strong class="text-white">${escapeHtml(review.executor_type)}</strong>
+                <span class="${badgeClass(review.outcome === 'approved' ? 'success' : review.outcome ? 'warn' : 'default')}">${escapeHtml(review.outcome ?? review.status)}</span>
               </div>
-              <div class="meta-row">
+              <div class="meta-row flex flex-wrap items-center gap-3 text-sm text-slate-400">
                 <span>Duration ${escapeHtml(formatDuration(review.duration_seconds))}</span>
                 <span>${escapeHtml(formatRelativeTime(review.completed_at ?? review.started_at))}</span>
               </div>
             </article>
         `).join('')
-        : '<div class="empty-state">No review history recorded.</div>';
+        : emptyStateMarkup('No review history recorded.');
 
     const commentBlocks = comments.length
         ? comments.slice(0, 8).map((comment) => `
-            <article class="finding-card">
-              <div class="card-row">
-                <strong>${escapeHtml(comment.issue_type)}</strong>
-                <span class="badge ${comment.severity === 'critical' || comment.severity === 'error' ? 'danger' : 'warn'}">${escapeHtml(comment.severity)}</span>
+            <article class="${surfaceCardClass('finding-card grid gap-3')}">
+              <div class="card-row flex flex-wrap items-center gap-3">
+                <strong class="text-white">${escapeHtml(comment.issue_type)}</strong>
+                <span class="${badgeClass(comment.severity === 'critical' || comment.severity === 'error' ? 'danger' : 'warn')}">${escapeHtml(comment.severity)}</span>
               </div>
-              <div>${escapeHtml(comment.message)}</div>
-              <div class="meta-row">
+              <div class="text-sm leading-6 text-slate-200">${escapeHtml(comment.message)}</div>
+              <div class="meta-row flex flex-wrap items-center gap-3 text-sm text-slate-400">
                 <span>${escapeHtml(comment.file_path)}${comment.line_number ? `:${comment.line_number}` : ''}</span>
                 <span>${escapeHtml(comment.executor_type)}</span>
               </div>
             </article>
         `).join('')
-        : '<div class="empty-state">No comments stored for this PR.</div>';
+        : emptyStateMarkup('No comments stored for this PR.');
 
     const autoFixBlock = autoFixAttempts.length
         ? autoFixAttempts.map((attempt) => `
-            <article class="list-item">
-              <div class="card-row">
-                <strong>Attempt ${escapeHtml(attempt.attempt_number)}</strong>
-                <span class="badge ${attempt.status === 'success' ? 'success' : 'warn'}">${escapeHtml(attempt.status)}</span>
+            <article class="${surfaceCardClass('list-item grid gap-3')}">
+              <div class="card-row flex flex-wrap items-center gap-3">
+                <strong class="text-white">Attempt ${escapeHtml(attempt.attempt_number)}</strong>
+                <span class="${badgeClass(attempt.status === 'success' ? 'success' : 'warn')}">${escapeHtml(attempt.status)}</span>
               </div>
-              <div class="meta-row">
+              <div class="meta-row flex flex-wrap items-center gap-3 text-sm text-slate-400">
                 <span>${escapeHtml((attempt.issues_targeted || []).length)} issues</span>
                 <span>${escapeHtml(formatRelativeTime(attempt.started_at))}</span>
               </div>
             </article>
         `).join('')
-        : '<div class="empty-state">No auto-fix attempts recorded.</div>';
+        : emptyStateMarkup('No auto-fix attempts recorded.');
 
     const testRunBlock = testRuns.length
         ? testRuns.map((run) => `
-            <article class="list-item">
-              <div class="card-row">
-                <strong>${escapeHtml(run.run_type)}</strong>
-                <span class="badge ${run.status === 'passed' ? 'success' : 'warn'}">${escapeHtml(run.status)}</span>
+            <article class="${surfaceCardClass('list-item grid gap-3')}">
+              <div class="card-row flex flex-wrap items-center gap-3">
+                <strong class="text-white">${escapeHtml(run.run_type)}</strong>
+                <span class="${badgeClass(run.status === 'passed' ? 'success' : 'warn')}">${escapeHtml(run.status)}</span>
               </div>
-              <div class="meta-row">
+              <div class="meta-row flex flex-wrap items-center gap-3 text-sm text-slate-400">
                 <span>${escapeHtml(formatDuration(run.duration_seconds))}</span>
                 <span>${escapeHtml(formatRelativeTime(run.started_at))}</span>
               </div>
             </article>
         `).join('')
-        : '<div class="empty-state">No test-and-heal runs recorded.</div>';
+        : emptyStateMarkup('No test-and-heal runs recorded.');
 
     const securityBlock = securityFindings.length
         ? securityFindings.map((finding) => `
-            <article class="finding-card">
-              <div class="card-row">
-                <strong>${escapeHtml(finding.title)}</strong>
-                <span class="badge ${finding.severity === 'critical' ? 'danger' : 'warn'}">${escapeHtml(finding.severity)}</span>
+            <article class="${surfaceCardClass('finding-card grid gap-3')}">
+              <div class="card-row flex flex-wrap items-center gap-3">
+                <strong class="text-white">${escapeHtml(finding.title)}</strong>
+                <span class="${badgeClass(finding.severity === 'critical' ? 'danger' : 'warn')}">${escapeHtml(finding.severity)}</span>
               </div>
-              <div>${escapeHtml(finding.description)}</div>
-              <div class="meta-row">
+              <div class="text-sm leading-6 text-slate-200">${escapeHtml(finding.description)}</div>
+              <div class="meta-row flex flex-wrap items-center gap-3 text-sm text-slate-400">
                 <span>${escapeHtml(finding.file_path ?? 'repository scan')}</span>
                 <span>${escapeHtml(formatRelativeTime(finding.detected_at))}</span>
               </div>
             </article>
         `).join('')
-        : '<div class="empty-state">No security findings stored.</div>';
+        : emptyStateMarkup('No security findings stored.');
 
     elements.prDetail.innerHTML = `
-        <section class="list-item">
-          <div class="card-row">
-            <strong>${escapeHtml(pr.repository)}</strong>
-            <span class="badge">${escapeHtml(pr.status)}</span>
-            <span class="badge">${escapeHtml(pr.review_level ?? 'unassigned')}</span>
+        <section class="${surfaceCardClass('grid gap-3')}">
+          <div class="card-row flex flex-wrap items-center gap-3">
+            <strong class="text-lg font-semibold text-white">${escapeHtml(pr.repository)}</strong>
+            <span class="${badgeClass()}">${escapeHtml(pr.status)}</span>
+            <span class="${badgeClass()}">${escapeHtml(pr.review_level ?? 'unassigned')}</span>
           </div>
-          <div class="meta-row">
+          <div class="meta-row flex flex-wrap items-center gap-3 text-sm text-slate-400">
             <span>Author ${escapeHtml(pr.author)}</span>
             <span>Priority ${escapeHtml(pr.priority_score ?? 0)}</span>
             <span>Health ${escapeHtml(pr.health_score ?? 'n/a')}</span>
             <span>SLA ${escapeHtml(pr.sla_hours)}h</span>
           </div>
         </section>
-        <section class="panel-subsection">
-          <h4>Review History</h4>
+        <section class="panel-subsection grid gap-3 border-t border-white/10 pt-4">
+          <h4 class="text-lg font-semibold text-white">Review History</h4>
           ${reviewBlocks}
         </section>
-        <section class="panel-subsection">
-          <h4>Review Comments</h4>
+        <section class="panel-subsection grid gap-3 border-t border-white/10 pt-4">
+          <h4 class="text-lg font-semibold text-white">Review Comments</h4>
           ${commentBlocks}
         </section>
-        <section class="panel-subsection">
-          <h4>Auto-fix Attempts</h4>
+        <section class="panel-subsection grid gap-3 border-t border-white/10 pt-4">
+          <h4 class="text-lg font-semibold text-white">Auto-fix Attempts</h4>
           ${autoFixBlock}
         </section>
-        <section class="panel-subsection">
-          <h4>Test & Heal</h4>
+        <section class="panel-subsection grid gap-3 border-t border-white/10 pt-4">
+          <h4 class="text-lg font-semibold text-white">Test & Heal</h4>
           ${testRunBlock}
         </section>
-        <section class="panel-subsection">
-          <h4>Security Findings</h4>
+        <section class="panel-subsection grid gap-3 border-t border-white/10 pt-4">
+          <h4 class="text-lg font-semibold text-white">Security Findings</h4>
           ${securityBlock}
         </section>
     `;
@@ -453,15 +490,15 @@ function renderPRDetail(detail) {
 
 function renderMetrics(snapshot) {
     if (!snapshot.trendData.length) {
-        elements.trendChart.innerHTML = '<div class="empty-state">No review trend data yet.</div>';
+        elements.trendChart.innerHTML = emptyStateMarkup('No review trend data yet.');
     } else {
         const maxValue = Math.max(...snapshot.trendData.map((point) => Number(point.avg_duration) || 0), 1);
         elements.trendChart.innerHTML = snapshot.trendData.map((point) => {
             const height = Math.max(16, Math.round(((Number(point.avg_duration) || 0) / maxValue) * 160));
             const label = point.bucket.slice(5);
             return `
-                <div class="spark-bar" style="height:${height}px" title="${escapeHtml(point.bucket)}: ${escapeHtml(formatDuration(point.avg_duration))}">
-                  <span class="spark-label">${escapeHtml(label)}</span>
+                <div class="spark-bar flex-1 rounded-t-[1.25rem] rounded-b-lg bg-gradient-to-t from-cyan-500 via-sky-400 to-emerald-300 shadow-lg shadow-cyan-500/20" style="height:${height}px" title="${escapeHtml(point.bucket)}: ${escapeHtml(formatDuration(point.avg_duration))}">
+                  <span class="spark-label text-[0.68rem] font-medium text-slate-400">${escapeHtml(label)}</span>
                 </div>
             `;
         }).join('');
@@ -505,18 +542,20 @@ function renderTeamSecurity() {
     elements.teamTableBody.innerHTML = data.developers.length
         ? data.developers.map((developer) => `
             <tr>
-              <td>${escapeHtml(developer.display_name)}</td>
-              <td>${escapeHtml(developer.role)}</td>
-              <td>${developer.is_available ? 'Available' : 'Unavailable'}</td>
-              <td>${escapeHtml(developer.unavailable_until ? new Date(developer.unavailable_until).toLocaleString() : 'Open-ended')}</td>
-              <td>
-                <button class="btn btn-ghost" data-availability-id="${escapeHtml(developer.id)}" data-next-state="${developer.is_available ? '0' : '1'}">
+              <td class="border-b border-white/10 px-4 py-3 font-medium text-white">${escapeHtml(developer.display_name)}</td>
+              <td class="border-b border-white/10 px-4 py-3 text-slate-300">${escapeHtml(developer.role)}</td>
+              <td class="border-b border-white/10 px-4 py-3">
+                <span class="${badgeClass(developer.is_available ? 'success' : 'warn')}">${developer.is_available ? 'Available' : 'Unavailable'}</span>
+              </td>
+              <td class="border-b border-white/10 px-4 py-3 text-slate-400">${escapeHtml(developer.unavailable_until ? new Date(developer.unavailable_until).toLocaleString() : 'Open-ended')}</td>
+              <td class="border-b border-white/10 px-4 py-3">
+                <button class="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white transition hover:bg-white/15" data-availability-id="${escapeHtml(developer.id)}" data-next-state="${developer.is_available ? '0' : '1'}">
                   ${developer.is_available ? 'Mark Away' : 'Restore'}
                 </button>
               </td>
             </tr>
         `).join('')
-        : '<tr><td colspan="5">No developers found.</td></tr>';
+        : '<tr><td colspan="5" class="px-4 py-8 text-center text-slate-400">No developers found.</td></tr>';
 
     elements.teamTableBody.querySelectorAll('[data-availability-id]').forEach((button) => {
         button.addEventListener('click', async () => {
@@ -543,16 +582,16 @@ function renderTeamSecurity() {
 
     elements.alertsList.innerHTML = data.recentAlerts.length
         ? data.recentAlerts.map((alert) => `
-            <article class="alert-card">
-              <div class="card-row">
-                <strong>${escapeHtml(alert.title)}</strong>
-                <span class="badge ${alert.priority === 'urgent' || alert.priority === 'high' ? 'danger' : 'warn'}">${escapeHtml(alert.priority)}</span>
+            <article class="${surfaceCardClass('alert-card grid gap-3')}">
+              <div class="card-row flex flex-wrap items-center gap-3">
+                <strong class="text-white">${escapeHtml(alert.title)}</strong>
+                <span class="${badgeClass(alert.priority === 'urgent' || alert.priority === 'high' ? 'danger' : 'warn')}">${escapeHtml(alert.priority)}</span>
               </div>
-              <div>${escapeHtml(alert.message)}</div>
-              <div class="meta-row">${escapeHtml(formatRelativeTime(alert.created_at))}</div>
+              <div class="text-sm leading-6 text-slate-200">${escapeHtml(alert.message)}</div>
+              <div class="meta-row text-sm text-slate-400">${escapeHtml(formatRelativeTime(alert.created_at))}</div>
             </article>
         `).join('')
-        : '<div class="empty-state">No recent notifications.</div>';
+        : emptyStateMarkup('No recent notifications.');
 
     const counts = ['critical', 'high', 'medium', 'low'].map((severity) => ({
         label: severity,
@@ -560,29 +599,29 @@ function renderTeamSecurity() {
     }));
 
     elements.securityMetrics.innerHTML = counts.map((metric) => `
-        <article class="metric-card">
-          <p class="eyebrow">${escapeHtml(metric.label)}</p>
-          <div class="value">${escapeHtml(metric.value)}</div>
-          <div class="delta">Recent findings by severity</div>
+        <article class="metric-card rounded-[1.8rem] border border-white/10 bg-gradient-to-br from-white/10 to-slate-900/80 p-5 shadow-glow backdrop-blur">
+          <p class="eyebrow text-[0.65rem] font-semibold uppercase tracking-[0.32em] text-sky-200/70">${escapeHtml(metric.label)}</p>
+          <div class="value mt-4 text-4xl font-black tracking-tight text-white">${escapeHtml(metric.value)}</div>
+          <div class="delta mt-2 text-sm text-slate-300">Recent findings by severity</div>
         </article>
     `).join('');
 
     elements.securityFindingsList.innerHTML = data.securityFindings.length
         ? data.securityFindings.map((finding) => `
-            <article class="finding-card">
-              <div class="card-row">
-                <strong>${escapeHtml(finding.title)}</strong>
-                <span class="badge ${finding.severity === 'critical' ? 'danger' : 'warn'}">${escapeHtml(finding.severity)}</span>
+            <article class="${surfaceCardClass('finding-card grid gap-3')}">
+              <div class="card-row flex flex-wrap items-center gap-3">
+                <strong class="text-white">${escapeHtml(finding.title)}</strong>
+                <span class="${badgeClass(finding.severity === 'critical' ? 'danger' : 'warn')}">${escapeHtml(finding.severity)}</span>
               </div>
-              <div>${escapeHtml(finding.description)}</div>
-              <div class="meta-row">
+              <div class="text-sm leading-6 text-slate-200">${escapeHtml(finding.description)}</div>
+              <div class="meta-row flex flex-wrap items-center gap-3 text-sm text-slate-400">
                 <span>${escapeHtml(finding.repository)} / PR #${escapeHtml(finding.github_pr_id)}</span>
                 <span>${escapeHtml(finding.file_path ?? 'scan')}</span>
                 <span>${escapeHtml(formatRelativeTime(finding.detected_at))}</span>
               </div>
             </article>
         `).join('')
-        : '<div class="empty-state">No security findings available.</div>';
+        : emptyStateMarkup('No security findings available.');
 }
 
 function validateConfigPayload(payload) {
@@ -608,23 +647,23 @@ function validateConfigPayload(payload) {
 function renderRules(rules) {
     elements.rulesList.innerHTML = rules.length
         ? rules.map((rule) => `
-            <article class="rule-card">
-              <div class="card-row">
-                <strong>${escapeHtml(rule.rule_name)}</strong>
-                <span class="badge">${escapeHtml(rule.rule_type)}</span>
-                <span class="badge ${rule.severity === 'critical' ? 'danger' : 'warn'}">${escapeHtml(rule.severity)}</span>
+            <article class="${surfaceCardClass('grid gap-4')}">
+              <div class="card-row flex flex-wrap items-center gap-3">
+                <strong class="text-white">${escapeHtml(rule.rule_name)}</strong>
+                <span class="${badgeClass()}">${escapeHtml(rule.rule_type)}</span>
+                <span class="${badgeClass(rule.severity === 'critical' ? 'danger' : 'warn')}">${escapeHtml(rule.severity)}</span>
               </div>
-              <div>${escapeHtml(rule.message)}</div>
-              <div class="meta-row">
+              <div class="text-sm leading-6 text-slate-200">${escapeHtml(rule.message)}</div>
+              <div class="meta-row flex flex-wrap items-center gap-3 text-sm text-slate-400">
                 <span>${escapeHtml(rule.pattern)}</span>
               </div>
-              <div class="card-row">
-                <button class="btn btn-secondary" data-edit-rule="${escapeHtml(rule.id)}">Edit</button>
-                <button class="btn btn-ghost" data-delete-rule="${escapeHtml(rule.id)}">Delete</button>
+              <div class="card-row flex flex-wrap items-center gap-3">
+                <button class="rounded-2xl border border-cyan-300/20 bg-cyan-400/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-50 transition hover:bg-cyan-400/20" data-edit-rule="${escapeHtml(rule.id)}">Edit</button>
+                <button class="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white transition hover:bg-white/15" data-delete-rule="${escapeHtml(rule.id)}">Delete</button>
               </div>
             </article>
         `).join('')
-        : '<div class="empty-state">No custom rules yet for this repository.</div>';
+        : emptyStateMarkup('No custom rules yet for this repository.');
 
     elements.rulesList.querySelectorAll('[data-edit-rule]').forEach((button) => {
         button.addEventListener('click', () => {
@@ -705,7 +744,7 @@ async function loadPRDetail(prId) {
     const result = await window.electronAPI.getPRDetail(prId);
     if (!result.success) {
         elements.prDetailTitle.textContent = 'Select a PR';
-        elements.prDetail.innerHTML = `<div class="empty-state">${escapeHtml(result.error)}</div>`;
+        elements.prDetail.innerHTML = emptyStateMarkup(result.error);
         return;
     }
 
@@ -771,16 +810,14 @@ function connectWebSocket() {
         state.ws.close();
     }
 
-    elements.wsStatus.textContent = 'Connecting';
-    elements.wsStatus.style.color = 'var(--warn)';
+    setConnectionStatus(elements.wsStatus, 'Connecting', 'warn');
 
     const ws = new WebSocket(state.runtimeConfig.wsUrl);
     state.ws = ws;
 
     ws.addEventListener('open', () => {
         state.wsReconnectDelay = 1000;
-        elements.wsStatus.textContent = 'Connected';
-        elements.wsStatus.style.color = 'var(--success)';
+        setConnectionStatus(elements.wsStatus, 'Connected', 'success');
         ws.send(JSON.stringify({
             type: 'auth',
             userId: state.runtimeConfig.wsUserId,
@@ -798,8 +835,7 @@ function connectWebSocket() {
     });
 
     ws.addEventListener('close', () => {
-        elements.wsStatus.textContent = 'Reconnecting';
-        elements.wsStatus.style.color = 'var(--danger)';
+        setConnectionStatus(elements.wsStatus, 'Reconnecting', 'danger');
         if (state.wsReconnectTimer) {
             clearTimeout(state.wsReconnectTimer);
         }
@@ -808,8 +844,7 @@ function connectWebSocket() {
     });
 
     ws.addEventListener('error', () => {
-        elements.wsStatus.textContent = 'Error';
-        elements.wsStatus.style.color = 'var(--danger)';
+        setConnectionStatus(elements.wsStatus, 'Error', 'danger');
     });
 }
 
@@ -1040,7 +1075,7 @@ elements.resetRuleBtn.addEventListener('click', () => {
 });
 
 elements.clearLogsBtn.addEventListener('click', () => {
-    elements.logsContainer.innerHTML = '<div class="empty-state">No logs yet. Start the agent to stream process output.</div>';
+    elements.logsContainer.innerHTML = emptyStateMarkup('No logs yet. Start the agent to stream process output.');
 });
 
 window.electronAPI.onLogOutput((data) => {
