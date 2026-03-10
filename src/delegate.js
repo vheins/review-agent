@@ -335,11 +335,6 @@ async function addReviewComments(repository, pr, repoDir) {
       commentToolSucceeded ||
       reviewWriteSucceeded;
 
-    if (failedTools.size > 0) {
-      logger.warn(`Tools that failed during review: ${[...failedTools].join(', ')}`);
-      logger.warn('Fallback review will be submitted to ensure PR gets a response.');
-    }
-
     // ── Summary log ──
     console.log('\n' + chalk.bold.blue('┌─── REVIEW ANALYSIS SUMMARY ───'));
     console.log(chalk.blue(`│`) + ` Severity Score  : ${chalk.bold(severityScore)} (threshold: ${config.severityThreshold})`);
