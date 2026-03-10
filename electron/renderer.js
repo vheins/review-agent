@@ -588,6 +588,7 @@ function renderTeamSecurity() {
 function validateConfigPayload(payload) {
     const reviewInterval = Number(payload.reviewInterval);
     const severityThreshold = Number(payload.severityThreshold);
+    const autoMergeHealthThreshold = Number(payload.autoMergeHealthThreshold);
 
     if (!Number.isFinite(reviewInterval) || reviewInterval < 60) {
         return 'Review interval must be at least 60 seconds.';
@@ -595,6 +596,10 @@ function validateConfigPayload(payload) {
 
     if (!Number.isFinite(severityThreshold) || severityThreshold < 1) {
         return 'Severity threshold must be at least 1.';
+    }
+
+    if (!Number.isFinite(autoMergeHealthThreshold) || autoMergeHealthThreshold < 1 || autoMergeHealthThreshold > 100) {
+        return 'Auto-merge health threshold must be between 1 and 100.';
     }
 
     return null;
@@ -737,7 +742,11 @@ async function loadRepositoryConfig() {
     elements.configForm.aiExecutor.value = config.aiExecutor ?? 'gemini';
     elements.configForm.autoMerge.value = String(Boolean(config.autoMerge));
     elements.configForm.severityThreshold.value = config.severityThreshold ?? 10;
+    elements.configForm.autoMergeHealthThreshold.value = config.autoMergeHealthThreshold ?? 60;
     elements.configForm.logLevel.value = config.logLevel ?? 'info';
+    elements.configForm.requiredChecks.value = Array.isArray(config.requiredChecks)
+        ? config.requiredChecks.join(',')
+        : String(config.requiredChecks ?? 'tests,review');
     elements.configValidation.textContent = `Editing ${result.payload.repository.full_name} on ${result.payload.repository.default_branch}.`;
     renderRules(rules);
 }
@@ -951,6 +960,11 @@ elements.configForm.addEventListener('submit', async (event) => {
         aiExecutor: formData.get('aiExecutor'),
         autoMerge: formData.get('autoMerge') === 'true',
         severityThreshold: Number(formData.get('severityThreshold')),
+        autoMergeHealthThreshold: Number(formData.get('autoMergeHealthThreshold')),
+        requiredChecks: String(formData.get('requiredChecks') ?? '')
+            .split(',')
+            .map((value) => value.trim())
+            .filter(Boolean),
         logLevel: formData.get('logLevel')
     };
 

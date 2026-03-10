@@ -43,7 +43,11 @@ export const config = {
   severityCritical: parseInt(process.env.SEVERITY_CRITICAL || '5', 10),
   severityHigh: parseInt(process.env.SEVERITY_HIGH || '3', 10),
   severityMedium: parseInt(process.env.SEVERITY_MEDIUM || '2', 10),
-  severityLow: parseInt(process.env.SEVERITY_LOW || '1', 10)
+  severityLow: parseInt(process.env.SEVERITY_LOW || '1', 10),
+  autoMergeHealthThreshold: parseInt(process.env.AUTO_MERGE_HEALTH_THRESHOLD || '60', 10),
+  requiredChecks: process.env.AUTO_MERGE_REQUIRED_CHECKS
+    ? process.env.AUTO_MERGE_REQUIRED_CHECKS.split(',').map((value) => value.trim()).filter(Boolean)
+    : ['tests', 'review']
 };
 
 class ConfigurationManager {

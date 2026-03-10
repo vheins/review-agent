@@ -1,9 +1,11 @@
 import crypto from 'crypto';
 import { logger } from './logger.js';
+import { workflowOrchestrator } from './workflow-orchestrator.js';
 
 export class WebhookHandler {
-  constructor(secret) {
+  constructor(secret, dependencies = {}) {
     this.secret = secret;
+    this.workflowOrchestrator = dependencies.workflowOrchestrator ?? workflowOrchestrator;
   }
 
   verifySignature(payload, signature) {
@@ -46,8 +48,12 @@ export class WebhookHandler {
     logger.info(`PR #${prNumber} ${action} in ${repoName}`);
     
     if (action === 'opened' || action === 'synchronize') {
-      // Trigger review process (simulated)
       logger.info(`Queueing review for PR #${prNumber}`);
+      await this.workflowOrchestrator.processPullRequest(payload);
+    }
+
+    if (action === 'closed' && payload.pull_request.merged_at) {
+      logger.info(`PR #${prNumber} merged in ${repoName}`);
     }
   }
 

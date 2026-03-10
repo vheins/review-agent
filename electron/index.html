@@ -340,6 +340,10 @@
                   <input name="severityThreshold" type="number" min="1" required>
                 </label>
                 <label class="field">
+                  <span>Auto Merge Health Threshold</span>
+                  <input name="autoMergeHealthThreshold" type="number" min="1" max="100" required>
+                </label>
+                <label class="field">
                   <span>Log Level</span>
                   <select name="logLevel">
                     <option value="debug">Debug</option>
@@ -349,6 +353,11 @@
                   </select>
                 </label>
               </div>
+
+              <label class="field">
+                <span>Required Checks</span>
+                <input name="requiredChecks" type="text" placeholder="tests,review,security">
+              </label>
 
               <div class="callout" id="configValidation">Select a repository to load its current configuration.</div>
               <button class="btn btn-primary" type="submit">Save Configuration</button>

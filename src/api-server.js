@@ -13,6 +13,7 @@ import teamRoutes from './routes/team.js';
 import securityRoutes from './routes/security.js';
 import configRoutes from './routes/config.js';
 import healthRoutes from './routes/health.js';
+import webhookRoutes from './routes/webhooks.js';
 
 export class APIServer {
   constructor() {
@@ -46,6 +47,7 @@ export class APIServer {
     this.app.use('/api/security', securityRoutes);
     this.app.use('/api/config', configRoutes);
     this.app.use('/api/health', healthRoutes);
+    this.app.use('/api/webhooks', webhookRoutes);
 
     this.app.get('/health', (req, res) => {
       res.json({ status: 'ok', timestamp: new Date().toISOString() });
