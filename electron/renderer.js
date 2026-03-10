@@ -107,33 +107,22 @@ function updateExecutorInfo(config) {
 
     // Get model based on executor
     let model = '-';
-    let yolo = 'Disabled';
 
     if (executor === 'gemini') {
         model = config.GEMINI_MODEL || 'auto-3';
-        yolo = config.GEMINI_YOLO === 'true' ? 'Enabled' : 'Disabled';
     } else if (executor === 'copilot') {
         model = config.COPILOT_MODEL || 'claude-haiku-4.5';
-        yolo = config.COPILOT_YOLO === 'true' ? 'Enabled' : 'Disabled';
     } else if (executor === 'kiro') {
         model = config.KIRO_AGENT || 'auto';
-        yolo = config.KIRO_YOLO === 'true' ? 'Enabled' : 'Disabled';
     } else if (executor === 'claude') {
         model = config.CLAUDE_MODEL || 'sonnet';
-        yolo = config.CLAUDE_YOLO === 'true' ? 'Enabled' : 'Disabled';
     } else if (executor === 'codex') {
         model = config.CODEX_MODEL || 'auto';
-        yolo = config.CODEX_YOLO === 'true' ? 'Enabled' : 'Disabled';
     } else if (executor === 'opencode') {
         model = config.OPENCODE_MODEL || 'auto';
-        yolo = config.OPENCODE_YOLO === 'true' ? 'Enabled' : 'Disabled';
     }
 
     document.getElementById('activeModel').textContent = model;
-
-    const yoloElement = document.getElementById('activeYolo');
-    yoloElement.textContent = yolo;
-    yoloElement.className = 'executor-value ' + (yolo === 'Enabled' ? 'yolo-enabled' : 'yolo-disabled');
 }
 
 // AI Executor Change Handler - removed (config moved to Agent tab)
@@ -616,54 +605,42 @@ async function loadAgentConfig() {
         // Gemini config
         const geminiEnabled = document.getElementById('agentGeminiEnabled');
         const geminiModel = document.getElementById('agentGeminiModel');
-        const geminiYolo = document.getElementById('agentGeminiYolo');
         if (geminiEnabled) geminiEnabled.value = config.GEMINI_ENABLED || 'true';
         if (geminiModel) geminiModel.value = config.GEMINI_MODEL || 'auto-3';
-        if (geminiYolo) geminiYolo.value = config.GEMINI_YOLO || 'false';
 
         // Copilot config
         const copilotEnabled = document.getElementById('agentCopilotEnabled');
         const copilotModel = document.getElementById('agentCopilotModel');
-        const copilotYolo = document.getElementById('agentCopilotYolo');
         if (copilotEnabled) copilotEnabled.value = config.COPILOT_ENABLED || 'false';
         if (copilotModel) copilotModel.value = config.COPILOT_MODEL || 'claude-haiku-4.5';
-        if (copilotYolo) copilotYolo.value = config.COPILOT_YOLO || 'false';
 
         // Kiro config
         const kiroEnabled = document.getElementById('agentKiroEnabled');
         const kiroAgent = document.getElementById('agentKiroAgent');
-        const kiroYolo = document.getElementById('agentKiroYolo');
         if (kiroEnabled) kiroEnabled.value = config.KIRO_ENABLED || 'false';
         if (kiroAgent) kiroAgent.value = config.KIRO_AGENT || 'auto';
-        if (kiroYolo) kiroYolo.value = config.KIRO_YOLO || 'false';
 
         // Claude config
         const claudeEnabled = document.getElementById('agentClaudeEnabled');
         const claudeModel = document.getElementById('agentClaudeModel');
         const claudeAgent = document.getElementById('agentClaudeAgent');
-        const claudeYolo = document.getElementById('agentClaudeYolo');
         if (claudeEnabled) claudeEnabled.value = config.CLAUDE_ENABLED || 'false';
         if (claudeModel) claudeModel.value = config.CLAUDE_MODEL || 'sonnet';
         if (claudeAgent) claudeAgent.value = config.CLAUDE_AGENT || '';
-        if (claudeYolo) claudeYolo.value = config.CLAUDE_YOLO || 'false';
 
         // Codex config
         const codexEnabled = document.getElementById('agentCodexEnabled');
         const codexModel = document.getElementById('agentCodexModel');
-        const codexYolo = document.getElementById('agentCodexYolo');
         if (codexEnabled) codexEnabled.value = config.CODEX_ENABLED || 'false';
         if (codexModel) codexModel.value = config.CODEX_MODEL || 'auto';
-        if (codexYolo) codexYolo.value = config.CODEX_YOLO || 'false';
 
         // OpenCode config
         const opencodeEnabled = document.getElementById('agentOpencodeEnabled');
         const opencodeModel = document.getElementById('agentOpencodeModel');
         const opencodeAgent = document.getElementById('agentOpencodeAgent');
-        const opencodeYolo = document.getElementById('agentOpencodeYolo');
         if (opencodeEnabled) opencodeEnabled.value = config.OPENCODE_ENABLED || 'false';
         if (opencodeModel) opencodeModel.value = config.OPENCODE_MODEL || 'auto';
         if (opencodeAgent) opencodeAgent.value = config.OPENCODE_AGENT || '';
-        if (opencodeYolo) opencodeYolo.value = config.OPENCODE_YOLO || 'false';
 
         // Update status indicators
         updateAgentStatus('gemini', config.GEMINI_ENABLED === 'true');

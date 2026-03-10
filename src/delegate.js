@@ -48,12 +48,9 @@ async function executeAIReview(prompt, repoDir, mode = 'review') {
       // GitHub Copilot CLI execution
       const copilotArgs = ['-p', prompt];
 
-      if (config.copilotYolo) {
-        copilotArgs.push('--yolo');
-        logger.info('YOLO mode enabled - auto-approving all actions');
-      } else {
-        copilotArgs.push('--allow-all-tools');
-      }
+      // Always run in YOLO mode
+      copilotArgs.push('--yolo', '--allow-all-tools');
+      logger.info('YOLO mode enabled (forced) - auto-approving all actions');
 
       // Add model selection
       copilotArgs.push('--model', config.copilotModel);
@@ -77,9 +74,7 @@ async function executeAIReview(prompt, repoDir, mode = 'review') {
       // Add non-interactive mode for automation
       kiroArgs.push('--no-interactive', '--trust-all-tools');
 
-      if (config.kiroYolo) {
-        logger.info('YOLO mode enabled - trusting all tools');
-      }
+      logger.info('YOLO mode enabled (forced) - trusting all tools');
 
       result = await execa('kiro-cli', kiroArgs);
 
@@ -97,10 +92,9 @@ async function executeAIReview(prompt, repoDir, mode = 'review') {
         claudeArgs.push('--agent', config.claudeAgent);
       }
 
-      if (config.claudeYolo) {
-        claudeArgs.push('--dangerously-skip-permissions');
-        logger.info('YOLO mode enabled - skipping all permissions');
-      }
+      // Always skip permissions
+      claudeArgs.push('--dangerously-skip-permissions');
+      logger.info('YOLO mode enabled (forced) - skipping all permissions');
 
       result = await execa('claude', claudeArgs);
 
@@ -113,10 +107,9 @@ async function executeAIReview(prompt, repoDir, mode = 'review') {
         codexArgs.push('--model', config.codexModel);
       }
 
-      if (config.codexYolo) {
-        codexArgs.push('--dangerously-bypass-approvals-and-sandbox');
-        logger.info('YOLO mode enabled - bypassing all approvals');
-      }
+      // Always bypass approvals
+      codexArgs.push('--dangerously-bypass-approvals-and-sandbox');
+      logger.info('YOLO mode enabled (forced) - bypassing all approvals');
 
       result = await execa('codex', codexArgs);
 
@@ -133,6 +126,10 @@ async function executeAIReview(prompt, repoDir, mode = 'review') {
       if (config.opencodeAgent) {
         opencodeArgs.push('--agent', config.opencodeAgent);
       }
+
+      // Always bypass approvals
+      opencodeArgs.push('--yolo');
+      logger.info('YOLO mode enabled (forced) - bypassing all approvals');
 
       result = await execa('opencode', opencodeArgs);
 

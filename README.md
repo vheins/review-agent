@@ -46,34 +46,28 @@ AI_EXECUTOR=gemini      # gemini, copilot, kiro, claude, codex, or opencode
 # Gemini CLI
 GEMINI_ENABLED=true
 GEMINI_MODEL=auto-3
-GEMINI_YOLO=false
 
 # GitHub Copilot CLI
 COPILOT_ENABLED=false
 COPILOT_MODEL=claude-haiku-4.5
-COPILOT_YOLO=false
 
 # Kiro CLI
 KIRO_ENABLED=false
 KIRO_AGENT=auto
-KIRO_YOLO=false
 
 # Claude Code CLI
 CLAUDE_ENABLED=false
 CLAUDE_MODEL=sonnet
 CLAUDE_AGENT=
-CLAUDE_YOLO=false
 
 # Codex CLI
 CODEX_ENABLED=false
 CODEX_MODEL=auto
-CODEX_YOLO=false
 
 # OpenCode CLI
 OPENCODE_ENABLED=false
 OPENCODE_MODEL=auto
 OPENCODE_AGENT=
-OPENCODE_YOLO=false
 ```
 
 ### AI Executor Options
@@ -83,7 +77,6 @@ OPENCODE_YOLO=false
 - Requires Gemini CLI installation
 - Set `AI_EXECUTOR=gemini` and `GEMINI_ENABLED=true`
 - Choose model with `GEMINI_MODEL`
-- Use `GEMINI_YOLO=true` for auto-approval
 
 Available Gemini models:
 - `auto-3` (default, recommended) - Let CLI choose best Gemini 3 model
@@ -99,14 +92,12 @@ Available Gemini models:
 - Requires GitHub Copilot CLI installation
 - Set `AI_EXECUTOR=copilot` and `COPILOT_ENABLED=true`
 - Choose model with `COPILOT_MODEL`
-- Use `COPILOT_YOLO=true` for auto-approval
 
 #### 🥷 Kiro CLI
 - Native Kiro integration
 - Requires Kiro CLI installation
 - Set `AI_EXECUTOR=kiro` and `KIRO_ENABLED=true`
 - Choose agent with `KIRO_AGENT`
-- Use `KIRO_YOLO=true` for auto-approval
 
 Available Kiro agents:
 - `auto` (default, recommended) - Let Kiro choose the best agent
@@ -120,7 +111,6 @@ Available Kiro agents:
 - Set `AI_EXECUTOR=claude` and `CLAUDE_ENABLED=true`
 - Choose model with `CLAUDE_MODEL`
 - Optional agent with `CLAUDE_AGENT`
-- Use `CLAUDE_YOLO=true` to skip permissions
 
 Available Claude models:
 - `sonnet` (default) - Latest Sonnet (alias)
@@ -133,7 +123,6 @@ Available Claude models:
 - Requires Codex CLI installation
 - Set `AI_EXECUTOR=codex` and `CODEX_ENABLED=true`
 - Choose model with `CODEX_MODEL`
-- Use `CODEX_YOLO=true` to bypass approvals
 
 Available Codex models:
 - `auto` (default) - Let Codex choose
