@@ -4,9 +4,71 @@ import notifier from 'node-notifier';
 import boxen from 'boxen';
 import terminalLink from 'terminal-link';
 import { config } from './config.js';
+import fs from 'fs-extra';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const levels = { info: 0, warn: 1, error: 2 };
 const currentLevel = levels[config.logLevel] || 0;
+
+// Log directory setup
+const LOG_DIR = path.join(__dirname, '..', 'logs');
+const LOG_RETENTION_DAYS = 7;
+
+// Ensure log directory exists
+fs.ensureDirSync(LOG_DIR);
+
+// Get current date for log file name
+function getLogFileName() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `review-agent-${year}-${month}-${day}.log`;
+}
+
+// Clean old log files (keep only last 7 days)
+function cleanOldLogs() {
+  try {
+    const files = fs.readdirSync(LOG_DIR);
+    const now = Date.now();
+    const retentionMs = LOG_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+
+    files.forEach(file => {
+      if (file.startsWith('review-agent-') && file.endsWith('.log')) {
+        const filePath = path.join(LOG_DIR, file);
+        const stats = fs.statSync(filePath);
+        const fileAge = now - stats.mtime.getTime();
+
+        if (fileAge > retentionMs) {
+          fs.unlinkSync(filePath);
+          console.log(chalk.gray(`🗑️  Deleted old log: ${file}`));
+        }
+      }
+    });
+  } catch (error) {
+    console.error(chalk.red('Failed to clean old logs:'), error.message);
+  }
+}
+
+// Write to log file
+function writeToLogFile(level, message) {
+  try {
+    const logFile = path.join(LOG_DIR, getLogFileName());
+    const timestamp = new Date().toISOString();
+    const logEntry = `[${timestamp}] [${level.toUpperCase()}] ${message}\n`;
+
+    fs.appendFileSync(logFile, logEntry, 'utf-8');
+  } catch (error) {
+    console.error(chalk.red('Failed to write to log file:'), error.message);
+  }
+}
+
+// Clean old logs on startup
+cleanOldLogs();
 
 // Single spinner instance to avoid concurrent spinners
 let activeSpinner = null;
@@ -43,6 +105,7 @@ export const logger = {
         activeSpinner = null;
       }
       console.log(chalk.blue('ℹ'), msg);
+      writeToLogFile('info', msg);
     }
   },
 
@@ -54,6 +117,7 @@ export const logger = {
         activeSpinner = null;
       }
       console.log(chalk.yellow('⚠'), msg);
+      writeToLogFile('warn', msg);
     }
   },
 
@@ -65,6 +129,7 @@ export const logger = {
         activeSpinner = null;
       }
       console.log(chalk.red('✖'), msg);
+      writeToLogFile('error', msg);
     }
   },
 

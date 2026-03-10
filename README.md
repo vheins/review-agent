@@ -290,3 +290,25 @@ See `electron/README.md` for detailed development guide.
 - Atomic comments (one comment per issue)
 - Merge conflict detection
 - Windows notifications for important events
+
+## Logging
+
+All console output is automatically saved to daily log files in the `logs/` directory:
+
+- **Log Format**: `review-agent-YYYY-MM-DD.log`
+- **Retention**: 7 days (older logs are automatically deleted)
+- **Location**: `/home/vheins/Agents/review-agent/logs/`
+- **Content**: All info, warning, and error messages with timestamps
+
+Example log entry:
+```
+[2024-03-10T08:39:28.123Z] [INFO] Starting PR review check...
+[2024-03-10T08:39:29.456Z] [INFO] Found 2 open PRs
+[2024-03-10T08:39:30.789Z] [ERROR] Failed to clone repository: permission denied
+```
+
+Logs are useful for:
+- Debugging issues
+- Tracking review history
+- Monitoring agent performance
+- Auditing automated actions

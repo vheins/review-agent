@@ -4,3 +4,5 @@ workspace/*
 !workspace/.gitkeep
 data/*
 dist/*
+logs/*
+!logs/.gitkeep
