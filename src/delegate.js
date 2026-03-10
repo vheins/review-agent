@@ -188,10 +188,10 @@ async function addReviewComments(repository, pr, repoDir) {
 
     const output = await executeAIReview(prompt, repoDir, 'review');
 
-    const severityScoreMatch = output.match(/SEVERITY_SCORE:\s*(\d+)/i);
-    const severityBreakdownMatch = output.match(/SEVERITY_BREAKDOWN:\s*(.+)/i);
-    const decisionMatch = output.match(/DECISION:\s*(APPROVE|REQUEST_CHANGES)/i);
-    const messageMatch = output.match(/MESSAGE:\s*(.+)/is);
+    const severityScoreMatch = output.match(/\*?\*?SEVERITY_SCORE\*?\*?:\s*(\d+)/i);
+    const severityBreakdownMatch = output.match(/\*?\*?SEVERITY_BREAKDOWN\*?\*?:\s*([^\n]+)/i);
+    const decisionMatch = output.match(/\*?\*?DECISION\*?\*?:\s*(APPROVE|REQUEST_CHANGES)/i);
+    const messageMatch = output.match(/\*?\*?MESSAGE\*?\*?:\s*(.+)/is);
 
     if (!decisionMatch || !messageMatch) {
       logger.warn(`${config.aiExecutor.toUpperCase()} response does not match expected format. Using fallback.`);
@@ -211,7 +211,23 @@ async function addReviewComments(repository, pr, repoDir) {
     }
 
     let decision = decisionMatch ? decisionMatch[1].toUpperCase() : 'REQUEST_CHANGES';
-    const message = messageMatch ? messageMatch[1].trim() : 'Review telah dilakukan. Silakan periksa komentar yang diberikan untuk detail lebih lanjut.';
+    let message = messageMatch ? messageMatch[1].trim() : '';
+    // If we couldn't parse a proper MESSAGE block or the AI didn't provide one, 
+    // fallback to using the entire raw AI output (stripped of metadata keywords) so the user sees the actual review
+    if (!message) {
+      if (output) {
+         message = output
+           .replace(/\*?\*?SEVERITY_SCORE\*?\*?:\s*\d+/ig, '')
+           .replace(/\*?\*?SEVERITY_BREAKDOWN\*?\*?:\s*[^\n]+/ig, '')
+           .replace(/\*?\*?DECISION\*?\*?:\s*(APPROVE|REQUEST_CHANGES)/ig, '')
+           .trim();
+      }
+      // Ultimate fallback if somehow the output was completely empty
+      if (!message) {
+         message = 'Review telah dilakukan. Silakan periksa komentar yang diberikan untuk detail lebih lanjut.';
+      }
+      logger.warn('Failed to parse MESSAGE block. Using cleaned raw AI output as fallback.');
+    }
 
     // Override decision if Critical or High issues found
     if ((hasCritical || hasHigh) && decision === 'APPROVE') {
@@ -219,11 +235,13 @@ async function addReviewComments(repository, pr, repoDir) {
       decision = 'REQUEST_CHANGES';
     }
 
-    // Check if AI already posted comments by looking for gh commands in output
+    // Check if AI already posted comments by looking for gh/mcp commands in output
     const hasPostedComments = output.includes('gh pr review') ||
       output.includes('gh api') ||
       output.includes('review submitted') ||
-      output.includes('comment added');
+      output.includes('comment added') ||
+      output.includes('add_comment_to_pending_review') ||
+      output.includes('pull_request_review_write');
     logger.info(`Severity Score: ${severityScore} (Threshold: ${config.severityThreshold})`);
     logger.info(`Severity Breakdown: ${severityBreakdown}`);
     logger.info(`Has Critical: ${hasCritical}, Has High: ${hasHigh}`);
@@ -256,33 +274,41 @@ async function addReviewComments(repository, pr, repoDir) {
   }
 }
 
-async function approvePR(repository, pr, message) {
+async function handleReviewSubmission(repository, prNumber, decision, message, hasPostedComments) {
   try {
-    logger.info(`Approving PR #${pr.number}`);
-    await execa('gh', [
-      'pr', 'review', pr.number.toString(),
-      '--approve',
-      '--body', message,
-      '--repo', repository
-    ], { stdio: 'inherit' });
-    logger.info(`PR #${pr.number} approved`);
+    const { stdout } = await execa('gh', ['api', `repos/${repository}/pulls/${prNumber}/reviews`]);
+    const reviews = JSON.parse(stdout);
+    const pendingReview = reviews.find(r => r.state === 'PENDING');
+    
+    if (pendingReview) {
+      logger.info(`Found pending review (${pendingReview.id}). Submitting it to prevent orphaned inline comments.`);
+      await execa('gh', [
+        'api', '--method', 'POST', 
+        `repos/${repository}/pulls/${prNumber}/reviews/${pendingReview.id}/events`,
+        '-f', `event=${decision}`,
+        '-f', `body=${message}`
+      ]);
+      logger.info(`Pending review submitted successfully as ${decision}`);
+      return;
+    }
+    
+    if (hasPostedComments) {
+      logger.info('AI already posted review comments and no pending review remains. Skipping fallback to prevent double comments.');
+      return;
+    }
+    
+    logger.info('AI did not post inline comments and no pending review found. Posting fallback summary review.');
+    const args = ['pr', 'review', prNumber.toString(), '--body', message, '--repo', repository];
+    if (decision === 'APPROVE') {
+      args.push('--approve');
+    } else {
+      args.push('--request-changes');
+    }
+    
+    await execa('gh', args, { stdio: 'inherit' });
+    logger.info(`Fallback review (${decision}) created successfully.`);
   } catch (error) {
-    logger.error(`Failed to approve PR #${pr.number}: ${error.message}`);
-  }
-}
-
-async function rejectPR(repository, pr, message) {
-  try {
-    logger.info(`Rejecting PR #${pr.number}`);
-    await execa('gh', [
-      'pr', 'review', pr.number.toString(),
-      '--request-changes',
-      '--body', message,
-      '--repo', repository
-    ], { stdio: 'inherit' });
-    logger.info(`PR #${pr.number} rejected`);
-  } catch (error) {
-    logger.error(`Failed to reject PR #${pr.number}: ${error.message}`);
+     logger.error(`Failed to handle review submission: ${error.message}`);
   }
 }
 
@@ -352,16 +378,7 @@ export async function delegateReview(repository, pr, repoDir) {
 
       const { decision, message, hasPostedComments, severityScore, severityBreakdown } = await addReviewComments(repository, pr, repoDir);
 
-      if (hasPostedComments) {
-        logger.info('Gemini already posted review comments, skipping duplicate summary comment');
-      } else {
-        logger.info('Gemini did not post comments, posting summary via gh CLI');
-        if (decision === 'APPROVE') {
-          await approvePR(repository, pr, message);
-        } else {
-          await rejectPR(repository, pr, message);
-        }
-      }
+      await handleReviewSubmission(repository, pr.number, decision, message, hasPostedComments);
 
       // Auto-fix minor issues if approved with low severity score (even for master branch)
       if (decision === 'APPROVE' && severityScore > 0 && severityScore < config.severityThreshold) {
@@ -401,16 +418,7 @@ export async function delegateReview(repository, pr, repoDir) {
     if (config.reviewMode === 'comment') {
       const { decision, message, hasPostedComments, severityScore, severityBreakdown } = await addReviewComments(repository, pr, repoDir);
 
-      if (hasPostedComments) {
-        logger.info('Gemini already posted review comments, skipping duplicate summary comment');
-      } else {
-        logger.info('Gemini did not post comments, posting summary via gh CLI');
-        if (decision === 'APPROVE') {
-          await approvePR(repository, pr, message);
-        } else {
-          await rejectPR(repository, pr, message);
-        }
-      }
+      await handleReviewSubmission(repository, pr.number, decision, message, hasPostedComments);
 
       // Auto-fix minor issues if approved with low severity score
       if (decision === 'APPROVE' && severityScore > 0 && severityScore < config.severityThreshold) {
