@@ -429,10 +429,19 @@ async function mergePR(repository, pr) {
 
 // ─────────────────────────────────────────────
 // Fix PR issues via AI agent
+// Runs on the PR's head branch (checkout enforced)
 // ─────────────────────────────────────────────
 async function fixPR(repository, pr, repoDir) {
   try {
     logger.info(`╔══ STEP: fixPR — PR #${pr.number} in ${repository}`);
+    logger.info(`  Branch: ${chalk.bold(pr.headRefName)} (all changes will be committed here)`);
+
+    // Ensure we are on the correct PR branch before running AI
+    logger.info(`► Ensuring checkout of branch '${pr.headRefName}' before fixing...`);
+    await execaVerbose('git', ['fetch', 'origin', pr.headRefName], { cwd: repoDir });
+    await execaVerbose('git', ['checkout', pr.headRefName], { cwd: repoDir });
+    await execaVerbose('git', ['pull', 'origin', pr.headRefName], { cwd: repoDir });
+    logger.info(`✔ On branch '${pr.headRefName}' — ready for auto-fix`);
 
     const guidelines = await fs.readFile('agents.md', 'utf-8');
     const promptTemplate = await fs.readFile('context/fix-prompt.md', 'utf-8');
