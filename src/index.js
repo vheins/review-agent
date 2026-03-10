@@ -1,7 +1,7 @@
 import { config } from './config.js';
 import { logger } from './logger.js';
 import { fetchOpenPRs, prepareRepository } from './github.js';
-import { delegateToGemini } from './delegate.js';
+import { delegateReview } from './delegate.js';
 import fs from 'fs-extra';
 
 async function run(once = false) {
@@ -38,7 +38,7 @@ async function run(once = false) {
         repoDir = await prepareRepository(pr);
       }
 
-      await delegateToGemini(pr.repository.nameWithOwner, pr, repoDir);
+      await delegateReview(pr.repository.nameWithOwner, pr, repoDir);
     }
 
     logger.info('All PRs processed');
