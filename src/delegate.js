@@ -190,8 +190,11 @@ async function executeAIReview(prompt, repoDir, mode = 'review') {
     console.log('');
 
     const { stdout, stderr } = await execaVerbose(cliCmd, args, { input: prompt });
-    // Combine stdout + stderr: Gemini CLI prints tool call results to stderr
-    const output = stripAnsi((stdout + '\n' + stderr).trim());
+    // stdout only: used for parsing AI response (MESSAGE, DECISION, SEVERITY_SCORE)
+    const output = stripAnsi(stdout.trim());
+    // stdout+stderr: used only for tool detection (hasPostedComments)
+    // Gemini CLI prints startup logs + tool call results to stderr — don't mix into AI response
+    const outputForDetection = stripAnsi((stdout + '\n' + stderr).trim());
 
     console.log('\n' + chalk.bold.green('┌─── ' + executor.toUpperCase() + ' OUTPUT ───'));
     output.split('\n').forEach(line => console.log(chalk.green('│') + ' ' + line));
@@ -286,9 +289,9 @@ async function addReviewComments(repository, pr, repoDir) {
       decision = 'REQUEST_CHANGES';
     }
 
-    // Detect if AI successfully posted comments
+    // Detect if AI successfully posted comments — use combined stdout+stderr for detection
     // Exclude lines that are error messages (tool call failed but name appears in error text)
-    const toolErrorLines = output.split('\n').filter(l =>
+    const toolErrorLines = outputForDetection.split('\n').filter(l =>
       l.includes('Error executing tool') ||
       l.includes('reported an error') ||
       l.includes('params must have required property')
@@ -300,10 +303,10 @@ async function addReviewComments(repository, pr, repoDir) {
       })
     );
 
-    const commentToolSucceeded = output.includes('add_comment_to_pending_review') &&
+    const commentToolSucceeded = outputForDetection.includes('add_comment_to_pending_review') &&
       !failedTools.has('add_comment_to_pending_review');
     // submit_pending = submit pending review with inline comments; create = standalone review
-    const reviewWriteSucceeded = output.includes('pull_request_review_write') &&
+    const reviewWriteSucceeded = outputForDetection.includes('pull_request_review_write') &&
       (!failedTools.has('pull_request_review_write'));
 
     if (failedTools.size > 0) {
@@ -329,9 +332,9 @@ async function addReviewComments(repository, pr, repoDir) {
     }
 
     const hasPostedComments = alreadyReviewedViaAPI ||
-      output.includes('gh pr review') ||
-      output.includes('review submitted') ||
-      output.includes('comment added') ||
+      outputForDetection.includes('gh pr review') ||
+      outputForDetection.includes('review submitted') ||
+      outputForDetection.includes('comment added') ||
       commentToolSucceeded ||
       reviewWriteSucceeded;
 

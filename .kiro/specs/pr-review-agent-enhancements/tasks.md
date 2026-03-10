@@ -14,7 +14,7 @@ The implementation is organized into 11 phases following the requirements struct
 
 ### Phase 1: Foundation (Data Model, Configuration, Parsing, Export)
 
-- [ ] 1. Set up project structure and core dependencies
+- [~] 1. Set up project structure and core dependencies
   - Create directory structure (src/, tests/, config/, data/)
   - Initialize package.json with dependencies (better-sqlite3, express, ws, fast-check, electron)
   - Set up ES modules configuration
@@ -22,7 +22,7 @@ The implementation is organized into 11 phases following the requirements struct
   - _Requirements: 41.1, 41.2_
 
 - [ ] 2. Implement database schema and initialization
-  - [ ] 2.1 Create database schema SQL file with all 15+ tables
+  - [~] 2.1 Create database schema SQL file with all 15+ tables
     - Define pull_requests, review_sessions, review_comments tables
     - Define developers, repositories, expertise_areas tables
     - Define metrics tables (pr_metrics, developer_metrics)
@@ -31,49 +31,49 @@ The implementation is organized into 11 phases following the requirements struct
     - Add all indexes for query performance
     - _Requirements: 41.1, 41.2_
   
-  - [ ] 2.2 Create DatabaseManager class with initialization
+  - [~] 2.2 Create DatabaseManager class with initialization
     - Implement SQLite connection with WAL mode
     - Configure pragmas (journal_mode, synchronous, foreign_keys, cache_size)
     - Implement schema migration system
     - Add periodic checkpoint mechanism
     - _Requirements: 41.1, 53.1_
   
-  - [ ]* 2.3 Write property test for database initialization
+  - [~] 2.3 Write property test for database initialization
     - **Property 20: Query Performance with Indexes**
     - **Validates: Requirements 41.2**
 
 - [ ] 3. Implement configuration management system
-  - [ ] 3.1 Create ConfigurationManager class
+  - [~] 3.1 Create ConfigurationManager class
     - Implement JSON/YAML config file parsing
     - Support repository-specific configuration
     - Implement config validation logic
     - Add default configuration values
     - _Requirements: 47.1, 47.2, 47.3_
   
-  - [ ] 3.2 Create repository_config table operations
+  - [~] 3.2 Create repository_config table operations
     - Implement config storage and retrieval
     - Add config versioning support
     - Implement config update with audit trail
     - _Requirements: 47.1, 47.3_
   
-  - [ ]* 3.3 Write property test for configuration round-trip
+  - [~] 3.3 Write property test for configuration round-trip
     - **Property 22: Configuration Round-Trip**
     - **Validates: Requirements 47.3**
 
 
 - [ ] 4. Implement review comment parsing system
-  - [ ] 4.1 Create CommentParser class
+  - [~] 4.1 Create CommentParser class
     - Implement structured comment format parser
     - Extract file path, line number, issue type, severity, message
     - Parse suggested fixes from AI executor output
     - Handle multiple comment formats (Gemini, Copilot, Kiro, Claude, Codex, OpenCode)
     - _Requirements: 45.1, 45.2_
   
-  - [ ]* 4.2 Write property test for comment parsing completeness
+  - [~] 4.2 Write property test for comment parsing completeness
     - **Property 21: Comment Parsing Completeness**
     - **Validates: Requirements 45.1**
   
-  - [ ]* 4.3 Write unit tests for comment parser
+  - [~] 4.3 Write unit tests for comment parser
     - Test parsing of valid structured comments
     - Test handling of malformed comments
     - Test extraction of all fields
@@ -93,7 +93,7 @@ The implementation is organized into 11 phases following the requirements struct
     - Add download endpoint for export files
     - _Requirements: 48.1, 48.2_
   
-  - [ ]* 5.3 Write property test for export/import round-trip
+  - [ ] 5.3 Write property test for export/import round-trip
     - **Property 23: Export/Import Round-Trip**
     - **Validates: Requirements 48.3**
 
@@ -109,11 +109,11 @@ The implementation is organized into 11 phases following the requirements struct
     - Track review outcomes (approved, rejected, needs_changes)
     - _Requirements: 1.1, 1.2, 1.3_
   
-  - [ ]* 7.2 Write property test for review duration persistence
+  - [ ] 7.2 Write property test for review duration persistence
     - **Property 1: Review Duration Persistence**
     - **Validates: Requirements 1.1**
   
-  - [ ]* 7.3 Write property test for time-to-merge calculation
+  - [ ] 7.3 Write property test for time-to-merge calculation
     - **Property 6: Time-to-Merge Calculation**
     - **Validates: Requirements 5.2**
 
@@ -125,11 +125,11 @@ The implementation is organized into 11 phases following the requirements struct
     - Implement time-bucketing (hour/day/week/month)
     - _Requirements: 1.4, 2.1, 2.2_
   
-  - [ ]* 8.2 Write property test for metrics calculation performance
+  - [ ] 8.2 Write property test for metrics calculation performance
     - **Property 2: Metrics Calculation Performance**
     - **Validates: Requirements 1.4**
   
-  - [ ]* 8.3 Write property test for time range filtering
+  - [ ] 8.3 Write property test for time range filtering
     - **Property 3: Time Range Filtering**
     - **Validates: Requirements 2.4**
 
@@ -146,7 +146,7 @@ The implementation is organized into 11 phases following the requirements struct
     - Track anomaly history
     - _Requirements: 2.3_
   
-  - [ ]* 9.3 Write unit tests for trend analysis
+  - [ ] 9.3 Write unit tests for trend analysis
     - Test moving average calculation
     - Test anomaly detection with known outliers
     - _Requirements: 2.3_
@@ -165,7 +165,7 @@ The implementation is organized into 11 phases following the requirements struct
     - Calculate repository-level quality scores
     - _Requirements: 3.3_
   
-  - [ ]* 10.3 Write unit tests for developer metrics
+  - [ ] 10.3 Write unit tests for developer metrics
     - Test metrics calculation with sample data
     - Test edge cases (no reviews, single review)
     - _Requirements: 3.1, 3.2_
@@ -177,7 +177,7 @@ The implementation is organized into 11 phases following the requirements struct
     - Track rejection reason frequencies
     - _Requirements: 4.1, 4.2_
   
-  - [ ]* 11.2 Write property test for comment categorization
+  - [ ] 11.2 Write property test for comment categorization
     - **Property 5: Comment Categorization Completeness**
     - **Validates: Requirements 4.1**
 
@@ -200,7 +200,7 @@ The implementation is organized into 11 phases following the requirements struct
     - Generate alert notifications
     - _Requirements: 3.5_
   
-  - [ ]* 13.2 Write property test for performance alert triggering
+  - [ ] 13.2 Write property test for performance alert triggering
     - **Property 4: Performance Alert Triggering**
     - **Validates: Requirements 3.5**
 
@@ -223,7 +223,7 @@ The implementation is organized into 11 phases following the requirements struct
     - Call GitHub API to assign reviewers
     - _Requirements: 7.4, 7.5_
   
-  - [ ]* 15.3 Write property test for reviewer assignment bounds
+  - [ ] 15.3 Write property test for reviewer assignment bounds
     - **Property 7: Reviewer Assignment Bounds**
     - **Validates: Requirements 7.5**
 
@@ -240,7 +240,7 @@ The implementation is organized into 11 phases following the requirements struct
     - Decay old expertise over time
     - _Requirements: 7.2_
   
-  - [ ]* 16.3 Write unit tests for expertise scoring
+  - [ ] 16.3 Write unit tests for expertise scoring
     - Test TF-IDF calculation
     - Test expertise decay
     - _Requirements: 7.1, 7.2_
@@ -259,7 +259,7 @@ The implementation is organized into 11 phases following the requirements struct
     - Update developer workload in database
     - _Requirements: 9.1_
   
-  - [ ]* 17.3 Write unit tests for workload calculation
+  - [ ] 17.3 Write unit tests for workload calculation
     - Test workload with various PR counts
     - Test workload updates
     - _Requirements: 9.1_
@@ -276,7 +276,7 @@ The implementation is organized into 11 phases following the requirements struct
     - Update priority scores periodically
     - _Requirements: 8.3_
   
-  - [ ]* 18.3 Write property test for priority score aging
+  - [ ] 18.3 Write property test for priority score aging
     - **Property 8: Priority Score Aging**
     - **Validates: Requirements 8.3**
 
@@ -310,7 +310,7 @@ The implementation is organized into 11 phases following the requirements struct
     - Track time in each status
     - _Requirements: 10.1, 10.2_
   
-  - [ ]* 21.2 Write property test for elapsed time accuracy
+  - [ ] 21.2 Write property test for elapsed time accuracy
     - **Property 9: Elapsed Time Accuracy**
     - **Validates: Requirements 10.2**
 
@@ -334,7 +334,7 @@ The implementation is organized into 11 phases following the requirements struct
     - Store quality score in database
     - _Requirements: 12.1, 12.3_
   
-  - [ ]* 23.3 Write property test for quality score bounds
+  - [ ] 23.3 Write property test for quality score bounds
     - **Property 10: Quality Score Bounds**
     - **Validates: Requirements 12.3**
 
@@ -351,7 +351,7 @@ The implementation is organized into 11 phases following the requirements struct
     - Track FP trends over time
     - _Requirements: 13.3_
   
-  - [ ]* 24.3 Write property test for false positive recording
+  - [ ] 24.3 Write property test for false positive recording
     - **Property 11: False Positive Recording**
     - **Validates: Requirements 13.2**
 
@@ -371,7 +371,7 @@ The implementation is organized into 11 phases following the requirements struct
     - Generate violation reports
     - _Requirements: 14.2, 14.3_
   
-  - [ ]* 25.3 Write property test for regex pattern matching
+  - [ ] 25.3 Write property test for regex pattern matching
     - **Property 12: Regex Pattern Matching**
     - **Validates: Requirements 14.2**
 
@@ -389,7 +389,7 @@ The implementation is organized into 11 phases following the requirements struct
     - Track rule usage and effectiveness
     - _Requirements: 14.1, 14.4_
   
-  - [ ]* 26.3 Write unit tests for rule validation
+  - [ ] 26.3 Write unit tests for rule validation
     - Test valid rule definitions
     - Test invalid regex patterns
     - Test AST rule validation
@@ -415,7 +415,7 @@ The implementation is organized into 11 phases following the requirements struct
     - Identify quality improvements or degradations
     - _Requirements: 12.4_
   
-  - [ ]* 28.2 Write unit tests for quality trends
+  - [ ] 28.2 Write unit tests for quality trends
     - Test trend calculation with sample data
     - Test trend direction detection
     - _Requirements: 12.4_
@@ -432,7 +432,7 @@ The implementation is organized into 11 phases following the requirements struct
     - Process batches efficiently
     - _Requirements: 17.1, 17.2_
   
-  - [ ]* 30.2 Write property test for related PR detection
+  - [ ] 30.2 Write property test for related PR detection
     - **Property 13: Related PR Detection**
     - **Validates: Requirements 17.1**
 
@@ -485,11 +485,11 @@ The implementation is organized into 11 phases following the requirements struct
     - Track fix success rates
     - _Requirements: 19.6_
   
-  - [ ]* 33.4 Write property test for auto-fix application
+  - [ ] 33.4 Write property test for auto-fix application
     - **Property 14: Auto-Fix Application**
     - **Validates: Requirements 19.5**
   
-  - [ ]* 33.5 Write property test for auto-fix verification
+  - [ ] 33.5 Write property test for auto-fix verification
     - **Property 24: Auto-Fix Verification**
     - **Validates: Requirements 49.4**
 
@@ -513,7 +513,7 @@ The implementation is organized into 11 phases following the requirements struct
     - Validate generated fixes
     - _Requirements: 19.3_
   
-  - [ ]* 35.2 Write unit tests for fix generation
+  - [ ] 35.2 Write unit tests for fix generation
     - Test formatting fix generation
     - Test import fix generation
     - Test AI fix generation
@@ -570,7 +570,7 @@ The implementation is organized into 11 phases following the requirements struct
     - Send at configured time
     - _Requirements: 22.4_
   
-  - [ ]* 39.3 Write unit tests for notification batching
+  - [ ] 39.3 Write unit tests for notification batching
     - Test batch grouping logic
     - Test digest generation
     - _Requirements: 22.4_
@@ -589,7 +589,7 @@ The implementation is organized into 11 phases following the requirements struct
     - Create escalation audit trail
     - _Requirements: 23.1, 23.2_
   
-  - [ ]* 40.3 Write unit tests for escalation logic
+  - [ ] 40.3 Write unit tests for escalation logic
     - Test escalation triggers
     - Test escalation level determination
     - _Requirements: 23.1_
@@ -640,11 +640,11 @@ The implementation is organized into 11 phases following the requirements struct
     - Store findings in security_findings table
     - _Requirements: 26.1, 26.2, 27.1, 28.1_
   
-  - [ ]* 44.3 Write property test for vulnerability detection
+  - [ ] 44.3 Write property test for vulnerability detection
     - **Property 15: Vulnerability Pattern Detection**
     - **Validates: Requirements 26.1**
   
-  - [ ]* 44.4 Write property test for sensitive data detection
+  - [ ] 44.4 Write property test for sensitive data detection
     - **Property 16: Sensitive Data Detection**
     - **Validates: Requirements 28.1**
 
@@ -661,7 +661,7 @@ The implementation is organized into 11 phases following the requirements struct
     - Generate security findings for vulnerable dependencies
     - _Requirements: 26.3_
   
-  - [ ]* 45.3 Write unit tests for dependency scanning
+  - [ ] 45.3 Write unit tests for dependency scanning
     - Test dependency extraction
     - Test CVE detection with known vulnerabilities
     - _Requirements: 26.3_
@@ -679,7 +679,7 @@ The implementation is organized into 11 phases following the requirements struct
     - Warn about missing licenses
     - _Requirements: 27.1, 27.2_
   
-  - [ ]* 46.3 Write unit tests for license validation
+  - [ ] 46.3 Write unit tests for license validation
     - Test allowlist/blocklist checking
     - Test license conflict detection
     - _Requirements: 27.1, 27.2_
@@ -703,7 +703,7 @@ The implementation is organized into 11 phases following the requirements struct
     - Preserve context while hiding sensitive values
     - _Requirements: 28.2_
   
-  - [ ]* 47.4 Write unit tests for sensitive data detection
+  - [ ] 47.4 Write unit tests for sensitive data detection
     - Test API key pattern detection
     - Test PII pattern detection
     - Test entropy-based secret detection
@@ -736,7 +736,7 @@ The implementation is organized into 11 phases following the requirements struct
     - Generate audit reports
     - _Requirements: 29.3_
   
-  - [ ]* 49.3 Write property test for audit trail immutability
+  - [ ] 49.3 Write property test for audit trail immutability
     - **Property 17: Audit Trail Immutability**
     - **Validates: Requirements 29.1**
 
@@ -766,7 +766,7 @@ The implementation is organized into 11 phases following the requirements struct
     - Compute weighted health score (0-100)
     - _Requirements: 31.1, 31.2_
   
-  - [ ]* 52.2 Write property test for health score bounds and consistency
+  - [ ] 52.2 Write property test for health score bounds and consistency
     - **Property 18: Health Score Bounds and Consistency**
     - **Validates: Requirements 31.1**
 
@@ -814,7 +814,7 @@ The implementation is organized into 11 phases following the requirements struct
     - Award badges when criteria met
     - _Requirements: 34.2_
   
-  - [ ]* 55.4 Write unit tests for gamification
+  - [ ] 55.4 Write unit tests for gamification
     - Test point calculation
     - Test achievement unlocking
     - Test leaderboard ranking
@@ -852,7 +852,7 @@ The implementation is organized into 11 phases following the requirements struct
     - Log API calls for debugging
     - _Requirements: 36.2_
   
-  - [ ]* 58.3 Write unit tests for GitHub client
+  - [ ] 58.3 Write unit tests for GitHub client
     - Mock gh CLI calls
     - Test error handling
     - Test retry logic
@@ -888,7 +888,7 @@ The implementation is organized into 11 phases following the requirements struct
     - Fallback to alternative executors on failure
     - _Requirements: 37.3_
   
-  - [ ]* 60.4 Write unit tests for AI executors
+  - [ ] 60.4 Write unit tests for AI executors
     - Test prompt generation
     - Test output parsing
     - Test executor selection
@@ -907,7 +907,7 @@ The implementation is organized into 11 phases following the requirements struct
     - Count passed/failed tests
     - _Requirements: 38.1_
   
-  - [ ]* 61.3 Write unit tests for CI integration
+  - [ ] 61.3 Write unit tests for CI integration
     - Test check run parsing
     - Test coverage report parsing
     - _Requirements: 38.1, 38.2_
@@ -926,7 +926,7 @@ The implementation is organized into 11 phases following the requirements struct
     - Flag coverage decreases
     - _Requirements: 39.2_
   
-  - [ ]* 62.3 Write property test for coverage delta calculation
+  - [ ] 62.3 Write property test for coverage delta calculation
     - **Property 19: Coverage Delta Calculation**
     - **Validates: Requirements 39.2**
 
@@ -949,7 +949,7 @@ The implementation is organized into 11 phases following the requirements struct
     - Process events asynchronously
     - _Requirements: 40.1_
   
-  - [ ]* 63.4 Write unit tests for webhook handling
+  - [ ] 63.4 Write unit tests for webhook handling
     - Test signature verification
     - Test payload parsing
     - Test event routing
@@ -992,7 +992,7 @@ The implementation is organized into 11 phases following the requirements struct
     - Apply appropriate rules and checks
     - _Requirements: 14.3_
   
-  - [ ]* 66.3 Write integration tests for review workflow
+  - [ ] 66.3 Write integration tests for review workflow
     - Test complete review flow
     - Test workflow with different review levels
     - _Requirements: 1.1_
@@ -1054,7 +1054,7 @@ The implementation is organized into 11 phases following the requirements struct
     - Track healing attempts and success rates
     - _Requirements: 50.3, 50.4_
   
-  - [ ]* 71.4 Write unit tests for test & heal
+  - [ ] 71.4 Write unit tests for test & heal
     - Test failure categorization
     - Test healing fix generation
     - Test re-run logic
@@ -1076,7 +1076,7 @@ The implementation is organized into 11 phases following the requirements struct
     - Alert on critical issues
     - _Requirements: 51.1, 51.2_
   
-  - [ ]* 72.3 Write property test for health check completeness
+  - [ ] 72.3 Write property test for health check completeness
     - **Property 25: Health Check Completeness**
     - **Validates: Requirements 51.2**
 
@@ -1092,7 +1092,7 @@ The implementation is organized into 11 phases following the requirements struct
     - Notify administrators of stuck tasks
     - _Requirements: 52.2, 52.3_
   
-  - [ ]* 73.3 Write property test for stuck task detection
+  - [ ] 73.3 Write property test for stuck task detection
     - **Property 26: Stuck Task Detection**
     - **Validates: Requirements 52.1**
 
@@ -1103,7 +1103,7 @@ The implementation is organized into 11 phases following the requirements struct
     - Validate database integrity after transactions
     - _Requirements: 53.1, 53.2_
   
-  - [ ]* 74.2 Write property test for transaction atomicity
+  - [ ] 74.2 Write property test for transaction atomicity
     - **Property 27: Transaction Atomicity**
     - **Validates: Requirements 53.1**
 
@@ -1123,7 +1123,7 @@ The implementation is organized into 11 phases following the requirements struct
     - Cleanup orphaned resources
     - _Requirements: 54.1, 54.3_
   
-  - [ ]* 75.3 Write property test for shutdown task rejection
+  - [ ] 75.3 Write property test for shutdown task rejection
     - **Property 28: Shutdown Task Rejection**
     - **Validates: Requirements 54.2**
 
@@ -1140,7 +1140,7 @@ The implementation is organized into 11 phases following the requirements struct
     - Detect lock theft
     - _Requirements: 55.2, 55.3_
   
-  - [ ]* 76.3 Write property test for task lock atomicity
+  - [ ] 76.3 Write property test for task lock atomicity
     - **Property 29: Task Lock Atomicity**
     - **Validates: Requirements 55.2**
 
@@ -1159,7 +1159,7 @@ The implementation is organized into 11 phases following the requirements struct
     - Track retry metrics
     - _Requirements: 56.3_
   
-  - [ ]* 77.3 Write property test for exponential backoff sequence
+  - [ ] 77.3 Write property test for exponential backoff sequence
     - **Property 30: Exponential Backoff Sequence**
     - **Validates: Requirements 56.2**
 
@@ -1183,7 +1183,7 @@ The implementation is organized into 11 phases following the requirements struct
     - Restore subscriptions after reconnect
     - _Requirements: 57.5_
   
-  - [ ]* 78.4 Write property test for WebSocket auto-reconnect
+  - [ ] 78.4 Write property test for WebSocket auto-reconnect
     - **Property 31: WebSocket Auto-Reconnect**
     - **Validates: Requirements 57.5**
 
@@ -1201,7 +1201,7 @@ The implementation is organized into 11 phases following the requirements struct
     - Log memory usage trends
     - _Requirements: 58.2_
   
-  - [ ]* 79.3 Write property test for event listener cleanup
+  - [ ] 79.3 Write property test for event listener cleanup
     - **Property 32: Event Listener Cleanup**
     - **Validates: Requirements 58.1**
 
@@ -1320,7 +1320,7 @@ The implementation is organized into 11 phases following the requirements struct
     - Broadcast health alerts (health_alert)
     - _Requirements: 44.1, 44.2_
   
-  - [ ]* 88.3 Write integration tests for WebSocket
+  - [ ] 88.3 Write integration tests for WebSocket
     - Test subscription management
     - Test event broadcasting
     - Test authentication
@@ -1444,7 +1444,7 @@ The implementation is organized into 11 phases following the requirements struct
     - Broadcast updates via WebSocket
     - _Requirements: 1.1, 49.1, 50.1_
   
-  - [ ]* 98.3 Write integration tests for complete workflow
+  - [ ] 98.3 Write integration tests for complete workflow
     - Test PR creation to merge flow
     - Test auto-fix iteration flow
     - Test escalation flow
@@ -1464,7 +1464,7 @@ The implementation is organized into 11 phases following the requirements struct
     - Configure required checks
     - _Requirements: 21.1_
   
-  - [ ]* 99.3 Write unit tests for auto-merge
+  - [ ] 99.3 Write unit tests for auto-merge
     - Test criteria checking
     - Test merge triggering
     - _Requirements: 21.1_
