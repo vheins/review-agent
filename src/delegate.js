@@ -1,5 +1,6 @@
 import { execa } from 'execa';
 import fs from 'fs-extra';
+import stripAnsi from 'strip-ansi';
 import { logger, notify } from './logger.js';
 import { config } from './config.js';
 import { prReviewDB } from './database.js';
@@ -152,7 +153,7 @@ async function executeAIReview(prompt, repoDir, mode = 'review') {
       result = await execa('gemini', geminiArgs);
     }
 
-    const output = result.stdout.trim();
+    const output = stripAnsi(result.stdout.trim());
 
     console.log(`\n--- ${executor.toUpperCase()} OUTPUT ---`);
     console.log(output);
