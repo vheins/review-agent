@@ -12,6 +12,7 @@ const __dirname = path.dirname(__filename);
 describe('MetricsEngine Property Tests', () => {
   const testDbDir = path.join(__dirname, '..', 'data', 'test-metrics');
   const testDbPath = path.join(testDbDir, 'test-metrics.db');
+  const validDateArbitrary = (min, max) => fc.date({ min, max }).filter((value) => !Number.isNaN(value.getTime()));
 
   let engine;
   let testDbManager;
@@ -43,7 +44,7 @@ describe('MetricsEngine Property Tests', () => {
   it('Property 1: Review Duration Persistence', async () => {
     await fc.assert(
       fc.asyncProperty(
-        fc.date({ min: new Date('2020-01-01'), max: new Date('2025-12-31') }), // Start time
+        validDateArbitrary(new Date('2020-01-01'), new Date('2025-12-31')), // Start time
         fc.integer({ min: 1, max: 3600 }), // Duration in seconds
         async (startDate, duration) => {
           // Clear for clean run
@@ -72,7 +73,7 @@ describe('MetricsEngine Property Tests', () => {
   it('Property 6: Time-to-Merge Calculation', async () => {
     await fc.assert(
       fc.asyncProperty(
-        fc.date({ min: new Date('2020-01-01'), max: new Date('2025-12-31') }), // Creation time
+        validDateArbitrary(new Date('2020-01-01'), new Date('2025-12-31')), // Creation time
         fc.integer({ min: 100, max: 100000 }), // Time to merge in seconds
         async (createDate, mergeDuration) => {
           const createdAt = createDate.toISOString();
@@ -126,8 +127,8 @@ describe('MetricsEngine Property Tests', () => {
   it('Property 3: Time Range Filtering', async () => {
     await fc.assert(
       fc.asyncProperty(
-        fc.date({ min: new Date('2023-01-01'), max: new Date('2023-01-10') }),
-        fc.date({ min: new Date('2023-01-11'), max: new Date('2023-01-20') }),
+        validDateArbitrary(new Date('2023-01-01'), new Date('2023-01-10')),
+        validDateArbitrary(new Date('2023-01-11'), new Date('2023-01-20')),
         async (dateIn, dateOut) => {
           testDbManager.db.prepare('DELETE FROM review_sessions').run();
           

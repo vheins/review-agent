@@ -5,6 +5,9 @@ export class WSManager {
   constructor() {
     this.wss = null;
     this.clients = new Map(); // ws -> userData
+    this.sessionToken = process.env.DASHBOARD_SESSION_TOKEN || 'electron-dashboard-token';
+    this.rateWindowStartedAt = 0;
+    this.rateWindowCount = 0;
   }
 
   init(server) {
@@ -49,18 +52,58 @@ export class WSManager {
 
   async handleMessage(ws, data) {
     if (data.type === 'auth') {
-      // Simple auth simulation
-      this.clients.set(ws, { userId: data.userId });
+      if (!data.token || data.token !== this.sessionToken) {
+        ws.send(JSON.stringify({ type: 'auth_error', message: 'Invalid session token' }));
+        ws.close(4001, 'Invalid session token');
+        return;
+      }
+
+      this.clients.set(ws, {
+        userId: data.userId,
+        subscriptions: new Set()
+      });
       ws.send(JSON.stringify({ type: 'auth_success' }));
+      return;
+    }
+
+    if (data.type === 'subscribe') {
+      const client = this.clients.get(ws);
+      if (!client) {
+        ws.send(JSON.stringify({ type: 'error', message: 'Authenticate before subscribing' }));
+        return;
+      }
+
+      if (typeof data.channel === 'string' && data.channel.length > 0) {
+        client.subscriptions.add(data.channel);
+        ws.send(JSON.stringify({ type: 'subscription_success', channel: data.channel }));
+      }
     }
   }
 
-  broadcast(type, payload) {
+  broadcast(type, payload, channel = 'dashboard') {
     if (!this.wss) return;
+
+    const now = Date.now();
+    if (now - this.rateWindowStartedAt >= 1000) {
+      this.rateWindowStartedAt = now;
+      this.rateWindowCount = 0;
+    }
+
+    if (this.rateWindowCount >= 10) {
+      logger.warn(`WebSocket rate limit reached. Dropping event ${type}.`);
+      return;
+    }
+
+    this.rateWindowCount += 1;
 
     const message = JSON.stringify({ type, payload, timestamp: new Date().toISOString() });
     this.wss.clients.forEach((client) => {
-      if (client.readyState === WebSocket.OPEN) {
+      const clientData = this.clients.get(client);
+      if (
+        client.readyState === WebSocket.OPEN
+        && clientData
+        && clientData.subscriptions.has(channel)
+      ) {
         client.send(message);
       }
     });

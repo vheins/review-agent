@@ -3,584 +3,436 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'">
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://127.0.0.1:* http://127.0.0.1:*;"
+  >
   <title>🥷 Agentic Bunshin 🥷</title>
   <link rel="stylesheet" href="styles.css">
-  <!-- Markdown-it for preview -->
-  <script src="https://cdn.jsdelivr.net/npm/markdown-it@14.1.0/dist/markdown-it.min.js"></script>
 </head>
 <body>
-  <!-- Mobile Overlay -->
-  <div class="mobile-overlay" id="mobileOverlay"></div>
-
-  <div class="container">
-    <!-- Header -->
-    <header class="header">
-      <div class="header-content">
-        <!-- Mobile Menu Toggle -->
-        <button class="mobile-menu-toggle" id="mobileMenuToggle">
-          <span></span>
-          <span></span>
-          <span></span>
-        </button>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <p class="eyebrow">Electron Console</p>
         <h1>🥷 Agentic Bunshin 🥷</h1>
-        <div class="header-right">
-          <button class="theme-toggle" id="themeToggle" title="Toggle theme">
-            <span class="theme-icon">🌙</span>
-          </button>
-          <div class="status-badge" id="statusBadge">
-            <span class="status-dot"></span>
-            <span class="status-text">Stopped</span>
-          </div>
-        </div>
+        <p class="brand-copy">Live control room for review orchestration, backlog pressure, and quality posture.</p>
       </div>
-    </header>
 
-    <!-- Main Content -->
-    <div class="main-content">
-      <!-- Sidebar -->
-      <aside class="sidebar">
-        <div class="sidebar-header">
-          <button class="sidebar-close" id="sidebarClose">✕</button>
+      <nav class="nav" id="navTabs">
+        <button class="nav-item active" data-tab="overview">Overview</button>
+        <button class="nav-item" data-tab="prs">PRs</button>
+        <button class="nav-item" data-tab="metrics">Metrics</button>
+        <button class="nav-item" data-tab="team">Team</button>
+        <button class="nav-item" data-tab="security">Security</button>
+        <button class="nav-item" data-tab="config">Configuration</button>
+        <button class="nav-item" data-tab="logs">Logs</button>
+      </nav>
+
+      <section class="status-panel">
+        <div class="status-chip" id="statusBadge">
+          <span class="status-dot"></span>
+          <span class="status-text">Stopped</span>
         </div>
-        <nav class="nav">
-          <button class="nav-item active" data-tab="dashboard">
-            <span class="icon">📊</span>
-            Dashboard
-          </button>
-          <button class="nav-item" data-tab="config">
-            <span class="icon">⚙️</span>
-            Configuration
-          </button>
-          <button class="nav-item" data-tab="agent">
-            <span class="icon">🤖</span>
-            Agent
-          </button>
-          <button class="nav-item" data-tab="logs">
-            <span class="icon">📝</span>
-            Logs
-          </button>
-          <button class="nav-item" data-tab="context">
-            <span class="icon">📄</span>
-            Context Editor
-          </button>
-        </nav>
-      </aside>
+        <div class="connection-card">
+          <div>
+            <p class="mini-label">WebSocket</p>
+            <strong id="wsStatus">Disconnected</strong>
+          </div>
+          <div>
+            <p class="mini-label">API</p>
+            <strong id="apiStatus">Unknown</strong>
+          </div>
+        </div>
+      </section>
+    </aside>
 
-      <!-- Content Area -->
-      <main class="content">
-        <!-- Dashboard Tab -->
-        <div class="tab-content active" id="dashboard">
-          <div class="dashboard-grid">
-            <!-- Left Column: Control Panel + Stats -->
-            <div class="dashboard-left">
-              <div class="card">
-                <h2>Control Panel</h2>
-                <div class="control-buttons">
-                  <button class="btn btn-primary" id="startBtn">
-                    <span class="icon">▶️</span>
-                    Start Review
-                  </button>
-                  <button class="btn btn-secondary" id="startOnceBtn">
-                    <span class="icon">⏯️</span>
-                    Run Once
-                  </button>
-                  <button class="btn btn-warning" id="executeNowBtn" disabled>
-                    <span class="icon">⚡</span>
-                    Execute Now
-                  </button>
-                  <button class="btn btn-danger" id="stopBtn" disabled>
-                    <span class="icon">⏹️</span>
-                    Stop
-                  </button>
-                </div>
-                
-                <div class="last-log-container" id="lastLogContainer">
-                  <div class="last-log-label">Last Log:</div>
-                  <div class="last-log-content" id="lastLogContent">
-                    <span class="empty-log">No logs yet</span>
-                  </div>
-                </div>
-              </div>
+    <main class="main">
+      <header class="toolbar">
+        <div>
+          <p class="eyebrow">Operations</p>
+          <h2 id="toolbarTitle">Overview</h2>
+        </div>
 
-              <div class="card">
-                <h2>AI Executor Info</h2>
-                <div class="executor-info">
-                  <div class="executor-item">
-                    <span class="executor-label">Active Executor:</span>
-                    <span class="executor-value" id="activeExecutor">-</span>
-                  </div>
-                  <div class="executor-item">
-                    <span class="executor-label">Model:</span>
-                    <span class="executor-value" id="activeModel">-</span>
-                  </div>
-                  </div>
-                </div>
-              </div>
+        <div class="toolbar-actions">
+          <label class="inline-field">
+            <span>Range</span>
+            <select id="globalRange">
+              <option value="7">Last 7 Days</option>
+              <option value="30" selected>Last 30 Days</option>
+              <option value="90">Last 90 Days</option>
+            </select>
+          </label>
 
-              <div class="card">
-                <h2>Quick Stats</h2>
-                <div class="stats-grid">
-                  <div class="stat-card">
-                    <div class="stat-value" id="totalPRs">0</div>
-                    <div class="stat-label">Total PRs</div>
-                  </div>
-                  <div class="stat-card">
-                    <div class="stat-value" id="approved">0</div>
-                    <div class="stat-label">Approved</div>
-                  </div>
-                  <div class="stat-card">
-                    <div class="stat-value" id="changesRequested">0</div>
-                    <div class="stat-label">Changes Requested</div>
-                  </div>
-                  <div class="stat-card">
-                    <div class="stat-value" id="manualMerge">0</div>
-                    <div class="stat-label">Manual Merge</div>
-                  </div>
-                </div>
+          <button class="btn btn-ghost" id="refreshAllBtn">Refresh</button>
+          <button class="btn btn-primary" id="startBtn">Start</button>
+          <button class="btn btn-secondary" id="startOnceBtn">Run Once</button>
+          <button class="btn btn-warning" id="executeNowBtn" disabled>Execute Now</button>
+          <button class="btn btn-danger" id="stopBtn" disabled>Stop</button>
+        </div>
+      </header>
+
+      <section class="tab-page active" id="overview">
+        <div class="metrics-grid" id="overviewMetrics"></div>
+
+        <div class="panel-grid two-col">
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Priority Queue</p>
+                <h3>Review Queue</h3>
               </div>
             </div>
+            <div class="list-stack" id="reviewQueue"></div>
+          </section>
 
-            <!-- Right Column: Recent Activity -->
-            <div class="dashboard-right">
-              <div class="card">
-                <h2>Recent Activity</h2>
-                <div class="activity-list" id="activityList">
-                  <div class="empty-state">No activity yet. Start a review to see activity.</div>
-                </div>
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Activity Stream</p>
+                <h3>Recent Activity</h3>
               </div>
             </div>
+            <div class="list-stack" id="activityFeed"></div>
+          </section>
+        </div>
+
+        <div class="panel-grid two-col">
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Workload</p>
+                <h3>Team Balance</h3>
+              </div>
+            </div>
+            <div class="bar-list" id="overviewWorkload"></div>
+          </section>
+
+          <section class="panel accent-panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Configuration</p>
+                <h3>Repository Snapshot</h3>
+              </div>
+            </div>
+            <div class="list-stack" id="configSummaryList"></div>
+          </section>
+        </div>
+      </section>
+
+      <section class="tab-page" id="prs">
+        <div class="panel filter-panel">
+          <div class="filter-grid">
+            <label class="field">
+              <span>Status</span>
+              <select id="prStatusFilter">
+                <option value="">All</option>
+                <option value="open">Open</option>
+                <option value="merged">Merged</option>
+                <option value="closed">Closed</option>
+                <option value="rejected">Rejected</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Repository</span>
+              <select id="prRepositoryFilter">
+                <option value="">All Repositories</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Author</span>
+              <select id="prAuthorFilter">
+                <option value="">All Authors</option>
+              </select>
+            </label>
+            <label class="field field-wide">
+              <span>Search</span>
+              <input id="prSearchInput" type="search" placeholder="Search PR title, repository, or author">
+            </label>
           </div>
         </div>
 
-        <!-- Config Tab -->
-        <div class="tab-content" id="config">
-          <div class="card">
-            <h2>Configuration</h2>
-            <form id="configForm">
-              <div class="form-group">
-                <label for="delegate">Enable Delegation</label>
-                <select id="delegate" name="DELEGATE">
-                  <option value="true">Enabled</option>
-                  <option value="false">Disabled</option>
-                </select>
+        <div class="panel-grid two-col detail-layout">
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Pull Requests</p>
+                <h3>Current Queue</h3>
+              </div>
+            </div>
+            <div class="card-list" id="prList"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">PR Detail</p>
+                <h3 id="prDetailTitle">Select a PR</h3>
+              </div>
+            </div>
+            <div class="detail-column" id="prDetail"></div>
+          </section>
+        </div>
+      </section>
+
+      <section class="tab-page" id="metrics">
+        <div class="panel-grid two-col">
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Trend</p>
+                <h3>Review Time Trend</h3>
+              </div>
+            </div>
+            <div class="sparkline-bars" id="trendChart"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Executor Quality</p>
+                <h3>Approval Rate by Executor</h3>
+              </div>
+            </div>
+            <div class="bar-list" id="executorChart"></div>
+          </section>
+        </div>
+
+        <div class="panel-grid two-col">
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Rejections</p>
+                <h3>Top Rejection Reasons</h3>
+              </div>
+            </div>
+            <div class="bar-list" id="rejectionChart"></div>
+          </section>
+
+          <section class="panel accent-panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Export</p>
+                <h3>Metrics Export</h3>
+              </div>
+            </div>
+            <div class="stack gap-md">
+              <p class="muted">Export the currently selected range as CSV for external analysis.</p>
+              <button class="btn btn-primary" id="exportMetricsBtn">Export CSV</button>
+              <div class="callout" id="exportStatus">No export generated yet.</div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="tab-page" id="team">
+        <div class="panel-grid two-col">
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Capacity</p>
+                <h3>Developer Workload</h3>
+              </div>
+            </div>
+            <div class="bar-list" id="teamWorkload"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Availability</p>
+                <h3>Team Roster</h3>
+              </div>
+            </div>
+            <div class="table-shell">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Developer</th>
+                    <th>Role</th>
+                    <th>Availability</th>
+                    <th>Until</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="teamTableBody"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Notifications</p>
+              <h3>Recent Alerts</h3>
+            </div>
+          </div>
+          <div class="list-stack" id="alertsList"></div>
+        </section>
+      </section>
+
+      <section class="tab-page" id="security">
+        <div class="metrics-grid" id="securityMetrics"></div>
+
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Findings</p>
+              <h3>Recent Security Alerts</h3>
+            </div>
+          </div>
+          <div class="card-list compact" id="securityFindingsList"></div>
+        </section>
+      </section>
+
+      <section class="tab-page" id="config">
+        <div class="panel-grid two-col">
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Repository</p>
+                <h3>Configuration Editor</h3>
+              </div>
+            </div>
+
+            <label class="field">
+              <span>Repository</span>
+              <select id="configRepositorySelect"></select>
+            </label>
+
+            <form class="stack gap-md" id="configForm">
+              <div class="filter-grid">
+                <label class="field">
+                  <span>Review Interval (sec)</span>
+                  <input name="reviewInterval" type="number" min="60" step="60" required>
+                </label>
+                <label class="field">
+                  <span>Review Mode</span>
+                  <select name="reviewMode">
+                    <option value="comment">Comment</option>
+                    <option value="fix">Fix</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>AI Executor</span>
+                  <select name="aiExecutor">
+                    <option value="gemini">Gemini</option>
+                    <option value="copilot">Copilot</option>
+                    <option value="kiro">Kiro</option>
+                    <option value="claude">Claude</option>
+                    <option value="codex">Codex</option>
+                    <option value="opencode">OpenCode</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>Auto Merge</span>
+                  <select name="autoMerge">
+                    <option value="true">Enabled</option>
+                    <option value="false">Disabled</option>
+                  </select>
+                </label>
               </div>
 
-              <div class="form-group">
-                <label for="reviewMode">Review Mode</label>
-                <select id="reviewMode" name="REVIEW_MODE">
-                  <option value="comment">Comment</option>
-                  <option value="fix">Fix</option>
-                </select>
+              <div class="filter-grid">
+                <label class="field">
+                  <span>Severity Threshold</span>
+                  <input name="severityThreshold" type="number" min="1" required>
+                </label>
+                <label class="field">
+                  <span>Log Level</span>
+                  <select name="logLevel">
+                    <option value="debug">Debug</option>
+                    <option value="info">Info</option>
+                    <option value="warn">Warn</option>
+                    <option value="error">Error</option>
+                  </select>
+                </label>
               </div>
 
-              <div class="form-group">
-                <label for="aiExecutor">AI Executor</label>
-                <select id="aiExecutor" name="AI_EXECUTOR">
-                  <option value="gemini">Gemini CLI</option>
-                  <option value="copilot">GitHub Copilot CLI</option>
-                  <option value="kiro">Kiro CLI</option>
-                  <option value="claude">Claude Code CLI</option>
-                  <option value="codex">Codex CLI</option>
-                  <option value="opencode">OpenCode CLI</option>
-                </select>
-              </div>
-
-              <div class="form-group">
-                <label for="reviewInterval">Review Interval (seconds)</label>
-                <input type="number" id="reviewInterval" name="REVIEW_INTERVAL" min="60" value="600">
-              </div>
-
-              <div class="form-group">
-                <label for="autoMerge">Auto Merge</label>
-                <select id="autoMerge" name="AUTO_MERGE">
-                  <option value="true">Enabled</option>
-                  <option value="false">Disabled</option>
-                </select>
-              </div>
-
-              <div class="form-group">
-                <label for="prScope">PR Scope (comma-separated)</label>
-                <input type="text" id="prScope" name="PR_SCOPE" value="review-requested">
-              </div>
-
-              <div class="form-group">
-                <label for="logLevel">Log Level</label>
-                <select id="logLevel" name="LOG_LEVEL">
-                  <option value="info">Info</option>
-                  <option value="warn">Warn</option>
-                  <option value="error">Error</option>
-                </select>
-              </div>
-
-              <h3 style="margin-top: 2rem; margin-bottom: 1rem; color: #58a6ff;">Severity Scoring</h3>
-              
-              <div class="form-group">
-                <label for="severityThreshold">Severity Threshold (max points for approve)</label>
-                <input type="number" id="severityThreshold" name="SEVERITY_THRESHOLD" min="1" value="10">
-                <small class="form-hint">PR dengan total severity score >= threshold akan di-reject</small>
-              </div>
-
-              <div class="severity-grid">
-                <div class="form-group">
-                  <label for="severityCritical">Critical (points)</label>
-                  <input type="number" id="severityCritical" name="SEVERITY_CRITICAL" min="1" value="5">
-                  <small class="form-hint">Security vulnerabilities, data loss</small>
-                </div>
-
-                <div class="form-group">
-                  <label for="severityHigh">High (points)</label>
-                  <input type="number" id="severityHigh" name="SEVERITY_HIGH" min="1" value="3">
-                  <small class="form-hint">Logic errors, critical bugs</small>
-                </div>
-
-                <div class="form-group">
-                  <label for="severityMedium">Medium (points)</label>
-                  <input type="number" id="severityMedium" name="SEVERITY_MEDIUM" min="1" value="2">
-                  <small class="form-hint">Code quality, minor bugs</small>
-                </div>
-
-                <div class="form-group">
-                  <label for="severityLow">Low (points)</label>
-                  <input type="number" id="severityLow" name="SEVERITY_LOW" min="1" value="1">
-                  <small class="form-hint">Code style, documentation</small>
-                </div>
-              </div>
-
-              <div class="severity-info">
-                <strong>⚠️ Important:</strong> Any CRITICAL or HIGH severity issues will always result in REQUEST_CHANGES, regardless of total score.
-              </div>
-
-              <button type="submit" class="btn btn-primary">Save Configuration</button>
+              <div class="callout" id="configValidation">Select a repository to load its current configuration.</div>
+              <button class="btn btn-primary" type="submit">Save Configuration</button>
             </form>
-          </div>
-        </div>
+          </section>
 
-        <!-- Agent Tab -->
-        <div class="tab-content" id="agent">
-          <div class="card">
-            <h2>AI Agent Configuration</h2>
-            <p class="card-description">Configure AI executors for code review and auto-fix.</p>
-            
-            <div class="agent-selector">
-              <button class="agent-tab active" data-agent="gemini">
-                <span class="agent-icon">💎</span>
-                Gemini
-              </button>
-              <button class="agent-tab" data-agent="copilot">
-                <span class="agent-icon">🤖</span>
-                Copilot
-              </button>
-              <button class="agent-tab" data-agent="kiro">
-                <span class="agent-icon">🥷</span>
-                Kiro
-              </button>
-              <button class="agent-tab" data-agent="claude">
-                <span class="agent-icon">🎭</span>
-                Claude
-              </button>
-              <button class="agent-tab" data-agent="codex">
-                <span class="agent-icon">📝</span>
-                Codex
-              </button>
-              <button class="agent-tab" data-agent="opencode">
-                <span class="agent-icon">🔓</span>
-                OpenCode
-              </button>
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Rules</p>
+                <h3>Custom Rule Editor</h3>
+              </div>
             </div>
 
-            <form id="agentForm">
-              <!-- Gemini Config -->
-              <div class="agent-config active" id="gemini-config">
-                <div class="agent-header">
-                  <h3>Gemini CLI Configuration</h3>
-                  <div class="agent-status" id="geminiStatus">
-                    <span class="status-indicator"></span>
-                    <span class="status-text">Disabled</span>
-                  </div>
-                </div>
-
-                <div class="form-group">
-                  <label for="agentGeminiEnabled">Enable Gemini</label>
-                  <select id="agentGeminiEnabled" name="GEMINI_ENABLED">
-                    <option value="true">Enabled</option>
-                    <option value="false">Disabled</option>
+            <form class="stack gap-md" id="ruleForm">
+              <div class="filter-grid">
+                <label class="field">
+                  <span>Rule Name</span>
+                  <input name="rule_name" type="text" required>
+                </label>
+                <label class="field">
+                  <span>Type</span>
+                  <select name="rule_type">
+                    <option value="regex">Regex</option>
+                    <option value="ast">AST</option>
                   </select>
-                  <small class="form-hint">Enable or disable Gemini CLI as an executor option</small>
-                </div>
-
-                <div class="form-group">
-                  <label for="agentGeminiModel">Model</label>
-                  <select id="agentGeminiModel" name="GEMINI_MODEL">
-                    <option value="auto-3">Auto (Gemini 3) - Recommended</option>
-                    <option value="auto-2.5">Auto (Gemini 2.5)</option>
-                    <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro Preview</option>
-                    <option value="gemini-3-flash-preview">Gemini 3 Flash Preview</option>
-                    <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
-                    <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-                    <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</option>
+                </label>
+                <label class="field">
+                  <span>Severity</span>
+                  <select name="severity">
+                    <option value="critical">Critical</option>
+                    <option value="high">High</option>
+                    <option value="warning">Warning</option>
+                    <option value="info">Info</option>
                   </select>
-                  <small class="form-hint">Select the Gemini model (Auto lets CLI choose the best model)</small>
-                </div>
-
-                </div>
+                </label>
               </div>
 
-              <!-- Copilot Config -->
-              <div class="agent-config" id="copilot-config">
-                <div class="agent-header">
-                  <h3>GitHub Copilot CLI Configuration</h3>
-                  <div class="agent-status" id="copilotStatus">
-                    <span class="status-indicator"></span>
-                    <span class="status-text">Disabled</span>
-                  </div>
-                </div>
+              <label class="field">
+                <span>Pattern</span>
+                <textarea name="pattern" rows="3" required></textarea>
+              </label>
 
-                <div class="form-group">
-                  <label for="agentCopilotEnabled">Enable Copilot</label>
-                  <select id="agentCopilotEnabled" name="COPILOT_ENABLED">
-                    <option value="true">Enabled</option>
-                    <option value="false">Disabled</option>
-                  </select>
-                  <small class="form-hint">Enable or disable GitHub Copilot CLI as an executor option</small>
-                </div>
+              <label class="field">
+                <span>Message</span>
+                <textarea name="message" rows="2" required></textarea>
+              </label>
 
-                <div class="form-group">
-                  <label for="agentCopilotModel">Model</label>
-                  <select id="agentCopilotModel" name="COPILOT_MODEL">
-                    <option value="claude-haiku-4.5">Claude Haiku 4.5 (Fast, Default) - 0.33x</option>
-                    <option value="claude-sonnet-4.6">Claude Sonnet 4.6 - 1x</option>
-                    <option value="claude-sonnet-4.5">Claude Sonnet 4.5 - 1x</option>
-                    <option value="claude-sonnet-4">Claude Sonnet 4 - 1x</option>
-                    <option value="claude-opus-4.6">Claude Opus 4.6 - 3x</option>
-                    <option value="claude-opus-4.5">Claude Opus 4.5 - 3x</option>
-                    <option value="gemini-3-pro-preview">Gemini 3 Pro (Preview) - 1x</option>
-                    <option value="gpt-5.4">GPT-5.4 - 1x</option>
-                    <option value="gpt-5.3-codex">GPT-5.3-Codex - 1x</option>
-                    <option value="gpt-5.2-codex">GPT-5.2-Codex - 1x</option>
-                    <option value="gpt-5.2">GPT-5.2 - 1x</option>
-                    <option value="gpt-5.1-codex-max">GPT-5.1-Codex-Max - 1x</option>
-                    <option value="gpt-5.1-codex">GPT-5.1-Codex - 1x</option>
-                    <option value="gpt-5.1">GPT-5.1 - 1x</option>
-                    <option value="gpt-5.1-codex-mini">GPT-5.1-Codex-Mini (Preview) - 0.33x</option>
-                  </select>
-                  <small class="form-hint">Select the AI model for Copilot (cost multiplier shown)</small>
-                </div>
+              <label class="field">
+                <span>Sample Code For Validation</span>
+                <textarea id="ruleSampleCode" rows="5">const query = `SELECT * FROM users WHERE id = ${userId}`;</textarea>
+              </label>
 
-                </div>
+              <div class="toolbar-actions">
+                <button class="btn btn-secondary" type="button" id="testRuleBtn">Test Rule</button>
+                <button class="btn btn-primary" type="submit">Save Rule</button>
+                <button class="btn btn-ghost" type="button" id="resetRuleBtn">Reset</button>
               </div>
-
-              <!-- Kiro Config -->
-              <div class="agent-config" id="kiro-config">
-                <div class="agent-header">
-                  <h3>Kiro CLI Configuration</h3>
-                  <div class="agent-status" id="kiroStatus">
-                    <span class="status-indicator"></span>
-                    <span class="status-text">Disabled</span>
-                  </div>
-                </div>
-
-                <div class="form-group">
-                  <label for="agentKiroEnabled">Enable Kiro</label>
-                  <select id="agentKiroEnabled" name="KIRO_ENABLED">
-                    <option value="true">Enabled</option>
-                    <option value="false">Disabled</option>
-                  </select>
-                  <small class="form-hint">Enable or disable Kiro CLI as an executor option</small>
-                </div>
-
-                <div class="form-group">
-                  <label for="agentKiroAgent">Agent</label>
-                  <select id="agentKiroAgent" name="KIRO_AGENT">
-                    <option value="auto">Auto (Let Kiro choose)</option>
-                    <option value="general-task-execution">General Task Execution</option>
-                    <option value="context-gatherer">Context Gatherer</option>
-                    <option value="custom-agent-creator">Custom Agent Creator</option>
-                  </select>
-                  <small class="form-hint">Select the Kiro agent to use (Auto recommended)</small>
-                </div>
-
-                </div>
-              </div>
-
-              <!-- Claude Config -->
-              <div class="agent-config" id="claude-config">
-                <div class="agent-header">
-                  <h3>Claude Code CLI Configuration</h3>
-                  <div class="agent-status" id="claudeStatus">
-                    <span class="status-indicator"></span>
-                    <span class="status-text">Disabled</span>
-                  </div>
-                </div>
-
-                <div class="form-group">
-                  <label for="agentClaudeEnabled">Enable Claude</label>
-                  <select id="agentClaudeEnabled" name="CLAUDE_ENABLED">
-                    <option value="true">Enabled</option>
-                    <option value="false">Disabled</option>
-                  </select>
-                  <small class="form-hint">Enable or disable Claude Code CLI as an executor option</small>
-                </div>
-
-                <div class="form-group">
-                  <label for="agentClaudeModel">Model</label>
-                  <select id="agentClaudeModel" name="CLAUDE_MODEL">
-                    <option value="sonnet">Sonnet (Latest, Default)</option>
-                    <option value="opus">Opus (Latest)</option>
-                    <option value="claude-sonnet-4-5-20250929">Claude Sonnet 4.5 (Specific)</option>
-                  </select>
-                  <small class="form-hint">Select the Claude model (aliases or full names)</small>
-                </div>
-
-                <div class="form-group">
-                  <label for="agentClaudeAgent">Agent (Optional)</label>
-                  <input type="text" id="agentClaudeAgent" name="CLAUDE_AGENT" placeholder="Leave empty for default">
-                  <small class="form-hint">Custom agent name (optional)</small>
-                </div>
-
-                </div>
-              </div>
-
-              <!-- Codex Config -->
-              <div class="agent-config" id="codex-config">
-                <div class="agent-header">
-                  <h3>Codex CLI Configuration</h3>
-                  <div class="agent-status" id="codexStatus">
-                    <span class="status-indicator"></span>
-                    <span class="status-text">Disabled</span>
-                  </div>
-                </div>
-
-                <div class="form-group">
-                  <label for="agentCodexEnabled">Enable Codex</label>
-                  <select id="agentCodexEnabled" name="CODEX_ENABLED">
-                    <option value="true">Enabled</option>
-                    <option value="false">Disabled</option>
-                  </select>
-                  <small class="form-hint">Enable or disable Codex CLI as an executor option</small>
-                </div>
-
-                <div class="form-group">
-                  <label for="agentCodexModel">Model</label>
-                  <select id="agentCodexModel" name="CODEX_MODEL">
-                    <option value="auto">Auto (Recommended)</option>
-                    <option value="o3">O3 (Latest)</option>
-                  </select>
-                  <small class="form-hint">Select the Codex model</small>
-                </div>
-
-                </div>
-              </div>
-
-              <!-- OpenCode Config -->
-              <div class="agent-config" id="opencode-config">
-                <div class="agent-header">
-                  <h3>OpenCode CLI Configuration</h3>
-                  <div class="agent-status" id="opencodeStatus">
-                    <span class="status-indicator"></span>
-                    <span class="status-text">Disabled</span>
-                  </div>
-                </div>
-
-                <div class="form-group">
-                  <label for="agentOpencodeEnabled">Enable OpenCode</label>
-                  <select id="agentOpencodeEnabled" name="OPENCODE_ENABLED">
-                    <option value="true">Enabled</option>
-                    <option value="false">Disabled</option>
-                  </select>
-                  <small class="form-hint">Enable or disable OpenCode CLI as an executor option</small>
-                </div>
-
-                <div class="form-group">
-                  <label for="agentOpencodeModel">Model</label>
-                  <input type="text" id="agentOpencodeModel" name="OPENCODE_MODEL" placeholder="auto or provider/model">
-                  <small class="form-hint">Model in format: provider/model (e.g., anthropic/claude-3-sonnet)</small>
-                </div>
-
-                <div class="form-group">
-                  <label for="agentOpencodeAgent">Agent (Optional)</label>
-                  <input type="text" id="agentOpencodeAgent" name="OPENCODE_AGENT" placeholder="Leave empty for default">
-                  <small class="form-hint">Custom agent name (optional)</small>
-                </div>
-
-                </div>
-              </div>
-
-              <div class="form-actions">
-                <button type="submit" class="btn btn-primary">Save Agent Configuration</button>
-                <button type="button" class="btn btn-secondary" id="testAgentBtn">Test Agent</button>
-              </div>
+              <div class="callout" id="ruleTestOutput">Rule validation output will appear here.</div>
             </form>
-          </div>
+
+            <div class="panel-subsection">
+              <h4>Existing Rules</h4>
+              <div class="card-list compact" id="rulesList"></div>
+            </div>
+          </section>
         </div>
+      </section>
 
-        <!-- Logs Tab -->
-        <div class="tab-content" id="logs">
-          <div class="card">
-            <div class="card-header">
-              <h2>Live Logs</h2>
-              <button class="btn btn-small" id="clearLogsBtn">Clear</button>
+      <section class="tab-page" id="logs">
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Execution</p>
+              <h3>Live Process Logs</h3>
             </div>
-            <div class="logs-container" id="logsContainer">
-              <div class="empty-state">No logs yet. Start a review to see logs.</div>
-            </div>
+            <button class="btn btn-ghost" id="clearLogsBtn">Clear</button>
           </div>
-        </div>
-
-        <!-- Context Editor Tab -->
-        <div class="tab-content" id="context">
-          <div class="card">
-            <h2>Context Files Editor</h2>
-            <p class="card-description">Edit prompt templates and guidelines used by the review agent.</p>
-            
-            <div class="context-selector">
-              <button class="context-tab active" data-file="review-prompt">Review Prompt</button>
-              <button class="context-tab" data-file="fix-prompt">Fix Prompt</button>
-              <button class="context-tab" data-file="agents">Agents Guidelines</button>
-            </div>
-
-            <div class="editor-container">
-              <div class="editor-header">
-                <span class="editor-file-name" id="editorFileName">context/review-prompt.md</span>
-                <div class="editor-actions">
-                  <button class="btn btn-small btn-secondary" id="reloadContextBtn">
-                    <span class="icon">🔄</span>
-                    Reload
-                  </button>
-                  <button class="btn btn-small btn-primary" id="saveContextBtn">
-                    <span class="icon">💾</span>
-                    Save
-                  </button>
-                </div>
-              </div>
-              
-              <!-- Write/Preview Tabs -->
-              <div class="editor-mode-tabs">
-                <button class="editor-mode-tab active" data-mode="write">
-                  <span class="icon">✏️</span>
-                  Write
-                </button>
-                <button class="editor-mode-tab" data-mode="preview">
-                  <span class="icon">👁️</span>
-                  Preview
-                </button>
-              </div>
-
-              <!-- Editor Area -->
-              <div class="editor-content">
-                <textarea class="code-editor" id="contextEditor" spellcheck="false"></textarea>
-                <div class="markdown-preview" id="markdownPreview" style="display: none;"></div>
-              </div>
-
-              <div class="editor-footer">
-                <span class="editor-info" id="editorInfo">Ready</span>
-                <span class="editor-mode-indicator" id="editorModeIndicator">Write Mode</span>
-              </div>
-            </div>
+          <div class="logs-container" id="logsContainer">
+            <div class="empty-state">No logs yet. Start the agent to stream process output.</div>
           </div>
-        </div>
-      </main>
-    </div>
+        </section>
+      </section>
+    </main>
   </div>
 
   <script src="renderer.js"></script>
