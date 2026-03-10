@@ -21,9 +21,13 @@ For complex PRs or when you need structured analysis:
 
 STEP 1: Get PR details and diff
 PREFERRED METHOD - Use GitHub MCP (TRY THIS FIRST):
-- Use pull_request_read tool to get PR details and diff
-- Use get_file_contents to read specific files if needed
-- GitHub MCP is the PRIMARY method, always try this first
+- Use **pull_request_read** tool with:
+  - `method`: one of `get`, `get_diff`, `get_files`, `get_review_comments`, `get_reviews`, `get_comments`, `get_check_runs`
+  - `owner`: repository owner (string)
+  - `repo`: repository name (string)
+  - `pullNumber`: PR number (number)
+  - Start with `method="get"` to get PR overview, then `method="get_diff"` for the actual diff
+- Use **get_file_contents** to read specific source files if needed
 
 CHECK FOR MERGE CONFLICTS (CRITICAL):
 - Check if PR has merge conflicts with base branch
@@ -97,20 +101,27 @@ Example of NON-ATOMIC comment (WRONG):
 PREFERRED METHOD - Use GitHub MCP (TRY THIS FIRST):
 For EACH issue found, use these tools in sequence:
 
-1. Use add_comment_to_pending_review tool MULTIPLE TIMES (once per issue):
-   - Call it separately for each issue
-   - Specify: repository, pull_request_number, path, line, body (comment text in Indonesian)
-   - Each call creates one atomic comment
+1. Use **add_comment_to_pending_review** MULTIPLE TIMES (once per issue) with:
+   - `owner`: repository owner (string, required)
+   - `repo`: repository name (string, required)
+   - `pullNumber`: PR number (number, required)
+   - `path`: relative file path (string, required)
+   - `body`: comment text in Indonesian with severity label (string, required)
+   - `line`: line number in the diff the comment applies to (number, optional)
+   - `subjectType`: level of the comment target (string, required) — use `"line"` for line comments
+   - `side`: `"RIGHT"` for new code, `"LEFT"` for removed code (string, optional)
 
-2. After all atomic comments are added, use pull_request_review_write to submit the review:
-   - REQUIRED: method = "create" (always use "create" to submit a new review)
-   - Specify: owner, repo, pullNumber, event ("APPROVE" or "REQUEST_CHANGES")
-   - Add a summary body if needed
+2. After all atomic comments are added, use **pull_request_review_write** to submit with:
+   - `method`: `"create"` (string, required — ALWAYS use `"create"` to submit a new review)
+   - `owner`: repository owner (string, required)
+   - `repo`: repository name (string, required)
+   - `pullNumber`: PR number (number, required)
+   - `event`: `"APPROVE"` or `"REQUEST_CHANGES"` (string, optional)
+   - `body`: summary text (string, optional)
 
-Example workflow with GitHub MCP:
-- add_comment_to_pending_review(repo="{{repository}}", pr_number={{pr.number}}, path="file.ts", line=45, body="[HIGH] Potensi SQL injection...")
-- add_comment_to_pending_review(repo="{{repository}}", pr_number={{pr.number}}, path="utils.ts", line=120, body="[MEDIUM] Missing error handling...")
-- pull_request_review_write(method="create", owner="OWNER", repo="REPO", pullNumber={{pr.number}}, event="REQUEST_CHANGES", body="Review summary")
+Example workflow:
+- Call add_comment_to_pending_review once per issue (owner, repo, pullNumber, path, line, subjectType="line", body)
+- After all comments added, call pull_request_review_write with method="create", owner, repo, pullNumber, event
 
 FALLBACK METHOD - Use gh CLI (ONLY if GitHub MCP fails):
 For EACH issue, create a SEPARATE inline comment:
@@ -256,18 +267,17 @@ MESSAGE: Review telah dilakukan. ✅ PR ini di-APPROVE karena tidak ada issue CR
 
 Note: Jika ada suggestion dari gemini-code-assist yang kurang tepat, Anda boleh menyinggung hal tersebut secara ringkas di summary.
 
-IMPORTANT: 
+IMPORTANT:
 - Always try GitHub MCP first. Only use gh CLI if GitHub MCP is not available or fails.
-- Use pull_request_read to get PR info
+- **pull_request_read**: use `method` to choose what to fetch (`get`, `get_diff`, `get_files`, `get_review_comments`, etc.), always provide `owner`, `repo`, `pullNumber`
+- **add_comment_to_pending_review**: required fields — `owner`, `repo`, `pullNumber`, `path`, `body`, `subjectType` (use `"line"` for line comments)
+- **pull_request_review_write**: required fields — `method` (`"create"`), `owner`, `repo`, `pullNumber`; optional — `event` (`"APPROVE"`/`"REQUEST_CHANGES"`), `body`
+- If pull_request_review_write fails, FALLBACK to gh CLI: `gh pr review {{pr.number}} --repo {{repository}} --approve` OR `--request-changes --body "summary"`
 - Use security MCP tools (osvScanner, securityServer) to enhance security review
 - Use sequentialthinking for complex analysis
 - Use memory tools to maintain consistency
 - Use context7 for documentation lookup
-- Use add_comment_to_pending_review for EACH atomic comment
-- Use pull_request_review_write with method="create" to submit the final review (method is REQUIRED)
-- IMPORTANT: pull_request_review_write requires these exact fields: method ("create"), owner, repo, pullNumber, event ("APPROVE" or "REQUEST_CHANGES")
-- If pull_request_review_write fails, FALLBACK to gh CLI: gh pr review {pr.number} --repo {repository} --approve OR --request-changes --body "summary"
-- Create ATOMIC comments - one comment per issue, not one big comment with all issues.
+- Create ATOMIC comments — one comment per issue, not one big comment with all issues.
 - Follow the same pattern as gemini-code-assist: separate, focused comments.
 
 Your response:

@@ -14,7 +14,7 @@ import { prReviewDB } from './database.js';
 // line is printed whole — avoids partial-chunk splits
 // ─────────────────────────────────────────────
 async function execaVerbose(cmd, args, opts = {}) {
-  const { allowFail, ...execaOpts } = opts;
+  const { allowFail, input, ...execaOpts } = opts;
   const label = chalk.magenta(`[exec]`) + ' ' + chalk.white(`${cmd} ${args.join(' ')}`);
   logger.info(`▶ ${label}`);
 
@@ -22,8 +22,15 @@ async function execaVerbose(cmd, args, opts = {}) {
     ...execaOpts,
     stdout: 'pipe',
     stderr: 'pipe',
+    stdin: input !== undefined ? 'pipe' : 'ignore',
     reject: false,
   });
+
+  // Pipe prompt via stdin to avoid OS ARG_MAX limits
+  if (input !== undefined && proc.stdin) {
+    proc.stdin.write(input);
+    proc.stdin.end();
+  }
 
   const stdoutLines = [];
   const stderrLines = [];
@@ -127,7 +134,7 @@ async function executeAIReview(prompt, repoDir, mode = 'review') {
     prompt.split('\n').forEach(line => console.log(chalk.cyan('│') + ' ' + chalk.white(line)));
     console.log(chalk.bold.cyan('└───────────────────────────────────────') + '\n');
 
-    // ── Build executor args — all flags first, prompt injected LAST ──
+    // ── Build executor args — flags only, prompt via stdin ──
     let cliCmd = '';
     let args = [];
 
@@ -135,8 +142,7 @@ async function executeAIReview(prompt, repoDir, mode = 'review') {
       cliCmd = 'copilot';
       args = ['--yolo', '--allow-all-tools', '--model', config.copilotModel];
       if (mode === 'review') args.push('--silent');
-      args.push('-p', prompt);           // ← prompt LAST
-      logger.info('YOLO mode: --yolo --allow-all-tools');
+      logger.info('YOLO mode: --yolo --allow-all-tools | prompt → stdin');
 
     } else if (executor === 'kiro') {
       cliCmd = 'kiro-cli';
@@ -144,16 +150,14 @@ async function executeAIReview(prompt, repoDir, mode = 'review') {
       if (config.kiroAgent && config.kiroAgent !== 'auto') {
         args.unshift('--agent', config.kiroAgent);
       }
-      args.push(prompt);                 // ← prompt LAST
-      logger.info('YOLO mode: --no-interactive --trust-all-tools');
+      logger.info('YOLO mode: --no-interactive --trust-all-tools | prompt → stdin');
 
     } else if (executor === 'claude') {
       cliCmd = 'claude';
       args = ['--dangerously-skip-permissions'];
       if (config.claudeModel) args.push('--model', config.claudeModel);
       if (config.claudeAgent) args.push('--agent', config.claudeAgent);
-      args.push('--print', prompt);      // ← prompt LAST
-      logger.info('YOLO mode: --dangerously-skip-permissions');
+      logger.info('YOLO mode: --dangerously-skip-permissions | prompt → stdin');
 
     } else if (executor === 'codex') {
       cliCmd = 'codex';
@@ -161,8 +165,7 @@ async function executeAIReview(prompt, repoDir, mode = 'review') {
       if (config.codexModel && config.codexModel !== 'auto') {
         args.push('--model', config.codexModel);
       }
-      args.push(prompt);                 // ← prompt LAST
-      logger.info('YOLO mode: --dangerously-bypass-approvals-and-sandbox');
+      logger.info('YOLO mode: --dangerously-bypass-approvals-and-sandbox | prompt → stdin');
 
     } else if (executor === 'opencode') {
       cliCmd = 'opencode';
@@ -171,24 +174,22 @@ async function executeAIReview(prompt, repoDir, mode = 'review') {
         args.push('--model', config.opencodeModel);
       }
       if (config.opencodeAgent) args.push('--agent', config.opencodeAgent);
-      args.push(prompt);                 // ← prompt LAST
-      logger.info('YOLO mode: --yolo');
+      logger.info('YOLO mode: --yolo | prompt → stdin');
 
     } else {
-      // Gemini (default)
+      // Gemini (default) — --yolo enables headless, prompt via stdin
       cliCmd = 'gemini';
       args = ['--yolo'];
       if (config.geminiModel && !config.geminiModel.startsWith('auto')) {
         args.push('--model', config.geminiModel);
       }
-      args.push('-p', prompt);           // ← prompt LAST
-      logger.info('YOLO mode: --yolo (auto-approve all actions)');
+      logger.info('YOLO mode: --yolo | prompt → stdin');
     }
 
-    logger.info(`Spawning: ${chalk.bold(cliCmd)} (prompt injected last, ${prompt.length} chars)`);
+    logger.info(`Spawning: ${chalk.bold(cliCmd)} (prompt ${prompt.length} chars → stdin)`);
     console.log('');
 
-    const { stdout } = await execaVerbose(cliCmd, args);
+    const { stdout } = await execaVerbose(cliCmd, args, { input: prompt });
     const output = stripAnsi(stdout.trim());
 
     console.log('\n' + chalk.bold.green('┌─── ' + executor.toUpperCase() + ' OUTPUT ───'));
