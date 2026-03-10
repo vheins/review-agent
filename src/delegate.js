@@ -302,8 +302,9 @@ async function addReviewComments(repository, pr, repoDir) {
 
     const commentToolSucceeded = output.includes('add_comment_to_pending_review') &&
       !failedTools.has('add_comment_to_pending_review');
+    // submit_pending = submit pending review with inline comments; create = standalone review
     const reviewWriteSucceeded = output.includes('pull_request_review_write') &&
-      !failedTools.has('pull_request_review_write');
+      (!failedTools.has('pull_request_review_write'));
 
     if (failedTools.size > 0) {
       logger.warn(`Tools that failed during review: ${[...failedTools].join(', ')}`);
