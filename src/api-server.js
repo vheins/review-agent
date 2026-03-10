@@ -14,6 +14,7 @@ import securityRoutes from './routes/security.js';
 import configRoutes from './routes/config.js';
 import healthRoutes from './routes/health.js';
 import webhookRoutes from './routes/webhooks.js';
+import { globalErrorHandler, AppError } from './error-handler.js';
 
 export class APIServer {
   constructor() {
@@ -35,7 +36,7 @@ export class APIServer {
       if (apiKey || req.path.startsWith('/api/webhooks') || req.path === '/health') {
         next();
       } else {
-        res.status(401).json({ error: 'Unauthorized' });
+        next(new AppError('Unauthorized', 401, 'UNAUTHORIZED'));
       }
     });
 
@@ -57,10 +58,7 @@ export class APIServer {
     wsManager.init(this.server);
 
     // 5. Error Handler
-    this.app.use((err, req, res, next) => {
-      logger.error(`API Error: ${err.message}`);
-      res.status(500).json({ error: 'Internal Server Error' });
-    });
+    this.app.use(globalErrorHandler);
   }
 
   start() {

@@ -99,6 +99,37 @@ class DatabaseManager {
         throw new Error(`Schema file not found at ${schemaPath}`);
       }
     }
+
+    this.applyIncrementalMigrations();
+  }
+
+  applyIncrementalMigrations() {
+    const hasErrorLogs = this.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='error_logs'").get();
+    if (!hasErrorLogs) {
+      this.db.exec(`
+        CREATE TABLE error_logs (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          code TEXT NOT NULL,
+          message TEXT NOT NULL,
+          stack_trace TEXT,
+          severity TEXT NOT NULL,
+          context TEXT,
+          request_path TEXT,
+          request_method TEXT,
+          actor_id TEXT,
+          created_at DATETIME NOT NULL
+        );
+
+        CREATE INDEX idx_error_logs_created ON error_logs(created_at);
+        CREATE INDEX idx_error_logs_severity ON error_logs(severity, created_at);
+      `);
+    }
+
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_pr_repo_status ON pull_requests(repository_id, status);
+      CREATE INDEX IF NOT EXISTS idx_review_pr_completed ON review_sessions(pr_id, completed_at);
+      CREATE INDEX IF NOT EXISTS idx_test_pr_completed ON test_runs(pr_id, completed_at);
+    `);
   }
 
   setupCheckpoint() {

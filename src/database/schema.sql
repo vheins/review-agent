@@ -504,6 +504,24 @@ CREATE TABLE exports (
 CREATE INDEX idx_export_created ON exports(created_at);
 CREATE INDEX idx_export_expires ON exports(expires_at);
 
+-- Error Logs
+-- Stores structured application errors with request context
+CREATE TABLE error_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  code TEXT NOT NULL,
+  message TEXT NOT NULL,
+  stack_trace TEXT,
+  severity TEXT NOT NULL,
+  context TEXT,
+  request_path TEXT,
+  request_method TEXT,
+  actor_id TEXT,
+  created_at DATETIME NOT NULL
+);
+
+CREATE INDEX idx_error_logs_created ON error_logs(created_at);
+CREATE INDEX idx_error_logs_severity ON error_logs(severity, created_at);
+
 -- ============================================================================
 -- End of Schema
 -- ============================================================================

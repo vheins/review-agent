@@ -3,25 +3,21 @@ import ora from 'ora';
 import notifier from 'node-notifier';
 import boxen from 'boxen';
 import terminalLink from 'terminal-link';
-import { config } from './config.js';
 import fs from 'fs-extra';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { config } from './config.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const levels = { debug: -1, info: 0, warn: 1, error: 2 };
 const currentLevel = levels[config.logLevel] || 0;
-
-// Log directory setup
 const LOG_DIR = path.join(__dirname, '..', 'logs');
 const LOG_RETENTION_DAYS = 7;
 
-// Ensure log directory exists
 fs.ensureDirSync(LOG_DIR);
 
-// Get current date for log file name
 function getLogFileName() {
   const now = new Date();
   const year = now.getFullYear();
@@ -30,50 +26,58 @@ function getLogFileName() {
   return `review-agent-${year}-${month}-${day}.log`;
 }
 
-// Clean old log files (keep only last 7 days)
 function cleanOldLogs() {
   try {
     const files = fs.readdirSync(LOG_DIR);
-    const now = Date.now();
     const retentionMs = LOG_RETENTION_DAYS * 24 * 60 * 60 * 1000;
 
-    files.forEach(file => {
-      if (file.startsWith('review-agent-') && file.endsWith('.log')) {
-        const filePath = path.join(LOG_DIR, file);
-        const stats = fs.statSync(filePath);
-        const fileAge = now - stats.mtime.getTime();
-
-        if (fileAge > retentionMs) {
-          fs.unlinkSync(filePath);
-          console.log(chalk.gray(`🗑️  Deleted old log: ${file}`));
-        }
+    for (const file of files) {
+      if (!file.startsWith('review-agent-') || !file.endsWith('.log')) {
+        continue;
       }
-    });
+
+      const filePath = path.join(LOG_DIR, file);
+      const fileAge = Date.now() - fs.statSync(filePath).mtime.getTime();
+
+      if (fileAge > retentionMs) {
+        fs.unlinkSync(filePath);
+      }
+    }
   } catch (error) {
     console.error(chalk.red('Failed to clean old logs:'), error.message);
   }
 }
 
-// Write to log file
-function writeToLogFile(level, message) {
+function normalizeEntry(level, message, context = {}) {
+  return {
+    timestamp: new Date().toISOString(),
+    level,
+    message,
+    context
+  };
+}
+
+function writeToLogFile(entry) {
   try {
     const logFile = path.join(LOG_DIR, getLogFileName());
-    const timestamp = new Date().toISOString();
-    const logEntry = `[${timestamp}] [${level.toUpperCase()}] ${message}\n`;
-
-    fs.appendFileSync(logFile, logEntry, 'utf-8');
+    fs.appendFileSync(logFile, `${JSON.stringify(entry)}\n`, 'utf-8');
   } catch (error) {
     console.error(chalk.red('Failed to write to log file:'), error.message);
   }
 }
 
-// Clean old logs on startup
+function formatConsoleMessage(entry) {
+  const contextText = Object.keys(entry.context).length > 0
+    ? ` ${chalk.gray(JSON.stringify(entry.context))}`
+    : '';
+
+  return `${entry.message}${contextText}`;
+}
+
 cleanOldLogs();
 
-// Single spinner instance to avoid concurrent spinners
 let activeSpinner = null;
 
-// Handle process termination to stop spinner
 const cleanup = () => {
   if (activeSpinner) {
     activeSpinner.stop();
@@ -83,7 +87,6 @@ const cleanup = () => {
 
 process.on('SIGINT', () => {
   cleanup();
-  console.log(chalk.yellow('\n\n⚠ Process interrupted by user'));
   process.exit(0);
 });
 
@@ -92,69 +95,31 @@ process.on('SIGTERM', () => {
   process.exit(0);
 });
 
-process.on('exit', () => {
+function logWithLevel(level, color, icon, message, context = {}) {
+  if (currentLevel > levels[level]) {
+    return;
+  }
+
   cleanup();
-});
+
+  const entry = normalizeEntry(level, message, context);
+  console.log(color(icon), formatConsoleMessage(entry));
+  writeToLogFile(entry);
+}
 
 export const logger = {
-  debug: (msg) => {
-    if (currentLevel <= -1) {
-      if (activeSpinner) {
-        activeSpinner.stop();
-        activeSpinner = null;
-      }
-      console.log(chalk.gray('⚙'), msg);
-      writeToLogFile('debug', msg);
-    }
-  },
-
-  info: (msg) => {
-    if (currentLevel <= 0) {
-      // Stop any active spinner first
-      if (activeSpinner) {
-        activeSpinner.stop();
-        activeSpinner = null;
-      }
-      console.log(chalk.blue('ℹ'), msg);
-      writeToLogFile('info', msg);
-    }
-  },
-
-  warn: (msg) => {
-    if (currentLevel <= 1) {
-      // Stop any active spinner first
-      if (activeSpinner) {
-        activeSpinner.stop();
-        activeSpinner = null;
-      }
-      console.log(chalk.yellow('⚠'), msg);
-      writeToLogFile('warn', msg);
-    }
-  },
-
-  error: (msg) => {
-    if (currentLevel <= 2) {
-      // Stop any active spinner first
-      if (activeSpinner) {
-        activeSpinner.stop();
-        activeSpinner = null;
-      }
-      console.log(chalk.red('✖'), msg);
-      writeToLogFile('error', msg);
-    }
-  },
+  debug: (message, context = {}) => logWithLevel('debug', chalk.gray, '⚙', message, context),
+  info: (message, context = {}) => logWithLevel('info', chalk.blue, 'ℹ', message, context),
+  warn: (message, context = {}) => logWithLevel('warn', chalk.yellow, '⚠', message, context),
+  error: (message, context = {}) => logWithLevel('error', chalk.red, '✖', message, context),
 
   countdown: async (seconds) => {
     if (currentLevel > 0) {
-      await new Promise(resolve => setTimeout(resolve, seconds * 1000));
+      await new Promise((resolve) => setTimeout(resolve, seconds * 1000));
       return;
     }
 
-    // Stop any active spinner first
-    if (activeSpinner) {
-      activeSpinner.stop();
-      activeSpinner = null;
-    }
+    cleanup();
 
     let interrupted = false;
     const interruptHandler = () => {
@@ -163,14 +128,15 @@ export const logger = {
 
     process.once('SIGUSR1', interruptHandler);
 
-    for (let i = seconds; i > 0; i--) {
+    for (let i = seconds; i > 0; i -= 1) {
       if (interrupted) {
         process.stdout.write(`\r${chalk.yellow('⚡')} Countdown interrupted - executing now!          \n`);
         process.removeListener('SIGUSR1', interruptHandler);
         return;
       }
+
       process.stdout.write(`\r${chalk.blue('ℹ')} Waiting ${chalk.yellow(i)} seconds...`);
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
     }
 
     process.removeListener('SIGUSR1', interruptHandler);
@@ -180,20 +146,16 @@ export const logger = {
   spinner: (text) => {
     if (currentLevel > 0) {
       return {
-        start: () => { },
-        succeed: (msg) => console.log(chalk.green('✔'), msg || text),
-        fail: (msg) => console.log(chalk.red('✖'), msg || text),
-        warn: (msg) => console.log(chalk.yellow('⚠'), msg || text),
-        stop: () => { },
+        start: () => {},
+        succeed: (message) => console.log(chalk.green('✔'), message || text),
+        fail: (message) => console.log(chalk.red('✖'), message || text),
+        warn: (message) => console.log(chalk.yellow('⚠'), message || text),
+        stop: () => {},
         text: ''
       };
     }
 
-    // Stop any active spinner first
-    if (activeSpinner) {
-      activeSpinner.stop();
-    }
-
+    cleanup();
     activeSpinner = ora({
       text,
       color: 'cyan',
@@ -202,180 +164,71 @@ export const logger = {
       hideCursor: true
     });
 
-    // Wrap methods to track active spinner
-    const originalStart = activeSpinner.start.bind(activeSpinner);
-    const originalSucceed = activeSpinner.succeed.bind(activeSpinner);
-    const originalFail = activeSpinner.fail.bind(activeSpinner);
-    const originalWarn = activeSpinner.warn.bind(activeSpinner);
-    const originalStop = activeSpinner.stop.bind(activeSpinner);
-
-    activeSpinner.start = () => {
-      originalStart();
-      return activeSpinner;
-    };
-
-    activeSpinner.succeed = (msg) => {
-      originalSucceed(msg);
-      activeSpinner = null;
-      return activeSpinner;
-    };
-
-    activeSpinner.fail = (msg) => {
-      originalFail(msg);
-      activeSpinner = null;
-      return activeSpinner;
-    };
-
-    activeSpinner.warn = (msg) => {
-      originalWarn(msg);
-      activeSpinner = null;
-      return activeSpinner;
-    };
-
-    activeSpinner.stop = () => {
-      originalStop();
-      activeSpinner = null;
-    };
-
     return activeSpinner;
+  },
+
+  searchLogs: async ({ level, text, limit = 100 } = {}) => {
+    const files = (await fs.readdir(LOG_DIR))
+      .filter((file) => file.startsWith('review-agent-') && file.endsWith('.log'))
+      .sort()
+      .reverse();
+
+    const results = [];
+
+    for (const file of files) {
+      const content = await fs.readFile(path.join(LOG_DIR, file), 'utf8');
+      const lines = content.trim().split('\n').filter(Boolean).reverse();
+
+      for (const line of lines) {
+        try {
+          const entry = JSON.parse(line);
+          const matchesLevel = !level || entry.level === level;
+          const matchesText = !text || JSON.stringify(entry).includes(text);
+
+          if (matchesLevel && matchesText) {
+            results.push(entry);
+          }
+
+          if (results.length >= limit) {
+            return results;
+          }
+        } catch (error) {
+          continue;
+        }
+      }
+    }
+
+    return results;
   }
 };
 
 export const notify = {
   manualMerge: (prNumber, repository, reason = 'Merge conflicts detected', prUrl = null) => {
-    // Stop any active spinner first
-    if (activeSpinner) {
-      activeSpinner.stop();
-      activeSpinner = null;
-    }
+    cleanup();
 
-    // Generate PR URL if not provided
-    if (!prUrl) {
-      prUrl = `https://github.com/${repository}/pull/${prNumber}`;
-    }
+    const resolvedPrUrl = prUrl ?? `https://github.com/${repository}/pull/${prNumber}`;
 
-    // Windows notification
     notifier.notify({
       title: '⚠️ Manual Merge Required',
       message: `PR #${prNumber} needs manual merge\n${reason}`,
       sound: true,
-      wait: false,
-      timeout: 10
+      wait: false
     });
 
-    // Create clickable link
-    const prLink = terminalLink(`#${prNumber}`, prUrl, {
-      fallback: (text, url) => `${text} (${url})`
-    });
-
-    // Big CLI box notification
-    const message = boxen(
-      chalk.bold.red('⚠️  MANUAL MERGE REQUIRED  ⚠️\n\n') +
-      chalk.yellow(`Repository: ${chalk.white(repository)}\n`) +
-      chalk.yellow(`PR Number: ${chalk.white(prLink)}\n`) +
-      chalk.yellow(`Reason: ${chalk.white(reason)}\n\n`) +
-      chalk.cyan('Please resolve the conflicts manually and push the changes.\n') +
-      chalk.gray(`Link: ${prUrl}`),
-      {
-        padding: 1,
-        margin: 1,
-        borderStyle: 'double',
-        borderColor: 'red',
-        backgroundColor: '#000000'
-      }
+    console.log(
+      boxen(
+        `${chalk.yellow.bold('Manual Merge Required')}\n\n`
+        + `Repository: ${chalk.cyan(repository)}\n`
+        + `PR: ${chalk.green(`#${prNumber}`)}\n`
+        + `Reason: ${chalk.white(reason)}\n\n`
+        + `${terminalLink('Open PR in browser', resolvedPrUrl)}`,
+        {
+          padding: 1,
+          margin: 1,
+          borderStyle: 'round',
+          borderColor: 'yellow'
+        }
+      )
     );
-
-    console.log('\n' + message + '\n');
-  },
-
-  success: (prNumber, repository, message = 'PR approved and merged', prUrl = null) => {
-    // Stop any active spinner first
-    if (activeSpinner) {
-      activeSpinner.stop();
-      activeSpinner = null;
-    }
-
-    // Generate PR URL if not provided
-    if (!prUrl) {
-      prUrl = `https://github.com/${repository}/pull/${prNumber}`;
-    }
-
-    // Windows notification
-    notifier.notify({
-      title: '✅ PR Success',
-      message: `PR #${prNumber} - ${message}`,
-      sound: true,
-      wait: false,
-      timeout: 5
-    });
-
-    // Create clickable link
-    const prLink = terminalLink(`#${prNumber}`, prUrl, {
-      fallback: (text, url) => `${text} (${url})`
-    });
-
-    // CLI box notification
-    const boxMessage = boxen(
-      chalk.bold.green('✅  SUCCESS  ✅\n\n') +
-      chalk.cyan(`Repository: ${chalk.white(repository)}\n`) +
-      chalk.cyan(`PR Number: ${chalk.white(prLink)}\n`) +
-      chalk.cyan(`Status: ${chalk.white(message)}\n\n`) +
-      chalk.gray(`Link: ${prUrl}`),
-      {
-        padding: 1,
-        margin: 1,
-        borderStyle: 'round',
-        borderColor: 'green',
-        backgroundColor: '#000000'
-      }
-    );
-
-    console.log('\n' + boxMessage + '\n');
-  },
-
-  requestChanges: (prNumber, repository, issuesCount, prUrl = null) => {
-    // Stop any active spinner first
-    if (activeSpinner) {
-      activeSpinner.stop();
-      activeSpinner = null;
-    }
-
-    // Generate PR URL if not provided
-    if (!prUrl) {
-      prUrl = `https://github.com/${repository}/pull/${prNumber}`;
-    }
-
-    // Windows notification
-    notifier.notify({
-      title: '🔍 Changes Requested',
-      message: `PR #${prNumber} - ${issuesCount} issues found`,
-      sound: true,
-      wait: false,
-      timeout: 5
-    });
-
-    // Create clickable link
-    const prLink = terminalLink(`#${prNumber}`, prUrl, {
-      fallback: (text, url) => `${text} (${url})`
-    });
-
-    // CLI box notification
-    const boxMessage = boxen(
-      chalk.bold.yellow('🔍  CHANGES REQUESTED  🔍\n\n') +
-      chalk.cyan(`Repository: ${chalk.white(repository)}\n`) +
-      chalk.cyan(`PR Number: ${chalk.white(prLink)}\n`) +
-      chalk.cyan(`Issues Found: ${chalk.white(issuesCount)}\n\n`) +
-      chalk.yellow('Please review the comments and make necessary changes.\n') +
-      chalk.gray(`Link: ${prUrl}`),
-      {
-        padding: 1,
-        margin: 1,
-        borderStyle: 'round',
-        borderColor: 'yellow',
-        backgroundColor: '#000000'
-      }
-    );
-
-    console.log('\n' + boxMessage + '\n');
   }
 };

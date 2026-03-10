@@ -3,12 +3,15 @@ import { dbManager } from '../database.js';
 import { reviewEngine } from '../review-engine.js';
 import { healthScoreCalculator } from '../health-score-calculator.js';
 import { autoFixService } from '../auto-fix-service.js';
+import { AppError } from '../error-handler.js';
 
 const router = express.Router();
 
 // GET /api/prs - List PRs
 router.get('/', async (req, res) => {
   const { status, repository_id } = req.query;
+  const limit = Math.min(Number(req.query.limit || 25), 100);
+  const offset = Math.max(Number(req.query.offset || 0), 0);
   let query = 'SELECT * FROM pull_requests WHERE 1=1';
   const params = [];
 
@@ -21,21 +24,36 @@ router.get('/', async (req, res) => {
     params.push(repository_id);
   }
 
-  const prs = dbManager.db.prepare(query).all(...params);
-  res.json(prs);
+  const totalQuery = `SELECT COUNT(*) AS total FROM (${query}) AS filtered_prs`;
+  query += ' ORDER BY updated_at DESC LIMIT ? OFFSET ?';
+  const prs = dbManager.db.prepare(query).all(...params, limit, offset);
+  const total = dbManager.db.prepare(totalQuery).get(...params).total;
+
+  res.json({
+    data: prs,
+    pagination: {
+      total,
+      limit,
+      offset
+    }
+  });
 });
 
 // GET /api/prs/:id - Get PR details
 router.get('/:id', async (req, res) => {
   const pr = dbManager.db.prepare('SELECT * FROM pull_requests WHERE id = ?').get(req.params.id);
-  if (!pr) return res.status(404).json({ error: 'PR not found' });
+  if (!pr) {
+    throw new AppError('PR not found', 404, 'PR_NOT_FOUND');
+  }
   res.json(pr);
 });
 
 // POST /api/prs/:id/review - Trigger review
 router.post('/:id/review', async (req, res) => {
   const pr = dbManager.db.prepare('SELECT * FROM pull_requests WHERE id = ?').get(req.params.id);
-  if (!pr) return res.status(404).json({ error: 'PR not found' });
+  if (!pr) {
+    throw new AppError('PR not found', 404, 'PR_NOT_FOUND');
+  }
 
   // Start review asynchronously
   reviewEngine.reviewPR(pr, './workspace/temp').catch(e => console.error(e));
