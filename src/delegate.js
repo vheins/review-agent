@@ -200,7 +200,7 @@ async function executeAIReview(prompt, repoDir, mode = 'review') {
     output.split('\n').forEach(line => console.log(chalk.green('│') + ' ' + line));
     console.log(chalk.bold.green('└───────────────────────────────────────') + '\n');
 
-    return output;
+    return { output, outputForDetection };
 
   } finally {
     process.chdir(originalDir);
@@ -235,7 +235,7 @@ async function addReviewComments(repository, pr, repoDir) {
     logger.info(`Prompt length: ${prompt.length} chars`);
 
     logger.info('► Delegating code review to AI agent...');
-    const output = await executeAIReview(prompt, repoDir, 'review');
+    const { output, outputForDetection } = await executeAIReview(prompt, repoDir, 'review');
 
     // ── Parse AI output ──
     logger.info('► Parsing AI response...');
@@ -278,7 +278,7 @@ async function addReviewComments(repository, pr, repoDir) {
           .trim();
       }
       if (!message) {
-        message = 'Review telah dilakukan. Silakan periksa komentar yang diberikan untuk detail lebih lanjut.';
+        message = 'Review selesai. Cek komentar inline untuk detail.';
       }
       logger.warn('Failed to parse MESSAGE block. Using cleaned raw AI output as fallback.');
     }

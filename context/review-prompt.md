@@ -138,12 +138,20 @@ Setelah semua komentar inline dikirim, tulis ini di akhir:
 SEVERITY_SCORE: <total>
 SEVERITY_BREAKDOWN: Critical: <n>, High: <n>, Medium: <n>, Low: <n>
 DECISION: <APPROVE|REQUEST_CHANGES>
-MESSAGE: <ringkasan singkat dalam bahasa Indonesia, SATU paragraf, tanpa list issue — semua detail sudah ada di komentar inline>
+MESSAGE: 
+<Ringkasan poin/list fitur yang diubah dalam bahasa Indonesia, langsung ke inti tanpa basa-basi>
+
+<Kesimpulan singkat skor/issue dalam bahasa Indonesia>
 ```
 
 **Contoh MESSAGE yang benar:**
 ```
-Review telah dilakukan. Ditemukan issue HIGH terkait SQL injection dan beberapa issue MEDIUM pada validasi input. Silakan cek komentar inline untuk detail. ⚠️ PR di-REJECT karena mengandung issue HIGH.
+Summary:
+- tambah endpoint settlement
+- pisahkan logic ke StoreSettlement action
+- perbaikan validasi input user
+
+Ditemukan issue HIGH pada SQL injection. ⚠️ PR di-REJECT.
 ```
 
 **Contoh MESSAGE yang salah:**
