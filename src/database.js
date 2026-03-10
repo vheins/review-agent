@@ -5,169 +5,183 @@ import fs from 'fs-extra';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const dbPath = path.join(__dirname, '..', 'data', 'history.db');
+class DatabaseManager {
+  constructor(dbPath) {
+    this.dbPath = dbPath || path.join(__dirname, '..', 'data', 'history.db');
+    this.db = null;
+    this.dbError = null;
+    this.checkpointInterval = null;
+    this.initPromise = null;
+    
+    // Ensure data directory exists
+    fs.ensureDirSync(path.dirname(this.dbPath));
+  }
 
-// Ensure data directory exists
-fs.ensureDirSync(path.dirname(dbPath));
+  async initialize() {
+    if (this.initPromise) return this.initPromise;
+    
+    this.initPromise = (async () => {
+      try {
+        const Database = (await import('better-sqlite3')).default;
+        this.db = new Database(this.dbPath);
 
-let db = null;
-let dbError = null;
+        // Configure pragmas (Requirement 53.1)
+        this.db.pragma('journal_mode = WAL');
+        this.db.pragma('synchronous = NORMAL');
+        this.db.pragma('foreign_keys = ON');
+        this.db.pragma('cache_size = -16000'); // 16MB cache
+        this.db.pragma('temp_store = MEMORY');
 
-// Try to initialize database
-try {
-  const Database = (await import('better-sqlite3')).default;
-  db = new Database(dbPath);
+        // Initialize schema (Requirement 41.1, 41.2)
+        await this.runMigrations();
 
-  // Create tables
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS pr_reviews (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      repository TEXT NOT NULL,
-      pr_number INTEGER NOT NULL,
-      pr_title TEXT NOT NULL,
-      pr_url TEXT NOT NULL,
-      decision TEXT NOT NULL,
-      severity_score INTEGER DEFAULT 0,
-      severity_breakdown TEXT,
-      message TEXT,
-      reviewed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE(repository, pr_number, reviewed_at)
-    );
+        // Set up periodic checkpoint (Requirement 53.1)
+        this.setupCheckpoint();
 
-    CREATE INDEX IF NOT EXISTS idx_reviewed_at ON pr_reviews(reviewed_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_repository ON pr_reviews(repository);
-  `);
+        console.log('✓ Database initialized successfully with WAL mode');
+        return true;
+      } catch (error) {
+        this.dbError = error.message;
+        console.warn('⚠ Database initialization failed:', error.message);
+        return false;
+      }
+    })();
+    
+    return this.initPromise;
+  }
 
-  console.log('✓ Database initialized successfully');
-} catch (error) {
-  dbError = error.message;
-  console.warn('⚠ Database initialization failed:', error.message);
-  console.warn('⚠ History features will be disabled. To fix:');
-  console.warn('  1. Install build tools: sudo apt-get install build-essential python3');
-  console.warn('  2. Rebuild: yarn remove better-sqlite3 && yarn add better-sqlite3');
+  async runMigrations() {
+    // Basic migration system: Check if a main table exists, if not, run full schema
+    const tableExists = this.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='pull_requests'").get();
+    
+    if (!tableExists) {
+      console.log('Initializing fresh database schema...');
+      const schemaPath = path.join(__dirname, 'database', 'schema.sql');
+      if (await fs.pathExists(schemaPath)) {
+        const schema = await fs.readFile(schemaPath, 'utf8');
+        
+        // Execute schema in a single transaction
+        this.db.transaction(() => {
+          this.db.exec(schema);
+          
+          // Seed initial data for FK requirements (dev and repo)
+          this.db.prepare(`
+            INSERT OR IGNORE INTO developers (id, github_username, created_at, updated_at)
+            VALUES (1, 'system', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          `).run();
+          
+          this.db.prepare(`
+            INSERT OR IGNORE INTO repositories (id, github_repo_id, owner, name, full_name, default_branch, created_at, updated_at)
+            VALUES (1, 0, 'system', 'default', 'system/default', 'main', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          `).run();
+
+          // Handle legacy data migration if old table exists
+          const oldTableExists = this.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='pr_reviews'").get();
+          if (oldTableExists) {
+            console.log('Migrating legacy pr_reviews data...');
+            this.db.exec(`
+              INSERT OR IGNORE INTO pull_requests (github_pr_id, repository_id, author_id, title, status, source_branch, target_branch, created_at, updated_at)
+              SELECT 
+                pr_number as github_pr_id, 
+                1 as repository_id, 
+                1 as author_id, 
+                pr_title as title, 
+                'closed' as status,
+                'unknown' as source_branch,
+                'main' as target_branch,
+                reviewed_at as created_at,
+                reviewed_at as updated_at
+              FROM pr_reviews;
+            `);
+          }
+        })();
+      } else {
+        throw new Error(`Schema file not found at ${schemaPath}`);
+      }
+    }
+  }
+
+  setupCheckpoint() {
+    // Run a passive checkpoint every 5 minutes
+    this.checkpointInterval = setInterval(() => {
+      if (this.db) {
+        try {
+          this.db.pragma('wal_checkpoint(PASSIVE)');
+          console.log('Database checkpoint completed');
+        } catch (error) {
+          console.error('Database checkpoint failed:', error.message);
+        }
+      }
+    }, 5 * 60 * 1000);
+    
+    // Ensure it doesn't keep the process alive
+    this.checkpointInterval.unref();
+  }
+
+  close() {
+    if (this.checkpointInterval) {
+      clearInterval(this.checkpointInterval);
+    }
+    if (this.db) {
+      this.db.close();
+      this.db = null;
+    }
+  }
+
+  // Helper to run in a transaction (Requirement 53.1)
+  transaction(fn) {
+    return this.db.transaction(fn);
+  }
+
+  isAvailable() {
+    return this.db !== null;
+  }
+
+  getError() {
+    return this.dbError;
+  }
+
+  addReview(review) {
+    if (!this.db) return;
+    try {
+      this.transaction(() => {
+        // Ensure repository exists
+        let repo = this.db.prepare('SELECT id FROM repositories WHERE full_name = ?').get(review.repository);
+        if (!repo) {
+          const parts = (review.repository || '').split('/');
+          const owner = parts[0] || 'unknown';
+          const name = parts[1] || 'unknown';
+          const repoId = Math.floor(Math.random() * 1000000);
+          const res = this.db.prepare(
+            'INSERT INTO repositories (github_repo_id, owner, name, full_name, default_branch, created_at, updated_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)'
+          ).run(repoId, owner, name, review.repository || 'unknown', 'main');
+          repo = { id: res.lastInsertRowid };
+        }
+
+        // Ensure PR exists
+        let pr = this.db.prepare('SELECT id FROM pull_requests WHERE github_pr_id = ?').get(review.pr_number);
+        if (!pr) {
+          const res = this.db.prepare(`
+            INSERT INTO pull_requests (github_pr_id, repository_id, author_id, title, source_branch, target_branch, status, created_at, updated_at)
+            VALUES (?, ?, 1, ?, 'unknown', 'main', 'closed', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          `).run(review.pr_number, repo.id, review.pr_title || 'Unknown');
+          pr = { id: res.lastInsertRowid };
+        }
+
+        // Insert review session
+        this.db.prepare(`
+          INSERT INTO review_sessions (pr_id, executor_type, status, started_at, completed_at, outcome, quality_score)
+          VALUES (?, 'unknown', 'completed', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?, ?)
+        `).run(pr.id, review.decision || 'unknown', review.severity_score || 0);
+      })();
+    } catch (error) {
+      console.warn('Failed to add review:', error.message);
+    }
+  }
 }
 
-export const prReviewDB = {
-  // Add new PR review
-  addReview(data) {
-    if (!db) {
-      console.warn('⚠ Database not available, skipping review save');
-      return null;
-    }
+// Create singleton instance
+const dbManager = new DatabaseManager();
 
-    try {
-      const stmt = db.prepare(`
-        INSERT INTO pr_reviews (repository, pr_number, pr_title, pr_url, decision, severity_score, severity_breakdown, message)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-
-      return stmt.run(
-        data.repository,
-        data.pr_number,
-        data.pr_title,
-        data.pr_url,
-        data.decision,
-        data.severity_score || 0,
-        data.severity_breakdown || '',
-        data.message || ''
-      );
-    } catch (error) {
-      console.warn('⚠ Failed to save review:', error.message);
-      return null;
-    }
-  },
-
-  // Get recent reviews
-  getRecentReviews(limit = 50) {
-    if (!db) {
-      return [];
-    }
-
-    try {
-      const stmt = db.prepare(`
-        SELECT * FROM pr_reviews
-        ORDER BY reviewed_at DESC
-        LIMIT ?
-      `);
-
-      return stmt.all(limit);
-    } catch (error) {
-      console.warn('⚠ Failed to get reviews:', error.message);
-      return [];
-    }
-  },
-
-  // Get reviews by repository
-  getReviewsByRepository(repository, limit = 20) {
-    if (!db) {
-      return [];
-    }
-
-    try {
-      const stmt = db.prepare(`
-        SELECT * FROM pr_reviews
-        WHERE repository = ?
-        ORDER BY reviewed_at DESC
-        LIMIT ?
-      `);
-
-      return stmt.all(repository, limit);
-    } catch (error) {
-      console.warn('⚠ Failed to get reviews by repository:', error.message);
-      return [];
-    }
-  },
-
-  // Get review statistics
-  getStats() {
-    if (!db) {
-      return { total: 0, approved: 0, rejected: 0 };
-    }
-
-    try {
-      const stmt = db.prepare(`
-        SELECT 
-          COUNT(*) as total,
-          SUM(CASE WHEN decision = 'APPROVE' THEN 1 ELSE 0 END) as approved,
-          SUM(CASE WHEN decision = 'REQUEST_CHANGES' THEN 1 ELSE 0 END) as rejected
-        FROM pr_reviews
-      `);
-
-      return stmt.get();
-    } catch (error) {
-      console.warn('⚠ Failed to get stats:', error.message);
-      return { total: 0, approved: 0, rejected: 0 };
-    }
-  },
-
-  // Clear old reviews (keep last N days)
-  clearOldReviews(days = 30) {
-    if (!db) {
-      return null;
-    }
-
-    try {
-      const stmt = db.prepare(`
-        DELETE FROM pr_reviews
-        WHERE reviewed_at < datetime('now', '-' || ? || ' days')
-      `);
-
-      return stmt.run(days);
-    } catch (error) {
-      console.warn('⚠ Failed to clear old reviews:', error.message);
-      return null;
-    }
-  },
-
-  // Check if database is available
-  isAvailable() {
-    return db !== null;
-  },
-
-  // Get error message if database failed to initialize
-  getError() {
-    return dbError;
-  }
-};
-
-export default db;
+export { dbManager, DatabaseManager };
+export default dbManager;

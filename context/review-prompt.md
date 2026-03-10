@@ -76,32 +76,37 @@ SEVERITY: `[CRITICAL]` | `[HIGH]` | `[MEDIUM]` | `[LOW]`
 
 **PREFERRED — GitHub MCP:**
 
-Panggil `add_comment_to_pending_review` untuk setiap issue:
-- `owner`: repository owner (string, required)
-- `repo`: repository name (string, required)
-- `pullNumber`: nomor PR (number, required)
-- `path`: relative path file dari diff — ambil dari baris `+++ b/<path>` (string, required)
-- `body`: isi komentar dengan format [SEVERITY] (string, required)
-- `line`: line number yang HARUS ada di diff output — parse dari hunk `@@ -a,b +c,d @@` (number, optional tapi diperlukan untuk inline)
-- `subjectType`: `"line"` untuk komentar per baris (string, required)
-- `side`: `"RIGHT"` untuk kode baru/added, `"LEFT"` untuk kode lama/removed (string, optional)
+1. **PILIH SKENARIO BERDASARKAN HASIL REVIEW:**
 
-Setelah semua komentar ditambah, submit dengan `pull_request_review_write`:
+⚠️ **LARANGAN KERAS**: JANGAN membuat review gabungan/summary massal dalam satu body jika ada banyak temuan baris kode! SEMUA temuan kode HARUS masuk lewat `add_comment_to_pending_review` (Skenario A).
 
-⚠️ Ada dua skenario — pilih yang tepat:
+**Skenario A — JIKA ADA TEMUAN KODE (WAJIB INLINE COMMENTS 3 LANGKAH):**
+Prosesnya HARUS berurutan, panggil 3 tool ini:
 
-**Skenario A — ada inline comments (pakai `add_comment_to_pending_review` di atas):**
-- `method`: `"submit_pending"` ← WAJIB untuk submit pending review yang berisi inline comments
-- `owner`, `repo`, `pullNumber` (required)
-- `event`: `"APPROVE"` atau `"REQUEST_CHANGES"` (required saat submit)
-- `body`: ringkasan review (optional)
+a) **BUAT PENDING REVIEW:** Panggil `pull_request_review_write`
+   - `method`: `"create"`
+   - `owner`, `repo`, `pullNumber`
+   - *PENTING: JANGAN kirim parameter `event` di sini, agar statusnya PENDING.*
 
-> Jangan pakai `method="create"` jika sudah add inline comments — itu buat review baru terpisah, inline comments tidak ikut tersubmit.
+b) **TAMBAH INLINE COMMENTS:** Panggil `add_comment_to_pending_review` SATU PER SATU untuk SETIAP temuan.
+   - `owner`, `repo`, `pullNumber`
+   - `path`: relative path file dari diff
+   - `body`: isi komentar dengan format [SEVERITY]
+   - `line`: line number di diff
+   - `subjectType`: `"line"`
 
-**Skenario B — tidak ada inline comments (hanya summary review):**
-- `method`: `"create"` + `event`: `"APPROVE"` atau `"REQUEST_CHANGES"`
-- `owner`, `repo`, `pullNumber` (required)
-- `body`: ringkasan review (optional)
+c) **SUBMIT REVIEW:** Panggil `pull_request_review_write` lagi
+   - `method`: `"submit_pending"`
+   - `owner`, `repo`, `pullNumber`
+   - `event`: `"REQUEST_CHANGES"` atau `"APPROVE"`
+   - `body`: Ringkasan pendek (opsional, max 2-3 kalimat)
+
+**Skenario B — JIKA PR PERFECT / TIDAK ADA TEMUAN SAMA SEKALI:**
+- Panggil `pull_request_review_write` HANYA SATU KALI dengan:
+  - `method`: `"create"`
+  - `event`: `"APPROVE"`
+  - `owner`, `repo`, `pullNumber`
+  - `body`: `LGTM. Tidak ada temuan.`
 
 **FALLBACK — jika GitHub MCP gagal:**
 ```bash
@@ -168,9 +173,9 @@ Ditemukan beberapa masalah:
 - Selalu coba GitHub MCP dulu. Gunakan gh CLI hanya jika MCP gagal.
 - **Baca diff dulu** sebelum komentar inline apapun — line number harus dari diff, bukan dari file langsung.
 - `pull_request_read` requires: `method` (`get`|`get_diff`|`get_files`|`get_review_comments`|`get_reviews`|`get_comments`|`get_check_runs`), `owner`, `repo`, `pullNumber`
-- `add_comment_to_pending_review` requires: `owner`, `repo`, `pullNumber`, `path`, `body`, `subjectType`
+- `add_comment_to_pending_review` requires: `owner`, `repo`, `pullNumber`, `path`, `body`, `subjectType` (isi dengan `"line"`), `line`.
 - `pull_request_review_write`:
-  - Setelah `add_comment_to_pending_review`: gunakan `method="submit_pending"` + `event`
-  - Tanpa inline comments: gunakan `method="create"` + `event`
+  - **Skenario A (Ada Temuan):** Panggil dua kali. Pertama `method="create"` (TANPA event) untuk buka sesi, lalu kedua `method="submit_pending"` + `event` untuk submit setelah semua komentar terkirim.
+  - **Skenario B (Tidak Ada Temuan):** Panggil satu kali, `method="create"` + `event="APPROVE"`.
 - Jika MCP gagal: `gh pr review {{pr.number}} --repo {{repository}} --request-changes --body "..."`
-- Satu komentar = satu issue. Jangan gabung.
+- SATU komentar = SATU issue. Gunakan inline (`add_comment_to_pending_review`) untuk menyorot kode secara presisi.

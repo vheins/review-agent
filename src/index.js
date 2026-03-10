@@ -3,6 +3,7 @@ import { logger } from './logger.js';
 import { fetchOpenPRs, prepareRepository } from './github.js';
 import { delegateReview } from './delegate.js';
 import fs from 'fs-extra';
+import { dbManager } from './database.js';
 
 async function run(once = false) {
   logger.info('Starting PR review check...');
@@ -53,6 +54,9 @@ async function main() {
   if (config.dryRun) {
     logger.info('Running in DRY RUN mode - no actual changes will be made');
   }
+
+  // Initialize database before starting
+  await dbManager.initialize();
 
   if (once) {
     await run(true);

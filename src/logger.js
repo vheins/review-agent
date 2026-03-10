@@ -11,7 +11,7 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const levels = { info: 0, warn: 1, error: 2 };
+const levels = { debug: -1, info: 0, warn: 1, error: 2 };
 const currentLevel = levels[config.logLevel] || 0;
 
 // Log directory setup
@@ -97,6 +97,17 @@ process.on('exit', () => {
 });
 
 export const logger = {
+  debug: (msg) => {
+    if (currentLevel <= -1) {
+      if (activeSpinner) {
+        activeSpinner.stop();
+        activeSpinner = null;
+      }
+      console.log(chalk.gray('⚙'), msg);
+      writeToLogFile('debug', msg);
+    }
+  },
+
   info: (msg) => {
     if (currentLevel <= 0) {
       // Stop any active spinner first

@@ -43,6 +43,22 @@ CREATE INDEX idx_pr_priority ON pull_requests(priority_score DESC);
 CREATE INDEX idx_pr_author ON pull_requests(author_id);
 CREATE INDEX idx_pr_repo ON pull_requests(repository_id);
 
+-- PR Reviewers
+-- Tracks assigned human reviewers and their review status
+CREATE TABLE pr_reviewers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  pr_id INTEGER NOT NULL,
+  developer_id INTEGER NOT NULL,
+  status TEXT DEFAULT 'pending', -- pending, approved, changes_requested
+  assigned_at DATETIME NOT NULL,
+  completed_at DATETIME,
+  FOREIGN KEY (pr_id) REFERENCES pull_requests(id),
+  FOREIGN KEY (developer_id) REFERENCES developers(id),
+  UNIQUE(pr_id, developer_id)
+);
+
+CREATE INDEX idx_pr_reviewer ON pr_reviewers(developer_id, status);
+
 -- Review Sessions
 -- Tracks individual review executions by AI executors
 CREATE TABLE review_sessions (
@@ -100,6 +116,7 @@ CREATE TABLE developers (
   github_username TEXT NOT NULL UNIQUE,
   email TEXT,
   display_name TEXT,
+  role TEXT DEFAULT 'developer', -- developer, lead, manager, admin
   is_available BOOLEAN DEFAULT 1,
   unavailable_until DATETIME,
   current_workload_score REAL DEFAULT 0,
@@ -219,6 +236,84 @@ CREATE TABLE false_positives (
 
 CREATE INDEX idx_fp_comment ON false_positives(comment_id);
 
+-- Checklists
+-- Stores checklist templates
+CREATE TABLE checklists (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  repository_id INTEGER, -- NULL for global checklists
+  name TEXT NOT NULL,
+  description TEXT,
+  is_active BOOLEAN DEFAULT 1,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL,
+  FOREIGN KEY (repository_id) REFERENCES repositories(id)
+);
+
+-- Checklist Items
+-- Stores individual items in a checklist
+CREATE TABLE checklist_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  checklist_id INTEGER NOT NULL,
+  item_text TEXT NOT NULL,
+  priority TEXT DEFAULT 'normal', -- high, normal, low
+  category TEXT,
+  FOREIGN KEY (checklist_id) REFERENCES checklists(id)
+);
+
+-- Review Checklists
+-- Tracks completion of checklists for specific reviews
+CREATE TABLE review_checklists (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  review_session_id INTEGER NOT NULL,
+  checklist_item_id INTEGER NOT NULL,
+  is_completed BOOLEAN DEFAULT 0,
+  completed_at DATETIME,
+  completed_by_developer_id INTEGER,
+  notes TEXT,
+  FOREIGN KEY (review_session_id) REFERENCES review_sessions(id),
+  FOREIGN KEY (checklist_item_id) REFERENCES checklist_items(id),
+  FOREIGN KEY (completed_by_developer_id) REFERENCES developers(id),
+  UNIQUE(review_session_id, checklist_item_id)
+);
+
+CREATE INDEX idx_review_checklist_session ON review_checklists(review_session_id);
+
+-- Orchestration Sets
+-- Groups related PRs for coordinated review
+CREATE TABLE orchestration_sets (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  status TEXT DEFAULT 'pending', -- pending, in_progress, completed, failed
+  created_at DATETIME NOT NULL,
+  completed_at DATETIME
+);
+
+-- Orchestration Set Members
+CREATE TABLE orchestration_set_members (
+  set_id TEXT NOT NULL,
+  pr_id INTEGER NOT NULL,
+  dependency_pr_id INTEGER, -- PR that must be reviewed first
+  FOREIGN KEY (set_id) REFERENCES orchestration_sets(id),
+  FOREIGN KEY (pr_id) REFERENCES pull_requests(id),
+  PRIMARY KEY (set_id, pr_id)
+);
+
+-- Review Templates
+-- Stores reusable review comment templates
+CREATE TABLE review_templates (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  category TEXT NOT NULL, -- security, quality, style, logic
+  template_text TEXT NOT NULL,
+  placeholders TEXT, -- JSON array of supported placeholders
+  usage_count INTEGER DEFAULT 0,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL
+);
+
+CREATE INDEX idx_template_category ON review_templates(category);
+
 -- ============================================================================
 -- Security & Compliance Tables
 -- ============================================================================
@@ -336,11 +431,52 @@ CREATE TABLE notifications (
 CREATE INDEX idx_notif_recipient ON notifications(recipient_id, is_read);
 CREATE INDEX idx_notif_batch ON notifications(batch_id);
 
+-- Discussion Threads
+-- Tracks comment threads on pull requests
+CREATE TABLE pr_discussions (
+  id TEXT PRIMARY KEY,
+  pr_id INTEGER NOT NULL,
+  github_thread_id TEXT NOT NULL,
+  author_id INTEGER NOT NULL,
+  body TEXT NOT NULL,
+  status TEXT DEFAULT 'open', -- open, resolved
+  is_resolved BOOLEAN DEFAULT 0,
+  resolved_at DATETIME,
+  resolved_by_developer_id INTEGER,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL,
+  FOREIGN KEY (pr_id) REFERENCES pull_requests(id),
+  FOREIGN KEY (author_id) REFERENCES developers(id),
+  FOREIGN KEY (resolved_by_developer_id) REFERENCES developers(id)
+);
+
+CREATE INDEX idx_discussion_pr ON pr_discussions(pr_id, status);
+
+-- Achievements
+-- Stores achievement definitions and awards
+CREATE TABLE achievements (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  icon TEXT,
+  points_reward INTEGER DEFAULT 0
+);
+
+-- Developer Achievements
+CREATE TABLE developer_achievements (
+  developer_id INTEGER NOT NULL,
+  achievement_id TEXT NOT NULL,
+  awarded_at DATETIME NOT NULL,
+  FOREIGN KEY (developer_id) REFERENCES developers(id),
+  FOREIGN KEY (achievement_id) REFERENCES achievements(id),
+  PRIMARY KEY (developer_id, achievement_id)
+);
+
 -- ============================================================================
 -- Configuration Tables
 -- ============================================================================
 
--- Repository Config
+-- Configuration Tables
 -- Stores per-repository configuration settings
 CREATE TABLE repository_config (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -351,6 +487,22 @@ CREATE TABLE repository_config (
   updated_by TEXT,
   FOREIGN KEY (repository_id) REFERENCES repositories(id)
 );
+
+-- Export Metadata
+-- Tracks generated data exports
+CREATE TABLE exports (
+  id TEXT PRIMARY KEY,
+  file_path TEXT NOT NULL,
+  file_type TEXT NOT NULL, -- csv, json
+  resource_type TEXT NOT NULL, -- metrics, reviews
+  filters TEXT, -- JSON
+  created_at DATETIME NOT NULL,
+  expires_at DATETIME NOT NULL,
+  created_by TEXT
+);
+
+CREATE INDEX idx_export_created ON exports(created_at);
+CREATE INDEX idx_export_expires ON exports(expires_at);
 
 -- ============================================================================
 -- End of Schema

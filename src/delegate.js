@@ -6,7 +6,7 @@ import stripAnsi from 'strip-ansi';
 import chalk from 'chalk';
 import { logger, notify } from './logger.js';
 import { config } from './config.js';
-import { prReviewDB } from './database.js';
+import { dbManager as prReviewDB } from './database.js';
 
 // ─────────────────────────────────────────────
 // Helper: verbose execa wrapper
@@ -240,41 +240,56 @@ async function addReviewComments(repository, pr, repoDir) {
     // ── Parse AI output ──
     logger.info('► Parsing AI response...');
 
-    const severityScoreMatch = output.match(/\*?\*?SEVERITY_SCORE\*?\*?:\s*(\d+)/i);
-    const severityBreakdownMatch = output.match(/\*?\*?SEVERITY_BREAKDOWN\*?\*?:\s*([^\n]+)/i);
-    const decisionMatch = output.match(/\*?\*?DECISION\*?\*?:\s*(APPROVE|REQUEST_CHANGES)/i);
-    const messageMatch = output.match(/\*?\*?MESSAGE\*?\*?:\s*(.+)/is);
+    const severityScoreMatch = output.match(/\*?\*?SEVERITY[_\s]SCORE\*?\*?:\s*(\d+)/i);
+    const severityBreakdownMatch = output.match(/\*?\*?SEVERITY[_\s]BREAKDOWN\*?\*?:\s*([^\n]+)/i);
+    const decisionMatch = output.match(/\*?\*?DECISION\*?\*?:\s*(APPROVE|REQUEST[_\s]CHANGES)/i);
+    const messageMatch = output.match(/\*?\*?MESSAGE\*?\*?:\s*([\s\S]+)/i);
 
     logger.info(`  Parsed SEVERITY_SCORE: ${severityScoreMatch ? severityScoreMatch[1] : 'not found'}`);
     logger.info(`  Parsed SEVERITY_BREAKDOWN: ${severityBreakdownMatch ? severityBreakdownMatch[1].trim() : 'not found'}`);
-    logger.info(`  Parsed DECISION: ${decisionMatch ? decisionMatch[1] : 'not found (using fallback REQUEST_CHANGES)'}`);
+    logger.info(`  Parsed DECISION: ${decisionMatch ? decisionMatch[1] : 'not found'}`);
     logger.info(`  Parsed MESSAGE: ${messageMatch ? 'found (' + messageMatch[1].trim().substring(0, 80) + '...)' : 'not found'}`);
 
-    if (!decisionMatch || !messageMatch) {
-      logger.warn(`${config.aiExecutor.toUpperCase()} response does not match expected format. Using fallback.`);
+    if (!decisionMatch && !messageMatch) {
+      logger.warn(`${config.aiExecutor.toUpperCase()} response does not match expected format.`);
     }
 
-    const severityScore = severityScoreMatch ? parseInt(severityScoreMatch[1], 10) : 0;
     const severityBreakdown = severityBreakdownMatch ? severityBreakdownMatch[1].trim() : 'N/A';
 
     let hasCritical = false;
     let hasHigh = false;
+    let computedScore = 0;
     if (severityBreakdownMatch) {
       const criticalMatch = severityBreakdown.match(/Critical:\s*(\d+)/i);
       const highMatch = severityBreakdown.match(/High:\s*(\d+)/i);
-      hasCritical = criticalMatch && parseInt(criticalMatch[1], 10) > 0;
-      hasHigh = highMatch && parseInt(highMatch[1], 10) > 0;
+      const mediumMatch = severityBreakdown.match(/Medium:\s*(\d+)/i);
+      const lowMatch = severityBreakdown.match(/Low:\s*(\d+)/i);
+      
+      const cCount = criticalMatch ? parseInt(criticalMatch[1], 10) : 0;
+      const hCount = highMatch ? parseInt(highMatch[1], 10) : 0;
+      const mCount = mediumMatch ? parseInt(mediumMatch[1], 10) : 0;
+      const lCount = lowMatch ? parseInt(lowMatch[1], 10) : 0;
+
+      hasCritical = cCount > 0;
+      hasHigh = hCount > 0;
+      
+      computedScore = (cCount * config.severityCritical) + 
+                      (hCount * config.severityHigh) + 
+                      (mCount * config.severityMedium) + 
+                      (lCount * config.severityLow);
     }
 
-    let decision = decisionMatch ? decisionMatch[1].toUpperCase() : 'REQUEST_CHANGES';
+    let severityScore = severityScoreMatch ? parseInt(severityScoreMatch[1], 10) : computedScore;
+
+    let decision = decisionMatch ? decisionMatch[1].toUpperCase().replace(/[\s_]+/, '_') : null;
     let message = messageMatch ? messageMatch[1].trim() : '';
 
     if (!message) {
       if (output) {
         message = output
-          .replace(/\*?\*?SEVERITY_SCORE\*?\*?:\s*\d+/ig, '')
-          .replace(/\*?\*?SEVERITY_BREAKDOWN\*?\*?:\s*[^\n]+/ig, '')
-          .replace(/\*?\*?DECISION\*?\*?:\s*(APPROVE|REQUEST_CHANGES)/ig, '')
+          .replace(/\*?\*?SEVERITY[_\s]SCORE\*?\*?:\s*\d+/ig, '')
+          .replace(/\*?\*?SEVERITY[_\s]BREAKDOWN\*?\*?:\s*[^\n]+/ig, '')
+          .replace(/\*?\*?DECISION\*?\*?:\s*(APPROVE|REQUEST[_\s]CHANGES)/ig, '')
           .trim();
       }
       if (!message) {
@@ -317,6 +332,8 @@ async function addReviewComments(repository, pr, repoDir) {
     // Final safety check via GitHub API: if PR already has a submitted review,
     // treat as posted to prevent duplicate submission regardless of text detection
     let alreadyReviewedViaAPI = false;
+    let apiDecision = null;
+    let apiMessage = null;
     try {
       const { stdout: reviewsJson } = await execaVerbose(
         'gh', ['api', `repos/${repository}/pulls/${pr.number}/reviews`, '--jq', '[.[] | select(.state != "PENDING")]'],
@@ -326,9 +343,28 @@ async function addReviewComments(repository, pr, repoDir) {
       if (existingReviews.length > 0) {
         logger.info(`GitHub API: found ${existingReviews.length} submitted review(s) on PR #${pr.number} — skipping fallback.`);
         alreadyReviewedViaAPI = true;
+        const lastReview = existingReviews[existingReviews.length - 1];
+        if (lastReview.state === 'APPROVED') apiDecision = 'APPROVE';
+        else if (lastReview.state === 'CHANGES_REQUESTED') apiDecision = 'REQUEST_CHANGES';
+        apiMessage = lastReview.body;
       }
     } catch (_) {
       logger.warn('Could not verify existing reviews via API — falling back to text detection.');
+    }
+
+    if (alreadyReviewedViaAPI) {
+      if (!decision && apiDecision) {
+        logger.info(`Recovered decision from GitHub API: ${apiDecision}`);
+        decision = apiDecision;
+      }
+      if (!messageMatch && apiMessage) {
+        message = apiMessage;
+      }
+    }
+
+    if (!decision) {
+      logger.warn('Decision not found in stdout and could not be recovered from API. Defaulting to REQUEST_CHANGES.');
+      decision = 'REQUEST_CHANGES';
     }
 
     const hasPostedComments = alreadyReviewedViaAPI ||

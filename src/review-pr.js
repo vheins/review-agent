@@ -6,6 +6,7 @@ import { execa } from 'execa';
 import chalk from 'chalk';
 import stripAnsi from 'strip-ansi';
 import fs from 'fs-extra';
+import { dbManager } from './database.js';
 
 // ─────────────────────────────────────────────
 // Helper: verbose execa wrapper (shared pattern)
@@ -82,6 +83,9 @@ async function reviewSpecificPR() {
     console.error(chalk.gray('Example: yarn review 112'));
     process.exit(1);
   }
+
+  // Initialize database before starting
+  await dbManager.initialize();
 
   console.log('\n' + chalk.bold.cyan('╔══════════════════════════════════════════════'));
   console.log(chalk.bold.cyan(`║ review-pr  PR #${prNumber}`));
