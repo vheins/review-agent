@@ -3,9 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'">
   <title>🥷 Agentic Bunshin 🥷</title>
   <link rel="stylesheet" href="styles.css">
+  <!-- Markdown-it for preview -->
+  <script src="https://cdn.jsdelivr.net/npm/markdown-it@14.1.0/dist/markdown-it.min.js"></script>
 </head>
 <body>
   <!-- Mobile Overlay -->
@@ -596,9 +598,28 @@
                   </button>
                 </div>
               </div>
-              <textarea class="code-editor" id="contextEditor" spellcheck="false"></textarea>
+              
+              <!-- Write/Preview Tabs -->
+              <div class="editor-mode-tabs">
+                <button class="editor-mode-tab active" data-mode="write">
+                  <span class="icon">✏️</span>
+                  Write
+                </button>
+                <button class="editor-mode-tab" data-mode="preview">
+                  <span class="icon">👁️</span>
+                  Preview
+                </button>
+              </div>
+
+              <!-- Editor Area -->
+              <div class="editor-content">
+                <textarea class="code-editor" id="contextEditor" spellcheck="false"></textarea>
+                <div class="markdown-preview" id="markdownPreview" style="display: none;"></div>
+              </div>
+
               <div class="editor-footer">
                 <span class="editor-info" id="editorInfo">Ready</span>
+                <span class="editor-mode-indicator" id="editorModeIndicator">Write Mode</span>
               </div>
             </div>
           </div>

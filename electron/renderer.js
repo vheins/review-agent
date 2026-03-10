@@ -384,10 +384,60 @@ setTimeout(() => {
 // Context Editor DOM Elements
 
 const contextEditor = document.getElementById('contextEditor');
+const markdownPreview = document.getElementById('markdownPreview');
 const editorFileName = document.getElementById('editorFileName');
 const editorInfo = document.getElementById('editorInfo');
+const editorModeIndicator = document.getElementById('editorModeIndicator');
 const saveContextBtn = document.getElementById('saveContextBtn');
 const reloadContextBtn = document.getElementById('reloadContextBtn');
+
+// Initialize markdown-it (loaded from CDN in HTML)
+let md = null;
+if (typeof markdownit !== 'undefined') {
+    md = markdownit({
+        html: true,
+        linkify: true,
+        typographer: true,
+        breaks: true
+    });
+}
+
+// Editor Mode (Write/Preview)
+let currentEditorMode = 'write';
+
+document.querySelectorAll('.editor-mode-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+        const mode = tab.dataset.mode;
+        currentEditorMode = mode;
+
+        // Update tabs
+        document.querySelectorAll('.editor-mode-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+
+        // Update mode indicator
+        editorModeIndicator.textContent = mode === 'write' ? 'Write Mode' : 'Preview Mode';
+
+        // Toggle editor/preview
+        if (mode === 'write') {
+            contextEditor.style.display = 'block';
+            markdownPreview.style.display = 'none';
+        } else {
+            contextEditor.style.display = 'none';
+            markdownPreview.style.display = 'block';
+
+            // Render markdown
+            if (md) {
+                try {
+                    markdownPreview.innerHTML = md.render(contextEditor.value);
+                } catch (error) {
+                    markdownPreview.innerHTML = `<p style="color: #f85149;">Error rendering markdown: ${error.message}</p>`;
+                }
+            } else {
+                markdownPreview.innerHTML = '<p style="color: #f0883e;">Markdown renderer not loaded. Please refresh the page.</p>';
+            }
+        }
+    });
+});
 
 // Context Tab Switching
 document.querySelectorAll('.context-tab').forEach(tab => {

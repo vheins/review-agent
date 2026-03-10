@@ -584,6 +584,47 @@ body {
     gap: 0.5rem;
 }
 
+.editor-mode-tabs {
+    display: flex;
+    gap: 0;
+    background: #161b22;
+    border-bottom: 1px solid #30363d;
+}
+
+.editor-mode-tab {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: #8b949e;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.editor-mode-tab:hover {
+    color: #c9d1d9;
+    background: rgba(48, 54, 61, 0.3);
+}
+
+.editor-mode-tab.active {
+    color: #58a6ff;
+    border-bottom-color: #58a6ff;
+    background: #0d1117;
+}
+
+.editor-mode-tab .icon {
+    font-size: 1rem;
+}
+
+.editor-content {
+    position: relative;
+    min-height: 500px;
+}
+
 .code-editor {
     width: 100%;
     min-height: 500px;
@@ -599,6 +640,137 @@ body {
 
 .code-editor:focus {
     outline: none;
+}
+
+.markdown-preview {
+    width: 100%;
+    min-height: 500px;
+    max-height: 600px;
+    padding: 1rem 2rem;
+    background: #0d1117;
+    color: #c9d1d9;
+    font-size: 0.875rem;
+    line-height: 1.6;
+    overflow-y: auto;
+}
+
+/* Markdown Preview Styles (GitHub-like) */
+.markdown-preview h1,
+.markdown-preview h2,
+.markdown-preview h3,
+.markdown-preview h4,
+.markdown-preview h5,
+.markdown-preview h6 {
+    margin-top: 1.5rem;
+    margin-bottom: 1rem;
+    font-weight: 600;
+    line-height: 1.25;
+    color: #c9d1d9;
+}
+
+.markdown-preview h1 {
+    font-size: 2rem;
+    border-bottom: 1px solid #30363d;
+    padding-bottom: 0.5rem;
+}
+
+.markdown-preview h2 {
+    font-size: 1.5rem;
+    border-bottom: 1px solid #30363d;
+    padding-bottom: 0.5rem;
+}
+
+.markdown-preview h3 {
+    font-size: 1.25rem;
+}
+
+.markdown-preview h4 {
+    font-size: 1rem;
+}
+
+.markdown-preview p {
+    margin-bottom: 1rem;
+}
+
+.markdown-preview ul,
+.markdown-preview ol {
+    margin-bottom: 1rem;
+    padding-left: 2rem;
+}
+
+.markdown-preview li {
+    margin-bottom: 0.5rem;
+}
+
+.markdown-preview code {
+    padding: 0.2rem 0.4rem;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 3px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.85em;
+    color: #f85149;
+}
+
+.markdown-preview pre {
+    padding: 1rem;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin-bottom: 1rem;
+}
+
+.markdown-preview pre code {
+    padding: 0;
+    background: transparent;
+    border: none;
+    color: #c9d1d9;
+}
+
+.markdown-preview blockquote {
+    padding: 0 1rem;
+    margin-bottom: 1rem;
+    border-left: 4px solid #30363d;
+    color: #8b949e;
+}
+
+.markdown-preview a {
+    color: #58a6ff;
+    text-decoration: none;
+}
+
+.markdown-preview a:hover {
+    text-decoration: underline;
+}
+
+.markdown-preview table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1rem;
+}
+
+.markdown-preview table th,
+.markdown-preview table td {
+    padding: 0.5rem 1rem;
+    border: 1px solid #30363d;
+}
+
+.markdown-preview table th {
+    background: #161b22;
+    font-weight: 600;
+}
+
+.markdown-preview hr {
+    height: 1px;
+    background: #30363d;
+    border: none;
+    margin: 1.5rem 0;
+}
+
+.markdown-preview img {
+    max-width: 100%;
+    height: auto;
 }
 
 .editor-footer {
@@ -624,6 +796,11 @@ body {
 
 .editor-info.modified {
     color: #f0883e;
+}
+
+.editor-mode-indicator {
+    font-weight: 500;
+    color: #8b949e;
 }
 
 
@@ -852,6 +1029,87 @@ body.light-theme .context-tab.active {
 
 body.light-theme .context-selector {
     border-bottom-color: #d0d7de;
+}
+
+body.light-theme .editor-mode-tabs {
+    background: #f6f8fa;
+    border-bottom-color: #d0d7de;
+}
+
+body.light-theme .editor-mode-tab {
+    color: #57606a;
+}
+
+body.light-theme .editor-mode-tab:hover {
+    color: #24292f;
+    background: rgba(208, 215, 222, 0.3);
+}
+
+body.light-theme .editor-mode-tab.active {
+    color: #0969da;
+    border-bottom-color: #0969da;
+    background: #ffffff;
+}
+
+body.light-theme .markdown-preview {
+    background: #ffffff;
+    color: #24292f;
+}
+
+body.light-theme .markdown-preview h1,
+body.light-theme .markdown-preview h2,
+body.light-theme .markdown-preview h3,
+body.light-theme .markdown-preview h4,
+body.light-theme .markdown-preview h5,
+body.light-theme .markdown-preview h6 {
+    color: #24292f;
+}
+
+body.light-theme .markdown-preview h1,
+body.light-theme .markdown-preview h2 {
+    border-bottom-color: #d0d7de;
+}
+
+body.light-theme .markdown-preview code {
+    background: #f6f8fa;
+    border-color: #d0d7de;
+    color: #cf222e;
+}
+
+body.light-theme .markdown-preview pre {
+    background: #f6f8fa;
+    border-color: #d0d7de;
+}
+
+body.light-theme .markdown-preview pre code {
+    background: transparent;
+    color: #24292f;
+}
+
+body.light-theme .markdown-preview blockquote {
+    border-left-color: #d0d7de;
+    color: #57606a;
+}
+
+body.light-theme .markdown-preview a {
+    color: #0969da;
+}
+
+body.light-theme .markdown-preview table th,
+body.light-theme .markdown-preview table td {
+    border-color: #d0d7de;
+}
+
+body.light-theme .markdown-preview table th {
+    background: #f6f8fa;
+}
+
+body.light-theme .markdown-preview hr {
+    background: #d0d7de;
+}
+
+body.light-theme .editor-mode-indicator {
+    color: #57606a;
 }
 
 body.light-theme .last-log-container {
@@ -1460,6 +1718,21 @@ body.light-theme .form-hint {
     .agent-status {
         width: 100%;
         justify-content: center;
+    }
+
+    .editor-mode-tabs {
+        gap: 0;
+    }
+
+    .editor-mode-tab {
+        flex: 1;
+        justify-content: center;
+        padding: 0.75rem 1rem;
+    }
+
+    .markdown-preview {
+        padding: 1rem;
+        font-size: 0.8rem;
     }
 }
 
