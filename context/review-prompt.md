@@ -21,12 +21,22 @@ For complex PRs or when you need structured analysis:
 
 STEP 1: Get PR details and diff
 PREFERRED METHOD - Use GitHub MCP (TRY THIS FIRST):
-- Use **pull_request_read** tool with:
-  - `method`: one of `get`, `get_diff`, `get_files`, `get_review_comments`, `get_reviews`, `get_comments`, `get_check_runs`
-  - `owner`: repository owner (string)
-  - `repo`: repository name (string)
-  - `pullNumber`: PR number (number)
-  - Start with `method="get"` to get PR overview, then `method="get_diff"` for the actual diff
+You MUST call pull_request_read in this order — do NOT skip any:
+
+a) Get PR overview:
+   - `method`: `"get"`, `owner`, `repo`, `pullNumber`
+
+b) Get the FULL DIFF (REQUIRED before adding any inline comment):
+   - `method`: `"get_diff"`, `owner`, `repo`, `pullNumber`
+   - READ and PARSE the diff output carefully
+   - Identify EACH changed file's path (lines starting with `+++ b/`)
+   - Identify VALID line numbers: only lines with `+` (added) or context lines in the hunk are valid targets
+   - Diff hunk format: `@@ -old_start,old_len +new_start,new_len @@` — new_start is the first line number
+   - IMPORTANT: the `line` param in add_comment_to_pending_review MUST be a line number that actually appears in the diff — using arbitrary file line numbers will cause the tool to fail
+
+c) Get changed files list (optional, if diff is too large):
+   - `method`: `"get_files"`, `owner`, `repo`, `pullNumber`
+
 - Use **get_file_contents** to read specific source files if needed
 
 CHECK FOR MERGE CONFLICTS (CRITICAL):
@@ -105,11 +115,14 @@ For EACH issue found, use these tools in sequence:
    - `owner`: repository owner (string, required)
    - `repo`: repository name (string, required)
    - `pullNumber`: PR number (number, required)
-   - `path`: relative file path (string, required)
+   - `path`: relative file path as shown in diff (e.g. `src/foo.js`) — must match `+++ b/PATH` from diff output (string, required)
    - `body`: comment text in Indonesian with severity label (string, required)
-   - `line`: line number in the diff the comment applies to (number, optional)
-   - `subjectType`: level of the comment target (string, required) — use `"line"` for line comments
-   - `side`: `"RIGHT"` for new code, `"LEFT"` for removed code (string, optional)
+   - `line`: line number that MUST EXIST in the diff (number, optional but strongly recommended)
+     ⚠️ CRITICAL: use ONLY line numbers visible in the diff output (lines with `+` or context lines)
+     ⚠️ Do NOT use arbitrary file line numbers — if the line is not in the diff, the tool WILL FAIL
+     ⚠️ Parse the diff hunk `@@ -a,b +c,d @@` to know which line numbers are valid (c, c+1, ... c+d-1)
+   - `subjectType`: `"line"` for line-level comments (string, required)
+   - `side`: `"RIGHT"` for added/unchanged lines in new code (string, optional, default `"RIGHT"`)
 
 2. After all atomic comments are added, use **pull_request_review_write** to submit with:
    - `method`: `"create"` (string, required — ALWAYS use `"create"` to submit a new review)
@@ -120,8 +133,9 @@ For EACH issue found, use these tools in sequence:
    - `body`: summary text (string, optional)
 
 Example workflow:
-- Call add_comment_to_pending_review once per issue (owner, repo, pullNumber, path, line, subjectType="line", body)
-- After all comments added, call pull_request_review_write with method="create", owner, repo, pullNumber, event
+- pull_request_read(method="get_diff") → parse diff → note valid line numbers per file
+- add_comment_to_pending_review(owner, repo, pullNumber, path="src/foo.js", line=42, subjectType="line", body="[HIGH] ...")
+- pull_request_review_write(method="create", owner, repo, pullNumber, event="REQUEST_CHANGES", body="...")
 
 FALLBACK METHOD - Use gh CLI (ONLY if GitHub MCP fails):
 For EACH issue, create a SEPARATE inline comment:
