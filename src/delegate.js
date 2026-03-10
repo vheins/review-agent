@@ -325,7 +325,7 @@ async function fixPR(repository, pr, repoDir) {
 
 export { executeAIReview };
 
-export async function delegateToGemini(repository, pr, repoDir) {
+export async function delegateReview(repository, pr, repoDir) {
   if (config.dryRun) {
     console.log(`\n[DRY RUN] Mode: ${config.reviewMode}, PR #${pr.number}`);
     return;
@@ -349,7 +349,7 @@ export async function delegateToGemini(repository, pr, repoDir) {
         logger.info('Original mode was FIX, but switching to COMMENT for master branch');
       }
 
-      const { decision, message, hasPostedComments } = await addReviewComments(repository, pr, repoDir);
+      const { decision, message, hasPostedComments, severityScore, severityBreakdown } = await addReviewComments(repository, pr, repoDir);
 
       if (hasPostedComments) {
         logger.info('Gemini already posted review comments, skipping duplicate summary comment');
@@ -359,6 +359,20 @@ export async function delegateToGemini(repository, pr, repoDir) {
           await approvePR(repository, pr, message);
         } else {
           await rejectPR(repository, pr, message);
+        }
+      }
+
+      // Auto-fix minor issues if approved with low severity score (even for master branch)
+      if (decision === 'APPROVE' && severityScore > 0 && severityScore < config.severityThreshold) {
+        logger.info(`PR approved but has minor issues (score: ${severityScore}). Running auto-fix...`);
+        logger.info(`Severity breakdown: ${severityBreakdown}`);
+
+        try {
+          await fixPR(repository, pr, repoDir);
+          logger.info('Auto-fix completed for minor issues');
+        } catch (fixError) {
+          logger.warn(`Auto-fix failed: ${fixError.message}`);
+          logger.warn('PR remains approved, but manual fixes may be needed');
         }
       }
 
@@ -384,7 +398,7 @@ export async function delegateToGemini(repository, pr, repoDir) {
   // Normal flow for non-master branches
   try {
     if (config.reviewMode === 'comment') {
-      const { decision, message, hasPostedComments } = await addReviewComments(repository, pr, repoDir);
+      const { decision, message, hasPostedComments, severityScore, severityBreakdown } = await addReviewComments(repository, pr, repoDir);
 
       if (hasPostedComments) {
         logger.info('Gemini already posted review comments, skipping duplicate summary comment');
@@ -394,6 +408,20 @@ export async function delegateToGemini(repository, pr, repoDir) {
           await approvePR(repository, pr, message);
         } else {
           await rejectPR(repository, pr, message);
+        }
+      }
+
+      // Auto-fix minor issues if approved with low severity score
+      if (decision === 'APPROVE' && severityScore > 0 && severityScore < config.severityThreshold) {
+        logger.info(`PR approved but has minor issues (score: ${severityScore}). Running auto-fix...`);
+        logger.info(`Severity breakdown: ${severityBreakdown}`);
+
+        try {
+          await fixPR(repository, pr, repoDir);
+          logger.info('Auto-fix completed for minor issues');
+        } catch (fixError) {
+          logger.warn(`Auto-fix failed: ${fixError.message}`);
+          logger.warn('PR remains approved, but manual fixes may be needed');
         }
       }
 

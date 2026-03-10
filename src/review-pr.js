@@ -1,7 +1,7 @@
 import { config } from './config.js';
 import { logger } from './logger.js';
 import { prepareRepository } from './github.js';
-import { delegateToGemini } from './delegate.js';
+import { delegateReview } from './delegate.js';
 import { execa } from 'execa';
 import fs from 'fs-extra';
 
@@ -84,7 +84,7 @@ async function reviewSpecificPR() {
         repoDir = await prepareRepository(prData);
       }
 
-      await delegateToGemini(pr.repository.nameWithOwner, prData, repoDir);
+      await delegateReview(pr.repository.nameWithOwner, prData, repoDir);
 
       logger.info('PR review completed');
     } else {
