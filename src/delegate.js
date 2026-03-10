@@ -25,10 +25,10 @@ async function execaVerbose(cmd, args, opts = {}) {
     reject: false,
   });
 
-  const stdoutLines  = [];
-  const stderrLines  = [];
-  let   stdoutBuf    = '';
-  let   stderrBuf    = '';
+  const stdoutLines = [];
+  const stderrLines = [];
+  let stdoutBuf = '';
+  let stderrBuf = '';
 
   function flushLines(buf, lines, color) {
     const parts = buf.split('\n');
@@ -107,12 +107,12 @@ async function executeAIReview(prompt, repoDir, mode = 'review') {
 
     // Validate executor enabled
     const enabledMap = {
-      gemini:    config.geminiEnabled,
-      copilot:   config.copilotEnabled,
-      kiro:      config.kiroEnabled,
-      claude:    config.claudeEnabled,
-      codex:     config.codexEnabled,
-      opencode:  config.opencodeEnabled,
+      gemini: config.geminiEnabled,
+      copilot: config.copilotEnabled,
+      kiro: config.kiroEnabled,
+      claude: config.claudeEnabled,
+      codex: config.codexEnabled,
+      opencode: config.opencodeEnabled,
     };
 
     if (enabledMap[executor] === false) {
@@ -129,7 +129,7 @@ async function executeAIReview(prompt, repoDir, mode = 'review') {
 
     // ── Build executor args — all flags first, prompt injected LAST ──
     let cliCmd = '';
-    let args   = [];
+    let args = [];
 
     if (executor === 'copilot') {
       cliCmd = 'copilot';
@@ -177,12 +177,12 @@ async function executeAIReview(prompt, repoDir, mode = 'review') {
     } else {
       // Gemini (default)
       cliCmd = 'gemini';
-      args = ['-y'];
+      args = ['--yolo'];
       if (config.geminiModel && !config.geminiModel.startsWith('auto')) {
         args.push('--model', config.geminiModel);
       }
       args.push('-p', prompt);           // ← prompt LAST
-      logger.info('YOLO mode: -y (auto-approve all actions)');
+      logger.info('YOLO mode: --yolo (auto-approve all actions)');
     }
 
     logger.info(`Spawning: ${chalk.bold(cliCmd)} (prompt injected last, ${prompt.length} chars)`);
@@ -200,7 +200,7 @@ async function executeAIReview(prompt, repoDir, mode = 'review') {
   } finally {
     process.chdir(originalDir);
     // Clean up temp prompt file
-    fs.remove(promptFile).catch(() => {});
+    fs.remove(promptFile).catch(() => { });
   }
 }
 
