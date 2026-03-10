@@ -145,10 +145,9 @@ async function executeAIReview(prompt, repoDir, mode = 'review') {
         geminiArgs.push('--model', config.geminiModel);
       }
 
-      if (config.geminiYolo) {
-        geminiArgs.push('-y');
-        logger.info('YOLO mode enabled - auto-approving all actions');
-      }
+      // Always run Gemini in YOLO mode
+      geminiArgs.push('-y');
+      logger.info('YOLO mode enabled - auto-approving all actions');
 
       result = await execa('gemini', geminiArgs);
     }
