@@ -189,8 +189,9 @@ async function executeAIReview(prompt, repoDir, mode = 'review') {
     logger.info(`Spawning: ${chalk.bold(cliCmd)} (prompt ${prompt.length} chars → stdin)`);
     console.log('');
 
-    const { stdout } = await execaVerbose(cliCmd, args, { input: prompt });
-    const output = stripAnsi(stdout.trim());
+    const { stdout, stderr } = await execaVerbose(cliCmd, args, { input: prompt });
+    // Combine stdout + stderr: Gemini CLI prints tool call results to stderr
+    const output = stripAnsi((stdout + '\n' + stderr).trim());
 
     console.log('\n' + chalk.bold.green('┌─── ' + executor.toUpperCase() + ' OUTPUT ───'));
     output.split('\n').forEach(line => console.log(chalk.green('│') + ' ' + line));
@@ -304,7 +305,29 @@ async function addReviewComments(repository, pr, repoDir) {
     const reviewWriteSucceeded = output.includes('pull_request_review_write') &&
       !failedTools.has('pull_request_review_write');
 
-    const hasPostedComments =
+    if (failedTools.size > 0) {
+      logger.warn(`Tools that failed during review: ${[...failedTools].join(', ')}`);
+      logger.warn('Fallback review will be submitted to ensure PR gets a response.');
+    }
+
+    // Final safety check via GitHub API: if PR already has a submitted review,
+    // treat as posted to prevent duplicate submission regardless of text detection
+    let alreadyReviewedViaAPI = false;
+    try {
+      const { stdout: reviewsJson } = await execaVerbose(
+        'gh', ['api', `repos/${repository}/pulls/${pr.number}/reviews`, '--jq', '[.[] | select(.state != "PENDING")]'],
+        { allowFail: true }
+      );
+      const existingReviews = JSON.parse(reviewsJson || '[]');
+      if (existingReviews.length > 0) {
+        logger.info(`GitHub API: found ${existingReviews.length} submitted review(s) on PR #${pr.number} — skipping fallback.`);
+        alreadyReviewedViaAPI = true;
+      }
+    } catch (_) {
+      logger.warn('Could not verify existing reviews via API — falling back to text detection.');
+    }
+
+    const hasPostedComments = alreadyReviewedViaAPI ||
       output.includes('gh pr review') ||
       output.includes('review submitted') ||
       output.includes('comment added') ||
