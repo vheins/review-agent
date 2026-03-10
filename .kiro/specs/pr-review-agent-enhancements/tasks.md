@@ -22,7 +22,7 @@ The implementation is organized into 11 phases following the requirements struct
   - _Requirements: 41.1, 41.2_
 
 - [ ] 2. Implement database schema and initialization
-  - [~] 2.1 Create database schema SQL file with all 15+ tables
+  - [x] 2.1 Create database schema SQL file with all 15+ tables
     - Define pull_requests, review_sessions, review_comments tables
     - Define developers, repositories, expertise_areas tables
     - Define metrics tables (pr_metrics, developer_metrics)
@@ -80,61 +80,61 @@ The implementation is organized into 11 phases following the requirements struct
     - _Requirements: 45.1_
 
 - [ ] 5. Implement data export system
-  - [ ] 5.1 Create DataExporter class
+  - [~] 5.1 Create DataExporter class
     - Implement CSV export for metrics data
     - Implement JSON export for review sessions
     - Support filtering by date range, repository, developer
     - Generate export files with unique IDs
     - _Requirements: 48.1, 48.2, 48.3_
   
-  - [ ] 5.2 Create export file management
+  - [~] 5.2 Create export file management
     - Store export metadata in exports table
     - Implement cleanup of expired exports (7 days)
     - Add download endpoint for export files
     - _Requirements: 48.1, 48.2_
   
-  - [ ] 5.3 Write property test for export/import round-trip
+  - [~] 5.3 Write property test for export/import round-trip
     - **Property 23: Export/Import Round-Trip**
     - **Validates: Requirements 48.3**
 
-- [ ] 6. Checkpoint - Ensure foundation tests pass
+- [~] 6. Checkpoint - Ensure foundation tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 ### Phase 2: Analytics & Metrics (Metrics Collection and Visualization)
 
 - [ ] 7. Implement Metrics Engine core
-  - [ ] 7.1 Create MetricsEngine class
+  - [~] 7.1 Create MetricsEngine class
     - Implement recordReview method to store review data
     - Calculate review duration and store in database
     - Track review outcomes (approved, rejected, needs_changes)
     - _Requirements: 1.1, 1.2, 1.3_
   
-  - [ ] 7.2 Write property test for review duration persistence
+  - [~] 7.2 Write property test for review duration persistence
     - **Property 1: Review Duration Persistence**
     - **Validates: Requirements 1.1**
   
-  - [ ] 7.3 Write property test for time-to-merge calculation
+  - [~] 7.3 Write property test for time-to-merge calculation
     - **Property 6: Time-to-Merge Calculation**
     - **Validates: Requirements 5.2**
 
 - [ ] 8. Implement metrics calculation and aggregation
-  - [ ] 8.1 Add calculateMetrics method to MetricsEngine
+  - [~] 8.1 Add calculateMetrics method to MetricsEngine
     - Calculate average review time for time ranges
     - Calculate approval rates by executor
     - Aggregate metrics by repository and developer
     - Implement time-bucketing (hour/day/week/month)
     - _Requirements: 1.4, 2.1, 2.2_
   
-  - [ ] 8.2 Write property test for metrics calculation performance
+  - [~] 8.2 Write property test for metrics calculation performance
     - **Property 2: Metrics Calculation Performance**
     - **Validates: Requirements 1.4**
   
-  - [ ] 8.3 Write property test for time range filtering
+  - [~] 8.3 Write property test for time range filtering
     - **Property 3: Time Range Filtering**
     - **Validates: Requirements 2.4**
 
 - [ ] 9. Implement trend analysis and anomaly detection
-  - [ ] 9.1 Add trend analysis to MetricsEngine
+  - [~] 9.1 Add trend analysis to MetricsEngine
     - Implement exponential weighted moving average
     - Calculate trend direction and magnitude
     - Support multiple granularities (daily, weekly, monthly)
