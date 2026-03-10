@@ -58,11 +58,13 @@ Urutan prioritas:
 5. Performance issue
 6. Code quality
 
-### STEP 5: Langsung fix
+### STEP 5: Langsung fix + commit + push
 
-**PREFERRED — GitHub MCP push_files:**
+⚠️ Fix tanpa commit + push = tidak ada efeknya di PR.
 
-Gunakan `push_files` untuk commit beberapa file sekaligus:
+**PREFERRED — GitHub MCP `push_files`:**
+
+`push_files` sudah sekaligus commit + push dalam satu call:
 - `owner`: repository owner (required)
 - `repo`: repository name (required)
 - `branch`: `{{pr.headRefName}}` (required — SELALU gunakan branch PR ini, JANGAN main/master)
@@ -74,7 +76,7 @@ Gunakan `push_files` untuk commit beberapa file sekaligus:
 # Edit file langsung di working directory
 git add .
 git commit -m "fix: deskripsi singkat"
-git push origin {{pr.headRefName}}   ← SELALU ke branch ini
+git push origin {{pr.headRefName}}   ← WAJIB, jangan skip
 ```
 
 Rules:

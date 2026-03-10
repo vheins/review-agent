@@ -155,7 +155,9 @@ export async function prepareRepository(pr) {
 
       await execaVerbose('git', ['fetch', 'origin'], { cwd: repoDir });
       await execaVerbose('git', ['checkout', pr.headRefName], { cwd: repoDir });
-      await execaVerbose('git', ['pull', 'origin', pr.headRefName], { cwd: repoDir });
+      // Discard any local changes (workspace is agent-only, safe to reset)
+      await execaVerbose('git', ['reset', '--hard', `origin/${pr.headRefName}`], { cwd: repoDir });
+      await execaVerbose('git', ['clean', '-fd'], { cwd: repoDir });
 
     } else {
       logger.info(`  Repository not found — cloning git@github.com:${repoName}.git...`);
