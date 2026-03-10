@@ -103,14 +103,14 @@ For EACH issue found, use these tools in sequence:
    - Each call creates one atomic comment
 
 2. After all atomic comments are added, use pull_request_review_write to submit the review:
-   - Specify: repository, pull_request_number, event (APPROVE or REQUEST_CHANGES)
+   - REQUIRED: method = "create" (always use "create" to submit a new review)
+   - Specify: owner, repo, pullNumber, event ("APPROVE" or "REQUEST_CHANGES")
    - Add a summary body if needed
 
 Example workflow with GitHub MCP:
-- add_comment_to_pending_review(repo, pr_number, "deploy-dev.sh", 45, "Potensi SQL injection...")
-- add_comment_to_pending_review(repo, pr_number, "deploy-dev.sh", 120, "Missing error handling...")
-- add_comment_to_pending_review(repo, pr_number, "utils.ts", 67, "Variabel unused...")
-- pull_request_review_write(repo, pr_number, "REQUEST_CHANGES", "Review summary")
+- add_comment_to_pending_review(repo="{{repository}}", pr_number={{pr.number}}, path="file.ts", line=45, body="[HIGH] Potensi SQL injection...")
+- add_comment_to_pending_review(repo="{{repository}}", pr_number={{pr.number}}, path="utils.ts", line=120, body="[MEDIUM] Missing error handling...")
+- pull_request_review_write(method="create", owner="OWNER", repo="REPO", pullNumber={{pr.number}}, event="REQUEST_CHANGES", body="Review summary")
 
 FALLBACK METHOD - Use gh CLI (ONLY if GitHub MCP fails):
 For EACH issue, create a SEPARATE inline comment:
@@ -264,7 +264,9 @@ IMPORTANT:
 - Use memory tools to maintain consistency
 - Use context7 for documentation lookup
 - Use add_comment_to_pending_review for EACH atomic comment
-- Use pull_request_review_write to submit the final review
+- Use pull_request_review_write with method="create" to submit the final review (method is REQUIRED)
+- IMPORTANT: pull_request_review_write requires these exact fields: method ("create"), owner, repo, pullNumber, event ("APPROVE" or "REQUEST_CHANGES")
+- If pull_request_review_write fails, FALLBACK to gh CLI: gh pr review {pr.number} --repo {repository} --approve OR --request-changes --body "summary"
 - Create ATOMIC comments - one comment per issue, not one big comment with all issues.
 - Follow the same pattern as gemini-code-assist: separate, focused comments.
 
