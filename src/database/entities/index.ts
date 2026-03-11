@@ -12,3 +12,4 @@ export { ReviewMetrics } from './review-metrics.entity';
 export { RepositoryConfig } from './repository-config.entity';
 export { DeveloperMetrics } from './developer-metrics.entity';
 export { SecurityFinding } from './security-finding.entity';
+export { AuditTrail } from './audit-trail.entity';

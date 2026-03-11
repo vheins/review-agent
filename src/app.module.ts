@@ -14,6 +14,7 @@ import { HealthModule } from './common/health/health.module.js';
 import { WebSocketModule } from './modules/websocket/websocket.module.js';
 import { SecurityModule } from './modules/security/security.module.js';
 import { TeamModule } from './modules/team/team.module.js';
+import { AuditLoggerModule } from './common/audit/audit-logger.module.js';
 
 /**
  * AppModule - Root NestJS Module
@@ -52,6 +53,7 @@ import { TeamModule } from './modules/team/team.module.js';
     WebSocketModule, // Real-time updates
     SecurityModule, // Security scanning
     TeamModule, // Team and developer services
+    AuditLoggerModule, // Audit logging
     
     // Future feature modules will be added here:
     // PullRequestModule,

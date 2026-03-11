@@ -570,15 +570,15 @@ Dokumen ini berisi rencana implementasi untuk refactor backend PR Review Agent d
     - Test reviewer assignment logic
     - Test capacity planning
 
-- [ ] 19. Migrate utility services
-  - [ ] 19.1 Migrate remaining utility services
+- [x] 19. Migrate utility services
+  - [x] 19.1 Migrate remaining utility services
     - Migrate batch-processor.js ke BatchProcessorService
     - Migrate data-exporter.js ke DataExporterService
     - Migrate audit-logger.js ke AuditLoggerService
     - Setup sebagai providers di modules yang sesuai
     - _Requirements: 18.5_
   
-  - [ ] 19.2 Write unit tests untuk utility services
+  - [x] 19.2 Write unit tests untuk utility services
     - Test batch processing
     - Test data export
     - Test audit logging

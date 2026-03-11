@@ -37,3 +37,6 @@ export * from './parser/index.js';
 // Exporter
 export * from './exporter/index.js';
 
+// Audit
+export * from './audit/index.js';
+
