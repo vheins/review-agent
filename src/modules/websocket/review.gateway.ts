@@ -9,13 +9,6 @@ import { Logger } from '@nestjs/common';
 
 /**
  * ReviewGateway - WebSocket Gateway for real-time updates
- * 
- * Features:
- * - Real-time broadcasting of review progress
- * - Connection tracking
- * - Express-compatible event formats
- * 
- * Requirements: 6.1, 6.2, 6.3, 6.4, 6.5
  */
 @WebSocketGateway({
   path: '/ws',
@@ -30,6 +23,9 @@ export class ReviewGateway implements OnGatewayConnection, OnGatewayDisconnect {
   handleConnection(client: any) {
     this.clients.add(client);
     this.logger.log(`Client connected. Total clients: ${this.clients.size}`);
+    
+    // Send immediate success for auth if needed by UI
+    // For now we just keep it simple
   }
 
   handleDisconnect(client: any) {
@@ -38,33 +34,32 @@ export class ReviewGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   /**
-   * Broadcast an event to all connected clients
+   * Broadcast an event to all connected clients in the format expected by UI
    */
-  broadcast(event: string, data: any) {
-    const payload = JSON.stringify({ event, data, timestamp: new Date().toISOString() });
-    this.logger.log(`Broadcasting event: ${event}`);
+  emit(type: string, payload: any) {
+    const message = JSON.stringify({ type, payload, timestamp: new Date().toISOString() });
     
     for (const client of this.clients) {
       if (client.readyState === 1) { // 1 = OPEN
-        client.send(payload);
+        client.send(message);
       }
     }
   }
 
-  // Specialized broadcast methods
-  broadcastReviewStart(prNumber: number, repo: string) {
-    this.broadcast('review:start', { prNumber, repository: repo });
+  // UI-compatible broadcast methods
+  broadcastReviewStarted(prNumber: number, repo: string) {
+    this.emit('review_started', { prNumber, repository: repo });
   }
 
   broadcastReviewProgress(prNumber: number, repo: string, progress: number, message: string) {
-    this.broadcast('review:progress', { prNumber, repository: repo, progress, message });
+    this.emit('review_progress', { prNumber, repository: repo, progress, message });
   }
 
-  broadcastReviewComplete(prNumber: number, repo: string, result: any) {
-    this.broadcast('review:complete', { prNumber, repository: repo, result });
+  broadcastReviewCompleted(prNumber: number, repo: string, result: any) {
+    this.emit('review_completed', { prNumber, repository: repo, result });
   }
 
-  broadcastReviewError(prNumber: number, repo: string, error: string) {
-    this.broadcast('review:error', { prNumber, repository: repo, error });
+  broadcastReviewFailed(prNumber: number, repo: string, error: string) {
+    this.emit('review_failed', { prNumber, repository: repo, error });
   }
 }

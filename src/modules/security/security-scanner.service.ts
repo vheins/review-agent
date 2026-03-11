@@ -71,4 +71,24 @@ export class SecurityScannerService {
 
     return findings;
   }
+
+  async getFindings(repoName: string, prNumber: number): Promise<SecurityFinding[]> {
+    return this.findingRepository.find({
+      where: { repository: repoName, prNumber },
+      order: { detectedAt: 'DESC' },
+    });
+  }
+
+  async generateReport(repoName: string, prNumber: number): Promise<string> {
+    const findings = await this.getFindings(repoName, prNumber);
+    if (findings.length === 0) return "No security issues found.";
+
+    let report = `## Security Report for ${repoName}#${prNumber}\n\n`;
+    for (const f of findings) {
+      report += `### [${f.severity.toUpperCase()}] ${f.title}\n`;
+      report += `- **File**: ${f.filePath}:${f.lineNumber}\n`;
+      report += `- **Description**: ${f.description}\n\n`;
+    }
+    return report;
+  }
 }

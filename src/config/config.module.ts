@@ -1,12 +1,12 @@
-import { Module } from '@nestjs/common';
+import { Module, Global } from '@nestjs/common';
 import { ConfigModule as NestConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import * as path from 'path';
-import appConfig from './app.config';
-import reviewConfig from './review.config';
-import aiExecutorConfig from './ai-executor.config';
-import databaseConfig from './database.config';
-import { validationSchema } from './validation.schema';
+import appConfig from './app.config.js';
+import reviewConfig from './review.config.js';
+import aiExecutorConfig from './ai-executor.config.js';
+import databaseConfig from './database.config.js';
+import { validationSchema } from './validation.schema.js';
 import { AppConfigService } from './app-config.service.js';
 import { ConfigController } from './config.controller.js';
 import { RepositoryConfig } from '../database/entities/repository-config.entity.js';
@@ -26,6 +26,7 @@ import { RepositoryConfig } from '../database/entities/repository-config.entity.
  * 
  * Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6
  */
+@Global()
 @Module({
   imports: [
     NestConfigModule.forRoot({

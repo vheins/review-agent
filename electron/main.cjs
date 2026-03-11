@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, Notification, shell } = require('electron')
 const path = require('path');
 const { spawn } = require('child_process');
 const fs = require('fs');
+const { api } = require('./api-helper.cjs');
 
 // Single instance lock
 const shouldUseSingleInstanceLock = process.env.ELECTRON_DISABLE_SINGLE_INSTANCE_LOCK !== '1';
@@ -100,7 +101,17 @@ async function startBackendServer() {
 
     backendServerProcess.on('close', (code) => {
         console.log(`Backend server exited with code ${code}`);
+        const wasRunning = !!backendServerProcess;
         backendServerProcess = null;
+        
+        // Auto-restart if it was running and exited with error (non-zero code)
+        // unless we are shutting down the app
+        if (wasRunning && code !== 0 && code !== null && !app.isQuitting) {
+            console.log('⚠ Backend server crashed. Restarting in 2 seconds...');
+            setTimeout(() => {
+                if (!app.isQuitting) startBackendServer();
+            }, 2000);
+        }
     });
 
     backendServerProcess.on('error', (error) => {
@@ -161,6 +172,7 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
+    app.isQuitting = true;
     if (reviewProcess) {
         reviewProcess.kill();
     }
@@ -252,7 +264,50 @@ ipcMain.handle('show-notification', async (event, { title, body }) => {
     return { success: true };
 });
 
+// ... (existing code)
+
 ipcMain.handle('open-external', async (event, url) => {
     await shell.openExternal(url);
     return { success: true };
+});
+
+// API Bridges
+ipcMain.handle('get-dashboard-snapshot', async (event, options) => {
+    return api.getDashboardSnapshot(options);
+});
+
+ipcMain.handle('list-prs', async (event, filters) => {
+    return api.listPRs(filters);
+});
+
+ipcMain.handle('get-pr-detail', async (event, prId) => {
+    return api.getPRDetail(prId);
+});
+
+ipcMain.handle('get-team-security-data', async () => {
+    return api.getTeamSecurityData();
+});
+
+ipcMain.handle('set-developer-availability', async (event, payload) => {
+    return api.setDeveloperAvailability(payload);
+});
+
+ipcMain.handle('get-repository-config-data', async (event, repositoryId) => {
+    return api.getRepositoryConfigData(repositoryId);
+});
+
+ipcMain.handle('save-repository-config-data', async (event, payload) => {
+    return api.saveRepositoryConfigData(payload);
+});
+
+ipcMain.handle('export-metrics-data', async (event, payload) => {
+    return api.exportMetricsData(payload);
+});
+
+ipcMain.handle('get-history', async (event, limit) => {
+    return api.getHistory(limit);
+});
+
+ipcMain.handle('get-stats', async () => {
+    return api.getStats();
 });

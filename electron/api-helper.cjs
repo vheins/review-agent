@@ -1,4 +1,5 @@
 // Helper functions for HTTP API calls to backend server
+// CommonJS version for Electron main process
 
 const API_BASE_URL = 'http://127.0.0.1:3000/api';
 
@@ -8,6 +9,7 @@ async function apiCall(endpoint, options = {}) {
             method: options.method || 'GET',
             headers: {
                 'Content-Type': 'application/json',
+                'X-API-Key': 'dev-key',
                 ...options.headers
             },
             body: options.body ? JSON.stringify(options.body) : undefined
@@ -25,7 +27,7 @@ async function apiCall(endpoint, options = {}) {
     }
 }
 
-export const api = {
+const api = {
     // Dashboard
     getDashboardSnapshot: async ({ rangeDays = 30 } = {}) => {
         return apiCall(`/dashboard?rangeDays=${rangeDays}`);
@@ -43,6 +45,7 @@ export const api = {
     },
 
     getPRDetail: async (prId) => {
+        // Handle prId as repo-num or similar
         return apiCall(`/prs/${prId}`);
     },
 
@@ -51,60 +54,43 @@ export const api = {
         return apiCall('/team/security');
     },
 
-    setDeveloperAvailability: async (payload) => {
-        return apiCall('/team/availability', {
-            method: 'POST',
-            body: payload
+    setDeveloperAvailability: async ({ developerId, isAvailable, unavailableUntil }) => {
+        return apiCall(`/team/developers/${developerId}/availability`, {
+            method: 'PUT',
+            body: { is_available: isAvailable, unavailable_until: unavailableUntil }
         });
     },
 
     // Configuration
-    getRepositoryConfigData: async (repositoryId) => {
-        return apiCall(`/config/repository/${repositoryId}`);
+    getRepositoryConfigData: async (repoName) => {
+        const repoParam = repoName.toString().replace('/', '-');
+        return apiCall(`/config/${repoParam}`);
     },
 
-    saveRepositoryConfigData: async (payload) => {
-        return apiCall('/config/repository', {
-            method: 'POST',
-            body: payload
-        });
-    },
-
-    // Rules
-    saveCustomRule: async (payload) => {
-        return apiCall('/config/rules', {
-            method: 'POST',
-            body: payload
-        });
-    },
-
-    deleteCustomRule: async (ruleId) => {
-        return apiCall(`/config/rules/${ruleId}`, {
-            method: 'DELETE'
-        });
-    },
-
-    testCustomRule: async (payload) => {
-        return apiCall('/config/rules/test', {
-            method: 'POST',
-            body: payload
+    saveRepositoryConfigData: async ({ repoName, config }) => {
+        const repoParam = repoName.toString().replace('/', '-');
+        return apiCall(`/config/${repoParam}`, {
+            method: 'PUT',
+            body: config
         });
     },
 
     // Metrics
-    exportMetricsData: async (payload) => {
+    exportMetricsData: async ({ filters, format = 'csv' }) => {
         return apiCall('/metrics/export', {
             method: 'POST',
-            body: payload
+            body: { filters, format }
         });
     },
 
     // History
     getHistory: async (limit = 50) => {
-        return apiCall(`/reviews/history?limit=${limit}`);
+        return apiCall(`/reviews?limit=${limit}`);
     },
 
     getStats: async () => {
-        return apiCall('/reviews/stats');
+        return apiCall('/metrics/overview');
     }
 };
+
+module.exports = { api };

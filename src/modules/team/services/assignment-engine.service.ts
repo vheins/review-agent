@@ -32,4 +32,9 @@ export class AssignmentEngineService {
     // Return top 2 candidates
     return candidates.slice(0, 2).map(d => d.developerId);
   }
+
+  async setAvailability(developerId: string, isAvailable: boolean, unavailableUntil?: string) {
+    this.logger.log(`Setting availability for ${developerId}: ${isAvailable} until ${unavailableUntil || 'forever'}`);
+    // In a real app, update DB
+  }
 }

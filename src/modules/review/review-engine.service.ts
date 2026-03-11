@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { GitHubClientService, PullRequest } from '../github/github.service.js';
 import { AiExecutorService } from '../ai/ai-executor.service.js';
+import { ReviewGateway } from '../websocket/review.gateway.js';
 import { AppConfigService } from '../../config/app-config.service.js';
 import { Review } from '../../database/entities/review.entity.js';
 import { PullRequest as PullRequestEntity } from '../../database/entities/pull-request.entity.js';
@@ -23,6 +24,7 @@ export class ReviewEngineService {
   constructor(
     private readonly github: GitHubClientService,
     private readonly ai: AiExecutorService,
+    private readonly gateway: ReviewGateway,
     private readonly config: AppConfigService,
     private readonly dataSource: DataSource,
     @InjectRepository(Review)
@@ -52,23 +54,29 @@ export class ReviewEngineService {
 
     try {
       this.logger.log(`Starting review for PR #${pr.number}: ${pr.title}`);
+      this.gateway.broadcastReviewStarted(pr.number, pr.repository.nameWithOwner);
 
       // 1. Prepare repository
+      this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 10, 'Preparing repository...');
       const repoDir = await this.github.prepareRepository(pr);
       
       // 2. Get diff
+      this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 25, 'Fetching diff...');
       const { stdout: diff } = await this.github.execaVerbose('git', ['diff', `${pr.baseRefName}...${pr.headRefName}`], { cwd: repoDir });
       
       if (!diff) {
         this.logger.warn(`No diff found for PR #${pr.number}, skipping review.`);
+        this.gateway.broadcastReviewCompleted(pr.number, pr.repository.nameWithOwner, { status: 'skipped', reason: 'no diff' });
         await queryRunner.rollbackTransaction();
         return true;
       }
 
       // 3. AI Review
+      this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 40, 'Executing AI review...');
       const comments = await this.ai.executeReview(pr, diff, repoDir);
       
       // 4. Calculate metrics and decision
+      this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 70, 'Analyzing findings...');
       const issuesFound = {
         bugs: comments.filter(c => c.issue_type === 'logic').length,
         security: comments.filter(c => c.issue_type === 'security').length,
@@ -98,6 +106,7 @@ export class ReviewEngineService {
       }
 
       // 5. Save/Update PR Entity
+      this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 80, 'Saving to database...');
       let prEntity = await this.prRepository.findOne({ where: { number: pr.number, repository: pr.repository.nameWithOwner } });
       if (!prEntity) {
         prEntity = this.prRepository.create({
@@ -106,7 +115,7 @@ export class ReviewEngineService {
           title: pr.title,
           url: pr.url,
           status: 'open',
-          author: 'unknown', // Not available in PullRequest interface yet
+          author: 'unknown',
           branch: pr.headRefName || 'unknown',
           baseBranch: pr.baseRefName || 'unknown',
           isDraft: false,
@@ -132,7 +141,7 @@ export class ReviewEngineService {
       const metrics = this.metricsRepository.create({
         reviewId: savedReview.id,
         duration: Date.now() - startTime,
-        filesReviewed: 0, // Would need more logic to count unique files in diff
+        filesReviewed: 0,
         commentsGenerated: comments.length,
         issuesFound,
         healthScore: Math.max(0, 100 - severityScore),
@@ -155,6 +164,7 @@ export class ReviewEngineService {
       await queryRunner.manager.save(commentEntities);
 
       // 9. Post comments to GitHub
+      this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 90, 'Posting to GitHub...');
       const summaryMessage = this.buildSummaryMessage(comments, decision, severityScore);
       await this.github.addReview(pr.repository.nameWithOwner, pr.number, summaryMessage, decision);
 
@@ -163,13 +173,16 @@ export class ReviewEngineService {
 
       // 11. Auto-merge if approved
       if (decision === 'APPROVE' && appConfig.autoMerge) {
+        this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 95, 'Auto-merging PR...');
         await this.github.mergePR(pr.repository.nameWithOwner, pr.number);
       }
 
       this.logger.log(`Successfully completed review for PR #${pr.number}`);
+      this.gateway.broadcastReviewCompleted(pr.number, pr.repository.nameWithOwner, { decision, severityScore });
       return true;
     } catch (error) {
       this.logger.error(`Failed to review PR #${pr.number}: ${error.message}`, error.stack);
+      this.gateway.broadcastReviewFailed(pr.number, pr.repository.nameWithOwner, error.message);
       await queryRunner.rollbackTransaction();
       return false;
     } finally {

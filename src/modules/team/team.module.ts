@@ -18,7 +18,6 @@ import { SecurityFinding } from '../../database/entities/security-finding.entity
   ],
   controllers: [TeamController],
   providers: [
-...
     DeveloperDashboardService,
     AssignmentEngineService,
     CapacityPlannerService,

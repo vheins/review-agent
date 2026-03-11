@@ -13,6 +13,7 @@ import { DataExporterModule } from './common/exporter/data-exporter.module.js';
 import { HealthModule } from './common/health/health.module.js';
 import { WebSocketModule } from './modules/websocket/websocket.module.js';
 import { SecurityModule } from './modules/security/security.module.js';
+import { WebhookModule } from './modules/webhook/webhook.module.js';
 import { TeamModule } from './modules/team/team.module.js';
 import { AuditLoggerModule } from './common/audit/audit-logger.module.js';
 
@@ -52,6 +53,7 @@ import { AuditLoggerModule } from './common/audit/audit-logger.module.js';
     HealthModule, // Health check
     WebSocketModule, // Real-time updates
     SecurityModule, // Security scanning
+    WebhookModule, // GitHub webhooks
     TeamModule, // Team and developer services
     AuditLoggerModule, // Audit logging
     
