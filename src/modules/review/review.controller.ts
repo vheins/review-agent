@@ -4,7 +4,7 @@ import { Repository } from 'typeorm';
 import { Review } from '../../database/entities/review.entity.js';
 import { ReviewEngineService } from './review-engine.service.js';
 
-@Controller('api/reviews')
+@Controller('reviews')
 export class ReviewController {
   constructor(
     private readonly reviewEngine: ReviewEngineService,

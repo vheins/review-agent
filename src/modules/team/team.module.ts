@@ -8,13 +8,17 @@ import { DeveloperMetrics } from '../../database/entities/developer-metrics.enti
 import { PullRequest } from '../../database/entities/pull-request.entity.js';
 import { Review } from '../../database/entities/review.entity.js';
 import { MetricsModule } from '../metrics/metrics.module.js';
+import { TeamController } from './team.controller.js';
+import { SecurityFinding } from '../../database/entities/security-finding.entity.js';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([DeveloperMetrics, PullRequest, Review]),
+    TypeOrmModule.forFeature([DeveloperMetrics, PullRequest, Review, SecurityFinding]),
     MetricsModule,
   ],
+  controllers: [TeamController],
   providers: [
+...
     DeveloperDashboardService,
     AssignmentEngineService,
     CapacityPlannerService,

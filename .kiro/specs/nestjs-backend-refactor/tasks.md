@@ -589,8 +589,8 @@ Dokumen ini berisi rencana implementasi untuk refactor backend PR Review Agent d
 
 ### Phase 6: Electron Integration (Minggu 11-12)
 
-- [ ] 21. Implement backend auto-start dari Electron
-  - [ ] 21.1 Update electron/main.cjs untuk spawn NestJS backend
+- [x] 21. Implement backend auto-start dari Electron
+  - [x] 21.1 Update electron/main.cjs untuk spawn NestJS backend
     - Modify startBackend() function untuk run NestJS
     - Development: spawn npm run backend:dev
     - Production: spawn node dari bundled backend

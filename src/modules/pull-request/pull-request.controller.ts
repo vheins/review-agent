@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Param, Query, ParseIntPipe, Body } from '@nestjs/common';
 import { PullRequestService } from './pull-request.service.js';
 
-@Controller('api/prs')
+@Controller('prs')
 export class PullRequestController {
   constructor(private readonly prService: PullRequestService) {}
 

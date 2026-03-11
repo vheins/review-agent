@@ -1,7 +1,7 @@
 import { Controller, Get, Put, Param, Body, NotFoundException } from '@nestjs/common';
 import { AppConfigService } from './app-config.service.js';
 
-@Controller('api/config')
+@Controller('config')
 export class ConfigController {
   constructor(private readonly configService: AppConfigService) {}
 

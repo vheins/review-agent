@@ -32,7 +32,7 @@ async function bootstrap() {
   const port = process.env.API_PORT || 3000;
 
   // Global prefix for all routes (optional, can be configured later)
-  // app.setGlobalPrefix('api');
+  app.setGlobalPrefix('api');
 
   // Enable CORS for Electron renderer process
   // Will be configured in Phase 6 with proper settings

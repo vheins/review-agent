@@ -70,32 +70,14 @@ async function startBackendServer() {
         return true;
     }
 
-    console.log('🚀 Starting backend server...');
+    console.log('🚀 Starting NestJS backend server...');
 
-    const serverPath = path.join(__dirname, '..', 'src', 'server.js');
-
-    // Use system Node.js by finding it in PATH
-    // This avoids using Electron's bundled Node.js which has different MODULE_VERSION
-    const { execSync } = require('child_process');
-    let nodePath = 'node';
-    try {
-        // Try to get system node path
-        if (process.platform === 'win32') {
-            nodePath = execSync('where node', { encoding: 'utf8' }).split('\n')[0].trim();
-        } else {
-            nodePath = execSync('which node', { encoding: 'utf8' }).trim();
-        }
-    } catch (e) {
-        // Fallback to 'node' in PATH
-        nodePath = 'node';
-    }
-
-    // In development, use nodemon for auto-restart
+    // In development, use npm run backend:dev
     const isDev = process.env.NODE_ENV === 'development';
-    const command = isDev ? 'nodemon' : nodePath;
+    const command = isDev ? 'npm' : 'node';
     const args = isDev
-        ? ['--watch', 'src', '--ext', 'js', '--exec', 'node', serverPath]
-        : [serverPath];
+        ? ['run', 'backend:dev']
+        : [path.join(__dirname, '..', 'dist', 'main.js')];
 
     backendServerProcess = spawn(command, args, {
         cwd: path.join(__dirname, '..'),

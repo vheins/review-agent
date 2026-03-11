@@ -5,7 +5,7 @@ import { ReviewMetrics } from '../../database/entities/review-metrics.entity.js'
 import { DeveloperMetrics } from '../../database/entities/developer-metrics.entity.js';
 import { MetricsService } from './metrics.service.js';
 
-@Controller('api/metrics')
+@Controller('metrics')
 export class MetricsController {
   constructor(
     private readonly metricsService: MetricsService,
