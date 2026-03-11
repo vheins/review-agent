@@ -15,14 +15,17 @@ export class GamificationService {
   async awardPoints(developerId: string, points: number, reason: string): Promise<void> {
     this.logger.log(`Awarding ${points} points to ${developerId} for: ${reason}`);
     
-    let metrics = await this.devMetricsRepo.findOne({ where: { developerId } });
+    let metrics = await this.devMetricsRepo.findOne({ where: { username: developerId } });
     if (!metrics) {
       metrics = this.devMetricsRepo.create({
-        developerId,
+        username: developerId,
         rankingPoints: points,
-        totalPrsReviewed: 0,
+        reviewedPrs: 0,
+        totalPrs: 0,
         averageHealthScore: 0,
-        expertiseAreas: {},
+        averageQualityScore: 0,
+        averageReviewTime: 0,
+        issuesFound: { bugs: 0, security: 0, performance: 0, maintainability: 0 },
       });
     } else {
       metrics.rankingPoints += points;

@@ -37,9 +37,6 @@ The database schema is now defined using TypeORM entities. `better-sqlite3` has 
 - `DeveloperMetrics`
 - `SecurityFinding`
 - `AuditTrail`
-- `Checklist`
-- `ChecklistItem`
-- `ReviewChecklist`
 
 ### 5. API Endpoints
 All endpoints now have a global `/api` prefix.

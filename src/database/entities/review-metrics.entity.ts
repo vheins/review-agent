@@ -5,7 +5,7 @@ import {
   OneToOne,
   JoinColumn,
 } from 'typeorm';
-import { Review } from './review.entity';
+import { Review } from './review.entity.js';
 
 /**
  * ReviewMetrics Entity

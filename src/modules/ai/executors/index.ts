@@ -1,4 +1,4 @@
-import { PullRequest } from '../github/github.service.js';
+import { PullRequest } from '../../github/github.service.js';
 
 /**
  * AI Review Comment Interface

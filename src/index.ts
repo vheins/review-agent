@@ -1,17 +1,15 @@
 /**
- * Root barrel export for NestJS backend
+ * Main entry point for the Review Agent backend
  * 
- * This file provides clean imports from the root src directory.
- * 
+ * This file provides barrel exports for all major components of the application.
  * Usage:
- * import { AppModule } from '@/index';
+ * import { AppModule } from '@/index.js';
  */
 
-// Export the root module
-export * from './app.module';
+import 'reflect-metadata';
 
-// Export barrel exports from subdirectories
-export * from './modules';
-export * from './common';
-export * from './database';
-export * from './config';
+export * from './app.module.js';
+export * from './modules/index.js';
+export * from './common/index.js';
+export * from './database/index.js';
+export * from './config/index.js';

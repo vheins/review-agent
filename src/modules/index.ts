@@ -1,26 +1,17 @@
 /**
- * Modules barrel export
+ * Feature modules barrel export
  * 
  * This file provides clean imports for all feature modules in the application.
+ * Usage:
+ * import { ReviewModule, PullRequestModule } from '@/modules/index.js';
  */
 
-// Core modules will be added here as they are migrated
-export * from './github/index.js';
-export * from './ai/index.js';
-export * from './review/index.js';
-export * from './metrics/index.js';
-export * from './compliance/index.js';
-export * from './pull-request/index.js';
-export * from './security/index.js';
-export * from './team/index.js';
+export * from './review/review.module.js';
+export * from './pull-request/pull-request.module.js';
+export * from './metrics/metrics.module.js';
+export * from './team/team.module.js';
+export * from './security/security.module.js';
+export * from './github/github.module.js';
+export * from './ai/ai.module.js';
 export * from './webhook/index.js';
 export * from './websocket/index.js';
-
-// Future modules:
-// export * from './pull-request/index.js';
-// export * from './review/index.ts';
-// export * from './ai/index.ts';
-// export * from './metrics/index.ts';
-// export * from './team/index.ts';
-// export * from './security/index.ts';
-// export * from './websocket/index.ts';

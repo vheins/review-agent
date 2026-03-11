@@ -8,9 +8,9 @@ import {
   OneToOne,
   JoinColumn,
 } from 'typeorm';
-import { PullRequest } from './pull-request.entity';
-import { Comment } from './comment.entity';
-import { ReviewMetrics } from './review-metrics.entity';
+import { PullRequest } from './pull-request.entity.js';
+import { Comment } from './comment.entity.js';
+import { ReviewMetrics } from './review-metrics.entity.js';
 
 /**
  * Review Entity

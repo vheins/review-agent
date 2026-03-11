@@ -19,7 +19,6 @@ In development, the default key is `dev-key`.
 ### 2. Reviews (`/reviews`)
 - `GET /reviews`: List recent review sessions.
 - `GET /reviews/:id`: Get details of a specific review session (including comments and metrics).
-- `POST /reviews`: Trigger a manual review via DTO.
 - `POST /reviews/run-once`: Trigger a one-time scan and review of all open PRs.
 
 ### 3. Metrics (`/metrics`)

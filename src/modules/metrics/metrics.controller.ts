@@ -37,6 +37,6 @@ export class MetricsController {
 
   @Get('developer/:username')
   async getDeveloperMetrics(@Param('username') username: string) {
-    return this.devMetricsRepo.findOne({ where: { developerId: username } });
+    return this.devMetricsRepo.findOne({ where: { username } });
   }
 }

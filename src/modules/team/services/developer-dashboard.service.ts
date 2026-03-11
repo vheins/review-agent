@@ -21,7 +21,7 @@ export class DeveloperDashboardService {
   ) {}
 
   async getDashboardData(developerId: string) {
-    const metrics = await this.devMetricsRepo.findOne({ where: { developerId } });
+    const metrics = await this.devMetricsRepo.findOne({ where: { username: developerId } });
     const pendingPRs = await this.prRepo.find({
       where: { author: developerId, status: 'open' },
       order: { updatedAt: 'DESC' },
@@ -37,9 +37,9 @@ export class DeveloperDashboardService {
     return {
       developerId,
       metrics: metrics || {
-        totalPrsReviewed: 0,
+        reviewedPrs: 0,
         averageHealthScore: 0,
-        rankingPoints: 0,
+        averageQualityScore: 0,
       },
       pendingPRs,
       recentReviews,

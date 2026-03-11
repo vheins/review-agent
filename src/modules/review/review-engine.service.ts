@@ -61,6 +61,8 @@ export class ReviewEngineService {
       this.gateway.broadcastReviewStarted(pr.number, pr.repository.nameWithOwner);
 
       const appConfig = this.config.getAppConfig();
+      const reviewConfig = this.config.getReviewConfig();
+      const repoConfig = await this.config.getRepositoryConfig(pr.repository.nameWithOwner);
 
       // 1. Prepare repository
       this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 10, 'Preparing repository...');
@@ -100,8 +102,10 @@ export class ReviewEngineService {
       const healthScore = this.metricsService.calculateHealthScore(allSecurityFindings, tempComments);
       const qualityScore = this.metricsService.calculateQualityScore(tempComments);
 
-      let decision: 'APPROVE' | 'REQUEST_CHANGES' = (healthScore < (100 - appConfig.severityThreshold)) ? 'REQUEST_CHANGES' : 'APPROVE';
+      // Decision based on threshold
+      let decision: 'APPROVE' | 'REQUEST_CHANGES' = (healthScore < (100 - reviewConfig.severityThreshold)) ? 'REQUEST_CHANGES' : 'APPROVE';
 
+      // Immediate override if critical or error issues found
       if ((allSecurityFindings.length > 0 || aiComments.some(c => c.severity === 'error')) && decision === 'APPROVE') {
         decision = 'REQUEST_CHANGES';
       }
@@ -130,8 +134,8 @@ export class ReviewEngineService {
         prNumber: pr.number,
         repository: pr.repository.nameWithOwner,
         status: 'completed',
-        mode: appConfig.reviewMode,
-        executor: (await this.config.getRepositoryConfig(pr.repository.nameWithOwner)).executor,
+        mode: repoConfig.reviewMode,
+        executor: repoConfig.executor,
         startedAt: new Date(startTime),
         completedAt: new Date(),
         pullRequest: prEntity,
@@ -174,8 +178,8 @@ export class ReviewEngineService {
       // 10. Attach Checklists
       await this.checklistService.attachChecklistsToReview(savedReview.id, pr.repository.nameWithOwner);
 
-      // 11. Apply Auto-Fixes if in 'fix' mode
-      if (appConfig.reviewMode === 'fix') {
+      // 11. Apply Auto-Fixes if enabled
+      if (repoConfig.reviewMode === 'auto-fix') {
         this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 85, 'Applying auto-fixes...');
         await this.applyAutoFixes(repoDir, aiComments);
       }
@@ -186,12 +190,12 @@ export class ReviewEngineService {
         'ai-agent',
         'pull_request',
         `${pr.repository.nameWithOwner}#${pr.number}`,
-        { decision, healthScore, qualityScore, mode: appConfig.reviewMode }
+        { decision, healthScore, qualityScore, mode: repoConfig.reviewMode }
       );
 
       // 13. Post comments to GitHub
       this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 90, 'Posting to GitHub...');
-      const summaryMessage = this.buildSummaryMessage(aiComments, allSecurityFindings, decision, healthScore, appConfig.reviewMode);
+      const summaryMessage = this.buildSummaryMessage(aiComments, allSecurityFindings, decision, healthScore, repoConfig.reviewMode);
       await this.github.addReview(pr.repository.nameWithOwner, pr.number, summaryMessage, decision);
 
       // 14. Commit transaction
@@ -206,7 +210,7 @@ export class ReviewEngineService {
       }
 
       // 17. Auto-merge
-      if (decision === 'APPROVE' && appConfig.autoMerge && appConfig.reviewMode === 'comment') {
+      if (decision === 'APPROVE' && repoConfig.autoMerge && repoConfig.reviewMode === 'comment') {
         this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 95, 'Auto-merging PR...');
         await this.github.mergePR(pr.repository.nameWithOwner, pr.number);
       }
@@ -233,7 +237,6 @@ export class ReviewEngineService {
           const lines = content.split('\n');
           
           if (comment.line_number <= lines.length) {
-            // Very simple replacement for demo - in reality need better line matching
             lines[comment.line_number - 1] = comment.suggested_fix;
             await fs.writeFile(filePath, lines.join('\n'));
             this.logger.log(`Applied auto-fix to ${comment.file_path}:${comment.line_number}`);
@@ -261,7 +264,7 @@ export class ReviewEngineService {
       msg += `⚠️ **Found ${securityFindings.length} security vulnerabilities!**\n`;
     }
     
-    if (mode === 'fix') {
+    if (mode === 'auto-fix') {
       msg += `✅ **Auto-fixes have been applied and pushed to your branch.**\n\n`;
     }
     

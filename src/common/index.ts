@@ -1,42 +1,25 @@
 /**
- * Common utilities barrel export
+ * Common module barrel export
  * 
- * This file provides clean imports for shared utilities, decorators,
- * guards, interceptors, filters, and other common functionality.
+ * This file provides clean imports for shared utilities, guards,
+ * interceptors, filters, and other cross-cutting concerns.
  * 
  * Usage:
- * import { SomeUtility, SomeDecorator } from '@/common';
+ * import { SomeUtility, SomeDecorator } from '@/common/index.js';
  */
 
-// Export common utilities here as they are created
-// Example:
-// export * from './decorators';
-// export * from './guards';
-// export * from './interceptors';
-// export * from './filters';
-// export * from './pipes';
-// export * from './utils';
-
-// Common utilities will be organized in subdirectories:
-// - src/common/decorators/
-// - src/common/guards/
-// - src/common/interceptors/
-// - src/common/filters/
-// - src/common/pipes/
-// - src/common/utils/
-// - src/common/interfaces/
-// - src/common/constants/
-
-// Logger
 export * from './logger.service.js';
 export * from './logger.module.js';
 
-// Parser
+// Features under development or future modules
+// export * from './decorators/index.js';
+// export * from './guards/index.js';
+// export * from './interceptors/index.js';
+// export * from './filters/index.js';
+// export * from './pipes/index.js';
+// export * from './utils/index.js';
+
 export * from './parser/index.js';
-
-// Exporter
-export * from './exporter/index.js';
-
-// Audit
 export * from './audit/index.js';
-
+export * from './health/index.js';
+export * from './exporter/index.js';

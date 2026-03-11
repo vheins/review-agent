@@ -90,13 +90,10 @@ export class MetricsService {
 
     let totalScore = 0;
     let totalPRs = prs.length;
-    let mergedPRs = prs.filter(p => p.status === 'merged').length;
 
     for (const pr of prs) {
-      // Find latest review for each PR
       if (pr.reviews && pr.reviews.length > 0) {
         const latestReview = pr.reviews.sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime())[0];
-        // We'd need to fetch metrics for this review
         const metrics = await this.metricsRepository.findOne({ where: { reviewId: latestReview.id } });
         if (metrics) totalScore += metrics.healthScore;
       }
@@ -104,19 +101,20 @@ export class MetricsService {
 
     const avgScore = totalPRs > 0 ? totalScore / totalPRs : 0;
 
-    let devMetrics = await this.devMetricsRepository.findOne({ where: { developerId: author } });
+    let devMetrics = await this.devMetricsRepository.findOne({ where: { username: author } });
     if (!devMetrics) {
       devMetrics = this.devMetricsRepository.create({
-        developerId: author,
-        totalPrsReviewed: totalPRs,
+        username: author,
+        reviewedPrs: totalPRs,
+        totalPrs: totalPRs, // Using totalPRs as a placeholder
         averageHealthScore: avgScore,
-        expertiseAreas: {},
-        rankingPoints: Math.round(avgScore * mergedPRs / 10),
+        averageQualityScore: 0,
+        averageReviewTime: 0,
+        issuesFound: { bugs: 0, security: 0, performance: 0, maintainability: 0 },
       });
     } else {
-      devMetrics.totalPrsReviewed = totalPRs;
+      devMetrics.reviewedPrs = totalPRs;
       devMetrics.averageHealthScore = avgScore;
-      devMetrics.rankingPoints = Math.round(avgScore * mergedPRs / 10);
     }
 
     await this.devMetricsRepository.save(devMetrics);

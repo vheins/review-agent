@@ -6,7 +6,7 @@ import {
   UpdateDateColumn,
   OneToMany,
 } from 'typeorm';
-import { Review } from './review.entity';
+import { Review } from './review.entity.js';
 
 /**
  * PullRequest Entity

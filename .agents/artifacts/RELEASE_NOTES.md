@@ -11,7 +11,6 @@ The backend has been completely rewritten using **NestJS**, **TypeScript**, and 
 - **Security Headers**: Integrated `helmet` for best-practice security headers.
 - **Rate Limiting**: Added protection against brute-force and DoS attacks using `@nestjs/throttler`.
 - **API Key Protection**: All endpoints are now secured via API Key authentication.
-- **Input Sanitization**: Added utilities to prevent XSS and SQL injection.
 
 ### 3. Improved Database Layer
 Switched from raw SQL with `better-sqlite3` to **TypeORM** with SQLite.
@@ -42,3 +41,6 @@ If you are developing custom modules, you must now use TypeScript.
 3. Update your `.env` file if necessary (refer to `.env.example`).
 4. Run `yarn backend:build` to compile the new backend.
 5. Start the app as usual with `yarn app:dev` or `yarn app`.
+
+## Known Issues
+- Full E2E testing in headless environments may require additional configuration.

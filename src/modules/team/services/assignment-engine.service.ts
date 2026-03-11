@@ -22,15 +22,15 @@ export class AssignmentEngineService {
     const allDevs = await this.devMetricsRepo.find();
     
     // Filter out author
-    const candidates = allDevs.filter(d => d.developerId !== author);
+    const candidates = allDevs.filter(d => d.username !== author);
     
     if (candidates.length === 0) return [];
 
     // Simple sorting by total PRs reviewed (experience)
-    candidates.sort((a, b) => b.totalPrsReviewed - a.totalPrsReviewed);
+    candidates.sort((a, b) => b.reviewedPrs - a.reviewedPrs);
     
     // Return top 2 candidates
-    return candidates.slice(0, 2).map(d => d.developerId);
+    return candidates.slice(0, 2).map(d => d.username);
   }
 
   async setAvailability(developerId: string, isAvailable: boolean, unavailableUntil?: string) {

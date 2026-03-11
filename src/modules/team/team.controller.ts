@@ -32,7 +32,7 @@ export class TeamController {
   @Get('workload')
   async getWorkload() {
     return this.devRepo.find({
-      select: ['developerId', 'totalPrsReviewed', 'rankingPoints'],
+      select: ['username', 'reviewedPrs', 'rankingPoints'],
     });
   }
 
