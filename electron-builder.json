@@ -6,11 +6,11 @@
     },
     "files": [
         "electron/**/*",
-        "src/**/*",
+        "dist/**/*",
         "context/**/*",
         "agents.md",
         ".env.example",
-        "node_modules/**/*"
+        "package.json"
     ],
     "buildDependenciesFromSource": false,
     "nodeGypRebuild": false,

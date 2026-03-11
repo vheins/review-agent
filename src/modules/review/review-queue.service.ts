@@ -80,14 +80,33 @@ export class ReviewQueueService implements OnModuleInit {
     const loop = async () => {
       if (!this.isRunning) return;
       
-      // Here we could also fetch new PRs from GitHub and add them to queue
-      // But for now we rely on external triggers or manual scan
-      
+      this.detectStuckTasks();
       this.processNext();
       setTimeout(loop, intervalMs);
     };
     
     loop();
+  }
+
+  /**
+   * Detect tasks that have been processing for too long and reset them
+   */
+  private detectStuckTasks(): void {
+    const now = new Date();
+    const timeoutMs = 300000; // 5 minutes
+
+    for (const item of this.queue) {
+      if (item.status === QueueStatus.PROCESSING && item.startedAt) {
+        const duration = now.getTime() - item.startedAt.getTime();
+        if (duration > timeoutMs) {
+          this.logger.warn(`Detected stuck task for PR #${item.pr.number}. Resetting status to PENDING.`);
+          item.status = QueueStatus.PENDING;
+          item.error = 'Task timed out (stuck detector)';
+          item.retryCount++;
+          this.activeCount = Math.max(0, this.activeCount - 1);
+        }
+      }
+    }
   }
 
   /**

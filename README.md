@@ -6,6 +6,7 @@ GitHub Pull Request assistant with optional Gemini CLI delegation.
 
 - Node.js >= 18
 - GitHub CLI (`gh`) authenticated
+- NestJS CLI (optional, for development)
 - AI Executor (choose one):
   - Gemini CLI (default)
   - GitHub Copilot CLI
@@ -18,12 +19,7 @@ GitHub Pull Request assistant with optional Gemini CLI delegation.
 
 ```bash
 yarn install
-
-# Rebuild native modules (required for better-sqlite3)
-npm rebuild better-sqlite3
 ```
-
-**Note**: If you encounter `Could not locate the bindings file` errors, run `npm rebuild better-sqlite3` to compile the native module for your Node.js version.
 
 ## Configuration
 
@@ -33,47 +29,53 @@ Copy `.env.example` to `.env`:
 cp .env.example .env
 ```
 
-Edit `.env`:
+## Usage
 
-```env
-DELEGATE=false          # Set to true to delegate reviews to AI
-REVIEW_MODE=comment     # comment: add comments and reject PR, fix: auto-fix issues
-REVIEW_INTERVAL=600     # Seconds between checks (continuous mode)
-LOG_LEVEL=info          # info, warn, or error
-WORKSPACE_DIR=./workspace  # Directory for cloning repositories
-EXCLUDE_REPO_OWNERS=    # Comma-separated list of repo owners to exclude (e.g., owner1,owner2)
-PR_SCOPE=authored,assigned,review-requested  # Comma-separated: authored, assigned, review-requested
-AUTO_MERGE=false        # Auto-merge approved PRs (only in comment mode)
+### Backend Development
 
-# AI Executor Configuration
-AI_EXECUTOR=gemini      # gemini, copilot, kiro, claude, codex, or opencode
+Start NestJS backend in watch mode:
 
-# Gemini CLI
-GEMINI_ENABLED=true
-GEMINI_MODEL=auto-3
-
-# GitHub Copilot CLI
-COPILOT_ENABLED=false
-COPILOT_MODEL=claude-haiku-4.5
-
-# Kiro CLI
-KIRO_ENABLED=false
-KIRO_AGENT=auto
-
-# Claude Code CLI
-CLAUDE_ENABLED=false
-CLAUDE_MODEL=sonnet
-CLAUDE_AGENT=
-
-# Codex CLI
-CODEX_ENABLED=false
-CODEX_MODEL=auto
-
-# OpenCode CLI
-OPENCODE_ENABLED=false
-OPENCODE_MODEL=auto
-OPENCODE_AGENT=
+```bash
+yarn backend:dev
 ```
+
+### Build Backend
+
+```bash
+yarn backend:build
+```
+
+### Desktop Application
+
+The desktop app automatically starts the NestJS backend on port 3000.
+
+```bash
+# Development mode (with hot reload)
+yarn app:dev
+
+# Production mode
+yarn app
+```
+
+## Testing
+
+```bash
+# Run all unit tests
+yarn test
+
+# Run tests with coverage
+yarn test run --coverage
+```
+
+## Architecture
+
+The project has been refactored to a modern **NestJS** architecture with **TypeScript** and **TypeORM**.
+
+- **Modularity**: Features are encapsulated in self-contained modules (GitHub, AI, Review, Metrics, etc.)
+- **Type Safety**: Full TypeScript support across the backend
+- **Database**: SQLite managed via TypeORM with automatic schema synchronization
+- **Real-time**: WebSocket integration for live review updates
+- **Security**: Helmet, Rate Limiting, and API Key protection
 
 ### AI Executor Options
 

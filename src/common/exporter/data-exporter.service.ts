@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import { Parser } from 'json2csv';
@@ -7,32 +7,29 @@ import { AppConfigService } from '../../config/app-config.service.js';
 
 /**
  * DataExporterService - Service for exporting application data
- * 
- * Features:
- * - Export to CSV and JSON formats
- * - File system storage with expiration
- * - Support for repository-specific exports
- * 
- * Requirements: 15.1, 15.2, 15.3
  */
 @Injectable()
-export class DataExporterService {
+export class DataExporterService implements OnModuleInit {
   private readonly logger = new Logger(DataExporterService.name);
-  private readonly exportDir: string;
+  private exportDir: string;
 
-  constructor(private readonly config: AppConfigService) {
-    const appConfig = this.config.getAppConfig();
-    this.exportDir = path.join(appConfig.workspaceDir, 'exports');
-    fs.ensureDirSync(this.exportDir);
+  constructor(private readonly config: AppConfigService) {}
+
+  onModuleInit() {
+    try {
+      const appConfig = this.config.getAppConfig();
+      this.exportDir = path.join(appConfig.workspaceDir, 'exports');
+      fs.ensureDirSync(this.exportDir);
+    } catch (e) {
+      this.logger.error(`Failed to initialize export directory: ${e.message}`);
+      // Fallback to local exports if config is not ready
+      this.exportDir = path.join(process.cwd(), 'workspace', 'exports');
+      fs.ensureDirSync(this.exportDir);
+    }
   }
 
   /**
    * Export data to a file
-   * 
-   * @param data - Array of objects to export
-   * @param resourceType - Name of the resource (e.g., 'metrics', 'reviews')
-   * @param format - Export format ('csv' or 'json')
-   * @returns Metadata about the exported file
    */
   async exportData(data: any[], resourceType: string, format: 'csv' | 'json' = 'csv'): Promise<{ id: string; fileName: string; filePath: string }> {
     const id = uuidv4();

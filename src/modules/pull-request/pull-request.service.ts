@@ -49,10 +49,7 @@ export class PullRequestService {
    * Scan GitHub for new pull requests and update database
    */
   async scanAndSync(): Promise<GitHubPR[]> {
-    const prs = await this.github.fetchOpenPRs();
-    // In a real app, we would update the database here too
-    // For now we just return them
-    return prs;
+    return this.github.fetchOpenPRs();
   }
 
   /**

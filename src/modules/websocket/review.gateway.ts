@@ -62,4 +62,8 @@ export class ReviewGateway implements OnGatewayConnection, OnGatewayDisconnect {
   broadcastReviewFailed(prNumber: number, repo: string, error: string) {
     this.emit('review_failed', { prNumber, repository: repo, error });
   }
+
+  broadcastMetricsUpdate(prNumber: number, repo: string, metrics: any) {
+    this.emit('metrics_updated', { prNumber, repository: repo, metrics });
+  }
 }

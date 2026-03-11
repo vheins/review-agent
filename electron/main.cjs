@@ -120,7 +120,7 @@ async function startBackendServer() {
     });
 
     // Wait for server to be ready
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 10; i++) {
         await new Promise(resolve => setTimeout(resolve, 1000));
         if (await isServerRunning(port)) {
             console.log(`✓ Backend server started successfully on port ${port}`);
@@ -131,7 +131,11 @@ async function startBackendServer() {
         }
     }
 
-    console.error('⚠ Backend server failed to start within 30 seconds');
+    console.error('⚠ Backend server failed to start within 10 seconds');
+    new Notification({
+        title: 'Backend Error',
+        body: 'Failed to start backend server. Please check logs.'
+    }).show();
     return false;
 }
 

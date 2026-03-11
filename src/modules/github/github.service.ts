@@ -294,4 +294,34 @@ export class GitHubClientService {
       return false;
     }
   }
+
+  /**
+   * Get files changed in a Pull Request
+   * 
+   * @param repoDir - Local repository directory
+   * @param pr - Pull Request metadata
+   * @returns List of changed files with content
+   */
+  async getChangedFiles(repoDir: string, pr: PullRequest): Promise<{ path: string; content: string }[]> {
+    try {
+      const { stdout } = await this.execaVerbose('git', ['diff', '--name-only', `${pr.baseRefName}...${pr.headRefName}`], { cwd: repoDir });
+      const filePaths = stdout.split('\n').filter(line => line.trim() !== '');
+      
+      const changedFiles: { path: string; content: string }[] = [];
+      for (const filePath of filePaths) {
+        const fullPath = path.join(repoDir, filePath);
+        if (await fs.pathExists(fullPath)) {
+          const stats = await fs.stat(fullPath);
+          if (stats.isFile()) {
+            const content = await fs.readFile(fullPath, 'utf8');
+            changedFiles.push({ path: filePath, content });
+          }
+        }
+      }
+      return changedFiles;
+    } catch (error) {
+      this.logger.error(`Failed to get changed files: ${error.message}`);
+      return [];
+    }
+  }
 }

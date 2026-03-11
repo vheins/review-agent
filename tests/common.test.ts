@@ -7,12 +7,16 @@ describe('Common Guards and Filters', () => {
   describe('ApiKeyGuard', () => {
     let guard: ApiKeyGuard;
     let configService: any;
+    let auditLogger: any;
 
     beforeEach(() => {
       configService = {
         get: vi.fn().mockReturnValue('test-key'),
       };
-      guard = new ApiKeyGuard(configService);
+      auditLogger = {
+        logAction: vi.fn().mockResolvedValue(true),
+      };
+      guard = new ApiKeyGuard(configService, auditLogger);
     });
 
     it('should allow request with valid API key', () => {
@@ -20,6 +24,8 @@ describe('Common Guards and Filters', () => {
         switchToHttp: () => ({
           getRequest: () => ({
             headers: { 'x-api-key': 'test-key' },
+            method: 'GET',
+            url: '/test',
           }),
         }),
       } as any;
@@ -32,11 +38,14 @@ describe('Common Guards and Filters', () => {
         switchToHttp: () => ({
           getRequest: () => ({
             headers: { 'x-api-key': 'wrong-key' },
+            method: 'GET',
+            url: '/test',
           }),
         }),
       } as any;
 
       expect(() => guard.canActivate(context)).toThrow(UnauthorizedException);
+      expect(auditLogger.logAction).toHaveBeenCalled();
     });
   });
 

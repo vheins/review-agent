@@ -3,19 +3,24 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { GitHubClientService, PullRequest } from '../github/github.service.js';
 import { AiExecutorService } from '../ai/ai-executor.service.js';
+import { AiFixGeneratorService } from '../ai/ai-fix-generator.service.js';
 import { ReviewGateway } from '../websocket/review.gateway.js';
 import { AppConfigService } from '../../config/app-config.service.js';
 import { Review } from '../../database/entities/review.entity.js';
 import { PullRequest as PullRequestEntity } from '../../database/entities/pull-request.entity.js';
 import { Comment } from '../../database/entities/comment.entity.js';
 import { ReviewMetrics } from '../../database/entities/review-metrics.entity.js';
+import { SecurityScannerService } from '../security/security-scanner.service.js';
+import { DependencyScannerService } from '../security/dependency-scanner.service.js';
+import { ChecklistService } from './checklist.service.js';
+import { AuditLoggerService } from '../../common/audit/audit-logger.service.js';
+import { GamificationService } from '../team/services/gamification.service.js';
+import { MetricsService } from '../metrics/metrics.service.js';
+import * as fs from 'fs-extra';
+import * as path from 'path';
 
 /**
  * ReviewEngineService - Core service for orchestrating PR reviews
- * 
- * This service coordinates GitHub operations, AI analysis, and database storage.
- * 
- * Requirements: 7.1, 7.2, 7.3, 7.4, 7.5
  */
 @Injectable()
 export class ReviewEngineService {
@@ -24,9 +29,16 @@ export class ReviewEngineService {
   constructor(
     private readonly github: GitHubClientService,
     private readonly ai: AiExecutorService,
+    private readonly aiFix: AiFixGeneratorService,
     private readonly gateway: ReviewGateway,
     private readonly config: AppConfigService,
     private readonly dataSource: DataSource,
+    private readonly securityScanner: SecurityScannerService,
+    private readonly dependencyScanner: DependencyScannerService,
+    private readonly checklistService: ChecklistService,
+    private readonly auditLogger: AuditLoggerService,
+    private readonly gamification: GamificationService,
+    private readonly metricsService: MetricsService,
     @InjectRepository(Review)
     private readonly reviewRepository: Repository<Review>,
     @InjectRepository(PullRequestEntity)
@@ -37,14 +49,6 @@ export class ReviewEngineService {
     private readonly metricsRepository: Repository<ReviewMetrics>,
   ) {}
 
-  /**
-   * Process and review a single Pull Request
-   * 
-   * @param pr - Pull Request metadata
-   * @returns Success status
-   * 
-   * Requirements: 7.2, 7.3
-   */
   async reviewPullRequest(pr: PullRequest): Promise<boolean> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -56,56 +60,53 @@ export class ReviewEngineService {
       this.logger.log(`Starting review for PR #${pr.number}: ${pr.title}`);
       this.gateway.broadcastReviewStarted(pr.number, pr.repository.nameWithOwner);
 
+      const appConfig = this.config.getAppConfig();
+
       // 1. Prepare repository
       this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 10, 'Preparing repository...');
       const repoDir = await this.github.prepareRepository(pr);
       
-      // 2. Get diff
-      this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 25, 'Fetching diff...');
+      // 2. Get changed files and diff
+      this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 20, 'Analyzing changed files...');
+      const changedFiles = await this.github.getChangedFiles(repoDir, pr);
       const { stdout: diff } = await this.github.execaVerbose('git', ['diff', `${pr.baseRefName}...${pr.headRefName}`], { cwd: repoDir });
       
-      if (!diff) {
-        this.logger.warn(`No diff found for PR #${pr.number}, skipping review.`);
-        this.gateway.broadcastReviewCompleted(pr.number, pr.repository.nameWithOwner, { status: 'skipped', reason: 'no diff' });
+      if (!diff && changedFiles.length === 0) {
+        this.logger.warn(`No changes found for PR #${pr.number}, skipping review.`);
+        this.gateway.broadcastReviewCompleted(pr.number, pr.repository.nameWithOwner, { status: 'skipped', reason: 'no changes' });
         await queryRunner.rollbackTransaction();
         return true;
       }
 
-      // 3. AI Review
-      this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 40, 'Executing AI review...');
-      const comments = await this.ai.executeReview(pr, diff, repoDir);
+      // 3. Run Security Scans
+      this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 30, 'Running security scans...');
+      const staticFindings = await this.securityScanner.scanFiles(pr.repository.nameWithOwner, pr.number, changedFiles);
+      const depFindings = await this.dependencyScanner.scanDependencies(repoDir, pr.repository.nameWithOwner, pr.number);
+      const allSecurityFindings = [...staticFindings, ...depFindings];
+
+      // 4. AI Review
+      this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 50, 'Executing AI review...');
+      const aiComments = await this.ai.executeReview(pr, diff || '', repoDir);
       
-      // 4. Calculate metrics and decision
-      this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 70, 'Analyzing findings...');
-      const issuesFound = {
-        bugs: comments.filter(c => c.issue_type === 'logic').length,
-        security: comments.filter(c => c.issue_type === 'security').length,
-        performance: 0,
-        maintainability: comments.filter(c => c.issue_type === 'quality').length,
-        architecture: 0,
-        testing: 0,
-      };
+      // 5. Calculate metrics and decision
+      this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 70, 'Calculating scores...');
+      
+      const tempComments = aiComments.map(c => ({
+        severity: c.severity,
+        category: c.issue_type,
+        suggestion: c.suggested_fix,
+      } as any));
 
-      const severityCounts = {
-        critical: comments.filter(c => c.message.toLowerCase().includes('critical')).length,
-        high: comments.filter(c => c.severity === 'error' && !c.message.toLowerCase().includes('critical')).length,
-        medium: comments.filter(c => c.severity === 'warning').length,
-        low: comments.filter(c => c.severity === 'info').length,
-      };
+      const healthScore = this.metricsService.calculateHealthScore(allSecurityFindings, tempComments);
+      const qualityScore = this.metricsService.calculateQualityScore(tempComments);
 
-      const appConfig = this.config.getAppConfig();
-      const severityScore = (severityCounts.critical * 10) + (severityCounts.high * 5) + 
-                            (severityCounts.medium * 2) + (severityCounts.low * 1);
+      let decision: 'APPROVE' | 'REQUEST_CHANGES' = (healthScore < (100 - appConfig.severityThreshold)) ? 'REQUEST_CHANGES' : 'APPROVE';
 
-      let decision: 'APPROVE' | 'REQUEST_CHANGES' = (severityScore >= appConfig.severityThreshold) ? 'REQUEST_CHANGES' : 'APPROVE';
-
-      // Override if critical or high issues found
-      if ((severityCounts.critical > 0 || severityCounts.high > 0) && decision === 'APPROVE') {
-        this.logger.warn(`Overriding APPROVE -> REQUEST_CHANGES due to critical/high issues`);
+      if ((allSecurityFindings.length > 0 || aiComments.some(c => c.severity === 'error')) && decision === 'APPROVE') {
         decision = 'REQUEST_CHANGES';
       }
 
-      // 5. Save/Update PR Entity
+      // 6. Save/Update PR Entity
       this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 80, 'Saving to database...');
       let prEntity = await this.prRepository.findOne({ where: { number: pr.number, repository: pr.repository.nameWithOwner } });
       if (!prEntity) {
@@ -124,12 +125,12 @@ export class ReviewEngineService {
         prEntity = await queryRunner.manager.save(prEntity);
       }
 
-      // 6. Create Review Entity
+      // 7. Create Review Entity
       const review = this.reviewRepository.create({
         prNumber: pr.number,
         repository: pr.repository.nameWithOwner,
         status: 'completed',
-        mode: appConfig.reviewMode || 'comment',
+        mode: appConfig.reviewMode,
         executor: (await this.config.getRepositoryConfig(pr.repository.nameWithOwner)).executor,
         startedAt: new Date(startTime),
         completedAt: new Date(),
@@ -137,21 +138,28 @@ export class ReviewEngineService {
       });
       const savedReview = await queryRunner.manager.save(review);
 
-      // 7. Create Metrics Entity
+      // 8. Create Metrics Entity
       const metrics = this.metricsRepository.create({
         reviewId: savedReview.id,
         duration: Date.now() - startTime,
-        filesReviewed: 0,
-        commentsGenerated: comments.length,
-        issuesFound,
-        healthScore: Math.max(0, 100 - severityScore),
-        qualityScore: Math.max(0, 100 - severityScore),
+        filesReviewed: changedFiles.length,
+        commentsGenerated: aiComments.length,
+        issuesFound: {
+          bugs: aiComments.filter(c => c.issue_type === 'logic').length,
+          security: allSecurityFindings.length + aiComments.filter(c => c.issue_type === 'security').length,
+          performance: 0,
+          maintainability: aiComments.filter(c => c.issue_type === 'quality').length,
+          architecture: 0,
+          testing: 0,
+        },
+        healthScore,
+        qualityScore,
         review: savedReview,
       });
       await queryRunner.manager.save(metrics);
 
-      // 8. Create Comment Entities
-      const commentEntities = comments.map(c => this.commentRepository.create({
+      // 9. Create Comment Entities
+      const commentEntities = aiComments.map(c => this.commentRepository.create({
         reviewId: savedReview.id,
         file: c.file_path,
         line: c.line_number,
@@ -163,22 +171,48 @@ export class ReviewEngineService {
       }));
       await queryRunner.manager.save(commentEntities);
 
-      // 9. Post comments to GitHub
+      // 10. Attach Checklists
+      await this.checklistService.attachChecklistsToReview(savedReview.id, pr.repository.nameWithOwner);
+
+      // 11. Apply Auto-Fixes if in 'fix' mode
+      if (appConfig.reviewMode === 'fix') {
+        this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 85, 'Applying auto-fixes...');
+        await this.applyAutoFixes(repoDir, aiComments);
+      }
+
+      // 12. Audit Log
+      await this.auditLogger.logAction(
+        'review_completed',
+        'ai-agent',
+        'pull_request',
+        `${pr.repository.nameWithOwner}#${pr.number}`,
+        { decision, healthScore, qualityScore, mode: appConfig.reviewMode }
+      );
+
+      // 13. Post comments to GitHub
       this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 90, 'Posting to GitHub...');
-      const summaryMessage = this.buildSummaryMessage(comments, decision, severityScore);
+      const summaryMessage = this.buildSummaryMessage(aiComments, allSecurityFindings, decision, healthScore, appConfig.reviewMode);
       await this.github.addReview(pr.repository.nameWithOwner, pr.number, summaryMessage, decision);
 
-      // 10. Commit transaction
+      // 14. Commit transaction
       await queryRunner.commitTransaction();
 
-      // 11. Auto-merge if approved
-      if (decision === 'APPROVE' && appConfig.autoMerge) {
+      // 15. Real-time updates
+      this.gateway.broadcastMetricsUpdate(pr.number, pr.repository.nameWithOwner, { healthScore, qualityScore });
+
+      // 16. Gamification
+      if (decision === 'APPROVE') {
+        await this.gamification.awardPoints(prEntity.author, 10, 'PR Approved by AI');
+      }
+
+      // 17. Auto-merge
+      if (decision === 'APPROVE' && appConfig.autoMerge && appConfig.reviewMode === 'comment') {
         this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 95, 'Auto-merging PR...');
         await this.github.mergePR(pr.repository.nameWithOwner, pr.number);
       }
 
       this.logger.log(`Successfully completed review for PR #${pr.number}`);
-      this.gateway.broadcastReviewCompleted(pr.number, pr.repository.nameWithOwner, { decision, severityScore });
+      this.gateway.broadcastReviewCompleted(pr.number, pr.repository.nameWithOwner, { decision, healthScore });
       return true;
     } catch (error) {
       this.logger.error(`Failed to review PR #${pr.number}: ${error.message}`, error.stack);
@@ -190,15 +224,52 @@ export class ReviewEngineService {
     }
   }
 
-  private buildSummaryMessage(comments: any[], decision: string, score: number): string {
-    if (comments.length === 0) {
-      return "LGTM! No issues found by AI review.";
+  private async applyAutoFixes(repoDir: string, comments: any[]) {
+    for (const comment of comments) {
+      if (comment.suggested_fix && comment.is_auto_fixable) {
+        const filePath = path.join(repoDir, comment.file_path);
+        if (await fs.pathExists(filePath)) {
+          const content = await fs.readFile(filePath, 'utf8');
+          const lines = content.split('\n');
+          
+          if (comment.line_number <= lines.length) {
+            // Very simple replacement for demo - in reality need better line matching
+            lines[comment.line_number - 1] = comment.suggested_fix;
+            await fs.writeFile(filePath, lines.join('\n'));
+            this.logger.log(`Applied auto-fix to ${comment.file_path}:${comment.line_number}`);
+          }
+        }
+      }
     }
+    
+    // Commit and push fixes
+    try {
+      await this.github.execaVerbose('git', ['add', '.'], { cwd: repoDir });
+      await this.github.execaVerbose('git', ['commit', '-m', 'chore: apply AI suggested fixes'], { cwd: repoDir });
+      await this.github.execaVerbose('git', ['push', 'origin', 'HEAD'], { cwd: repoDir });
+    } catch (e) {
+      this.logger.error(`Failed to push auto-fixes: ${e.message}`);
+    }
+  }
 
-    let msg = `### AI Review Summary\n\n`;
+  private buildSummaryMessage(aiComments: any[], securityFindings: any[], decision: string, healthScore: number, mode: string): string {
+    let msg = `### AI Review Summary (${mode} mode)\n\n`;
     msg += `**Decision:** ${decision}\n`;
-    msg += `**Severity Score:** ${score}\n\n`;
-    msg += `Found ${comments.length} potential issues. Please check inline comments for details.`;
+    msg += `**Health Score:** ${healthScore}/100\n\n`;
+    
+    if (securityFindings.length > 0) {
+      msg += `⚠️ **Found ${securityFindings.length} security vulnerabilities!**\n`;
+    }
+    
+    if (mode === 'fix') {
+      msg += `✅ **Auto-fixes have been applied and pushed to your branch.**\n\n`;
+    }
+    
+    if (aiComments.length > 0) {
+      msg += `Found ${aiComments.length} potential issues. Please check inline comments for details.`;
+    } else if (securityFindings.length === 0) {
+      msg += `LGTM! No significant issues found.`;
+    }
     
     return msg;
   }

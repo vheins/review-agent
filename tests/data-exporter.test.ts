@@ -16,6 +16,7 @@ describe('DataExporterService', () => {
       }),
     };
     service = new DataExporterService(configService as any);
+    service.onModuleInit();
   });
 
   afterEach(async () => {

@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Param, Query, ParseIntPipe, Body } from '@nestjs/common';
 import { PullRequestService } from './pull-request.service.js';
+import { sanitizeHtml } from '../../common/utils/sanitization.util.js';
 
 @Controller('prs')
 export class PullRequestController {
@@ -20,8 +21,7 @@ export class PullRequestController {
     @Param('repo') repo: string,
     @Param('number', ParseIntPipe) number: number,
   ) {
-    // repo might be owner-repo, we need to convert back to owner/repo
-    const repoName = repo.replace('-', '/');
+    const repoName = sanitizeHtml(repo).replace('-', '/');
     return this.prService.findOne(repoName, number);
   }
 
@@ -30,7 +30,7 @@ export class PullRequestController {
     @Param('repo') repo: string,
     @Param('number', ParseIntPipe) number: number,
   ) {
-    const repoName = repo.replace('-', '/');
+    const repoName = sanitizeHtml(repo).replace('-', '/');
     const success = await this.prService.triggerReview(repoName, number);
     return { success };
   }

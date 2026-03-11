@@ -6,6 +6,9 @@ import { ChecklistService } from './checklist.service.js';
 import { GitHubModule } from '../github/github.module.js';
 import { AiModule } from '../ai/ai.module.js';
 import { ConfigModule } from '../../config/config.module.js';
+import { SecurityModule } from '../security/security.module.js';
+import { TeamModule } from '../team/team.module.js';
+import { MetricsModule } from '../metrics/metrics.module.js';
 import { Review, PullRequest, Comment, ReviewMetrics, Checklist, ChecklistItem, ReviewChecklist } from '../../database/entities/index.js';
 
 import { ReviewController } from './review.controller.js';
@@ -21,6 +24,9 @@ import { ReviewController } from './review.controller.js';
     GitHubModule,
     AiModule,
     ConfigModule,
+    SecurityModule,
+    TeamModule,
+    MetricsModule,
   ],
   controllers: [ReviewController],
   providers: [ReviewEngineService, ReviewQueueService, ChecklistService],

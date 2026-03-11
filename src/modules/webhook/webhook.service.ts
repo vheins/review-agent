@@ -1,18 +1,24 @@
-import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 import { ReviewQueueService } from '../review/review-queue.service.js';
 
 @Injectable()
-export class WebhookService {
+export class WebhookService implements OnModuleInit {
   private readonly logger = new Logger(WebhookService.name);
-  private readonly secret: string | undefined;
+  private secret: string | undefined;
 
   constructor(
     private readonly configService: ConfigService,
     private readonly reviewQueue: ReviewQueueService,
-  ) {
-    this.secret = this.configService.get<string>('GITHUB_WEBHOOK_SECRET');
+  ) {}
+
+  onModuleInit() {
+    try {
+      this.secret = this.configService.get<string>('GITHUB_WEBHOOK_SECRET');
+    } catch (e) {
+      this.logger.warn(`Could not load GITHUB_WEBHOOK_SECRET: ${e.message}`);
+    }
   }
 
   verifySignature(payload: string, signature: string): boolean {
@@ -50,8 +56,6 @@ export class WebhookService {
     
     if (action === 'opened' || action === 'synchronize') {
       this.logger.log(`Queueing review for PR #${prNumber}`);
-      // Convert payload to our PullRequest interface if needed, 
-      // or just pass enough info to reviewQueue
       await this.reviewQueue.addToQueue({
         number: prNumber,
         title: payload.pull_request.title,
