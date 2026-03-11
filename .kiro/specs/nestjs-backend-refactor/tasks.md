@@ -373,7 +373,7 @@ Dokumen ini berisi rencana implementasi untuk refactor backend PR Review Agent d
 
 
 - [ ] 13. Implement WebSocket gateway
-  - [ ] 13.1 Create ReviewGateway untuk WebSocket
+  - [x] 13.1 Create ReviewGateway untuk WebSocket
     - Install @nestjs/websockets dan ws packages
     - Buat ReviewGateway dengan @WebSocketGateway decorator
     - Implement OnGatewayConnection dan OnGatewayDisconnect
@@ -381,7 +381,7 @@ Dokumen ini berisi rencana implementasi untuk refactor backend PR Review Agent d
     - Track connected clients
     - _Requirements: 6.1, 6.2_
   
-  - [ ] 13.2 Implement event broadcasting methods
+  - [x] 13.2 Implement event broadcasting methods
     - Implement broadcastReviewStart()
     - Implement broadcastReviewProgress()
     - Implement broadcastReviewComplete()
@@ -390,24 +390,24 @@ Dokumen ini berisi rencana implementasi untuk refactor backend PR Review Agent d
     - Maintain event type compatibility dengan Express
     - _Requirements: 6.3, 6.4_
   
-  - [ ] 13.3 Implement reconnection support
+  - [x] 13.3 Implement reconnection support
     - Handle client disconnections gracefully
     - Support automatic reconnection dari Electron
     - _Requirements: 6.5_
   
-  - [ ] 13.4 Write WebSocket integration tests
+  - [x] 13.4 Write WebSocket integration tests
     - Test connection dan disconnection
     - Test event broadcasting
     - Test reconnection logic
     - **Property 8: WebSocket Event Broadcasting**
     - **Validates: Requirements 6.3**
   
-  - [ ] 13.5 Write property test untuk event compatibility
+  - [x] 13.5 Write property test untuk event compatibility
     - **Property 9: WebSocket Event Compatibility**
     - **Validates: Requirements 6.4**
     - Test event format match dengan Electron expectations
   
-  - [ ] 13.6 Write property test untuk broadcast latency
+  - [x] 13.6 Write property test untuk broadcast latency
     - **Property 31: WebSocket Broadcast Latency**
     - **Validates: Requirements 17.3**
     - Test broadcast time < 100ms

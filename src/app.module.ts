@@ -5,6 +5,7 @@ import { LoggerModule } from './common/logger.module.js';
 import { GitHubModule } from './modules/github/github.module.js';
 import { AiModule } from './modules/ai/ai.module.js';
 import { ReviewModule } from './modules/review/review.module.js';
+import { MetricsModule } from './modules/metrics/metrics.module.js';
 
 /**
  * AppModule - Root NestJS Module
@@ -29,6 +30,7 @@ import { ReviewModule } from './modules/review/review.module.js';
     GitHubModule, // GitHub CLI operations
     AiModule, // AI-powered review operations
     ReviewModule, // Core review orchestration
+    MetricsModule, // Metrics and quality scoring
     
     // Future feature modules will be added here:
     // PullRequestModule,
