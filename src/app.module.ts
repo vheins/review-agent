@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from './config/config.module.js';
 import { DatabaseModule } from './database/database.module.js';
+import { LoggerModule } from './common/logger.module.js';
 
 /**
  * AppModule - Root NestJS Module
@@ -19,7 +20,7 @@ import { DatabaseModule } from './database/database.module.js';
     // Core modules
     ConfigModule, // Global configuration with .env support
     DatabaseModule, // TypeORM with SQLite
-    // LoggerModule, // Will be added in Phase 3
+    LoggerModule, // Custom logger with daily rotation
     
     // Feature modules will be added here:
     // PullRequestModule,

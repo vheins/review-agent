@@ -43,10 +43,17 @@ const __dirname = path.dirname(__filename);
         return {
           type: 'sqlite',
           database: dbPath,
-          entities: [path.join(__dirname, 'entities', '*.entity{.ts,.js}')],
+          entities: [
+            PullRequest,
+            Review,
+            Comment,
+            ReviewMetrics,
+            RepositoryConfig,
+            DeveloperMetrics,
+          ],
           synchronize: isDevelopment, // Auto-sync schema in development
           logging: isDevelopment ? ['query', 'error', 'warn'] : ['error'], // Log queries in development
-          autoLoadEntities: true, // Automatically load entities
+          autoLoadEntities: false, // Use explicit entity list instead
         };
       },
     }),

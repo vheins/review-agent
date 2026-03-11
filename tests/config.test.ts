@@ -23,8 +23,28 @@ describe('ConfigModule', () => {
     process.env.GEMINI_ENABLED = 'true';
     process.env.REVIEW_MODE = 'comment';
 
+    // Import only the NestJS ConfigModule without database dependencies
+    const { ConfigModule: NestConfigModule } = await import('@nestjs/config');
+    const appConfig = (await import('../src/config/app.config.js')).default;
+    const reviewConfig = (await import('../src/config/review.config.js')).default;
+    const aiExecutorConfig = (await import('../src/config/ai-executor.config.js')).default;
+    const databaseConfig = (await import('../src/config/database.config.js')).default;
+    const { validationSchema } = await import('../src/config/validation.schema.js');
+
     const module: TestingModule = await Test.createTestingModule({
-      imports: [ConfigModule],
+      imports: [
+        NestConfigModule.forRoot({
+          isGlobal: true,
+          ignoreEnvFile: true, // Use process.env directly in tests
+          cache: false, // Disable cache for tests
+          validationSchema,
+          validationOptions: {
+            allowUnknown: true,
+            abortEarly: false,
+          },
+          load: [appConfig, reviewConfig, aiExecutorConfig, databaseConfig],
+        }),
+      ],
     }).compile();
 
     configService = module.get<ConfigService>(ConfigService);

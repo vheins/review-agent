@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AppModule } from '../src/app.module';
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 
 /**
  * AppModule Tests
@@ -11,10 +11,16 @@ import { describe, it, expect, beforeEach } from 'vitest';
 describe('AppModule', () => {
   let module: TestingModule;
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     module = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
+  }, 30000); // 30 second timeout for module compilation
+
+  afterAll(async () => {
+    if (module) {
+      await module.close();
+    }
   });
 
   it('should be defined', () => {

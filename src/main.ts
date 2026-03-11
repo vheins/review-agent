@@ -1,5 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
+import { LoggingInterceptor } from './common/interceptors/logging.interceptor.js';
 import 'reflect-metadata';
 
 /**
@@ -15,6 +16,9 @@ import 'reflect-metadata';
  */
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // Apply LoggingInterceptor globally
+  app.useGlobalInterceptors(new LoggingInterceptor());
 
   // Get port from environment or use default
   const port = process.env.API_PORT || 3000;

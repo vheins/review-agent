@@ -27,6 +27,7 @@
 // - src/common/interfaces/
 // - src/common/constants/
 
-// Empty export to make this a valid module
-export {};
+// Logger
+export * from './logger.service';
+export * from './logger.module';
 
