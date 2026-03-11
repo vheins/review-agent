@@ -225,7 +225,7 @@ Dokumen ini berisi rencana implementasi untuk refactor backend PR Review Agent d
     - **Validates: Requirements 8.5**
     - Test parsing correctness untuk various formats
 
-- [ ] 8. Checkpoint - Verify core services
+- [x] 8. Checkpoint - Verify core services
   - Ensure all tests pass, ask the user if questions arise.
 
 
