@@ -10,6 +10,8 @@ import { PullRequest } from '../../database/entities/pull-request.entity.js';
 import { Comment } from '../../database/entities/comment.entity.js';
 import { ReviewMetrics } from '../../database/entities/review-metrics.entity.js';
 
+import { ReviewController } from './review.controller.js';
+
 /**
  * ReviewModule - Module for core review orchestration
  * 
@@ -22,6 +24,7 @@ import { ReviewMetrics } from '../../database/entities/review-metrics.entity.js'
     AiModule,
     ConfigModule,
   ],
+  controllers: [ReviewController],
   providers: [ReviewEngineService, ReviewQueueService],
   exports: [ReviewEngineService, ReviewQueueService],
 })

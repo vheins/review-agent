@@ -307,8 +307,8 @@ Dokumen ini berisi rencana implementasi untuk refactor backend PR Review Agent d
 
 ### Phase 4: API Layer Migration (Minggu 7-8)
 
-- [ ] 12. Implement REST API controllers
-  - [ ] 12.1 Create PullRequestController
+- [x] 12. Implement REST API controllers
+  - [x] 12.1 Create PullRequestController
     - Buat PullRequestModule dan PullRequestController
     - Implement GET /api/prs endpoint dengan query params
     - Implement GET /api/prs/:number endpoint
@@ -316,7 +316,7 @@ Dokumen ini berisi rencana implementasi untuk refactor backend PR Review Agent d
     - Create DTOs untuk request validation (ListPrQuery, etc.)
     - _Requirements: 5.1, 5.8_
   
-  - [ ] 12.2 Create ReviewController
+  - [x] 12.2 Create ReviewController
     - Buat ReviewController
     - Implement GET /api/reviews endpoint
     - Implement GET /api/reviews/:id endpoint
@@ -324,7 +324,7 @@ Dokumen ini berisi rencana implementasi untuk refactor backend PR Review Agent d
     - Create CreateReviewDto dengan validation decorators
     - _Requirements: 5.2, 5.8_
   
-  - [ ] 12.3 Create MetricsController
+  - [x] 12.3 Create MetricsController
     - Buat MetricsController
     - Implement GET /api/metrics/overview endpoint
     - Implement GET /api/metrics/pr/:number endpoint
@@ -341,7 +341,7 @@ Dokumen ini berisi rencana implementasi untuk refactor backend PR Review Agent d
     - Implement security operations endpoints
     - _Requirements: 5.5_
   
-  - [ ] 12.6 Create ConfigController
+  - [x] 12.6 Create ConfigController
     - Buat ConfigController
     - Implement GET /api/config/:repository endpoint
     - Implement PUT /api/config/:repository endpoint
@@ -353,7 +353,7 @@ Dokumen ini berisi rencana implementasi untuk refactor backend PR Review Agent d
     - Implement POST /api/webhooks/github endpoint
     - _Requirements: 5.7_
   
-  - [ ] 12.8 Create HealthController
+  - [x] 12.8 Create HealthController
     - Buat HealthController
     - Implement GET /health endpoint
     - _Requirements: 3.6_
@@ -366,13 +366,13 @@ Dokumen ini berisi rencana implementasi untuk refactor backend PR Review Agent d
     - **Property 4: API Endpoint Compatibility**
     - **Validates: Requirements 3.1, 5.8, 16.3**
   
-  - [ ] 12.10 Write property test untuk response format
+  - [x] 12.10 Write property test untuk response format
     - **Property 6: Response Format Compatibility**
     - **Validates: Requirements 3.4**
     - Test response data structure match dengan Electron expectations
 
 
-- [ ] 13. Implement WebSocket gateway
+- [x] 13. Implement WebSocket gateway
   - [x] 13.1 Create ReviewGateway untuk WebSocket
     - Install @nestjs/websockets dan ws packages
     - Buat ReviewGateway dengan @WebSocketGateway decorator
@@ -413,7 +413,7 @@ Dokumen ini berisi rencana implementasi untuk refactor backend PR Review Agent d
     - Test broadcast time < 100ms
 
 
-- [ ] 14. Implement guards, interceptors, dan filters
+- [x] 14. Implement guards, interceptors, dan filters
   - [x] 14.1 Create ApiKeyGuard untuk authentication
     - Implement CanActivate interface
     - Validate X-API-Key header
@@ -455,7 +455,7 @@ Dokumen ini berisi rencana implementasi untuk refactor backend PR Review Agent d
     - **Validates: Requirements 18.2**
     - Test invalid input rejection
 
-- [ ] 15. Checkpoint - Verify API layer
+- [x] 15. Checkpoint - Verify API layer
   - Ensure all tests pass, ask the user if questions arise.
 
 

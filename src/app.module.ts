@@ -7,7 +7,10 @@ import { AiModule } from './modules/ai/ai.module.js';
 import { ReviewModule } from './modules/review/review.module.js';
 import { MetricsModule } from './modules/metrics/metrics.module.js';
 import { ComplianceModule } from './modules/compliance/compliance.module.js';
+import { PullRequestModule } from './modules/pull-request/pull-request.module.js';
 import { DataExporterModule } from './common/exporter/data-exporter.module.js';
+import { HealthModule } from './common/health/health.module.js';
+import { WebSocketModule } from './modules/websocket/websocket.module.js';
 
 /**
  * AppModule - Root NestJS Module
@@ -34,7 +37,10 @@ import { DataExporterModule } from './common/exporter/data-exporter.module.js';
     ReviewModule, // Core review orchestration
     MetricsModule, // Metrics and quality scoring
     ComplianceModule, // Compliance reporting
+    PullRequestModule, // Pull Request management
     DataExporterModule, // Data exporting
+    HealthModule, // Health check
+    WebSocketModule, // Real-time updates
     
     // Future feature modules will be added here:
     // PullRequestModule,

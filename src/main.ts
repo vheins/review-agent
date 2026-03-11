@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor.js';
+import { GlobalExceptionFilter } from './common/filters/global-exception.filter.js';
 import 'reflect-metadata';
 
 /**
@@ -19,6 +20,9 @@ async function bootstrap() {
 
   // Apply LoggingInterceptor globally
   app.useGlobalInterceptors(new LoggingInterceptor());
+
+  // Apply GlobalExceptionFilter globally
+  app.useGlobalFilters(new GlobalExceptionFilter());
 
   // Get port from environment or use default
   const port = process.env.API_PORT || 3000;

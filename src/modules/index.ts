@@ -10,6 +10,7 @@ export * from './ai/index.js';
 export * from './review/index.js';
 export * from './metrics/index.js';
 export * from './compliance/index.js';
+export * from './pull-request/index.js';
 
 // Future modules:
 // export * from './pull-request/index.js';

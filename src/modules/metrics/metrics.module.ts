@@ -7,6 +7,8 @@ import { PullRequest } from '../../database/entities/pull-request.entity.js';
 import { Comment } from '../../database/entities/comment.entity.js';
 import { DeveloperMetrics } from '../../database/entities/developer-metrics.entity.js';
 
+import { MetricsController } from './metrics.controller.js';
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([
@@ -17,6 +19,7 @@ import { DeveloperMetrics } from '../../database/entities/developer-metrics.enti
       DeveloperMetrics,
     ]),
   ],
+  controllers: [MetricsController],
   providers: [MetricsService],
   exports: [MetricsService],
 })
