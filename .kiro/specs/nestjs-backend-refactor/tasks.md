@@ -461,20 +461,20 @@ Dokumen ini berisi rencana implementasi untuk refactor backend PR Review Agent d
 
 ### Phase 5: Additional Services (Minggu 9-10)
 
-- [ ] 16. Migrate metrics dan analytics services
-  - [ ] 16.1 Create MetricsModule dan MetricsCollectorService
+- [x] 16. Migrate metrics dan analytics services
+  - [x] 16.1 Create MetricsModule dan MetricsCollectorService
     - Buat MetricsModule dengan providers
     - Migrate metrics-collector.js ke MetricsCollectorService
     - Inject repositories untuk metrics storage
     - _Requirements: 11.1, 11.2_
   
-  - [ ] 16.2 Migrate HealthScoreCalculatorService
+  - [x] 16.2 Migrate HealthScoreCalculatorService
     - Migrate health-score-calculator.js
     - Implement calculateHealthScore() method
     - Ensure consistent score calculation
     - _Requirements: 11.3_
   
-  - [ ] 16.3 Migrate QualityScorerService
+  - [x] 16.3 Migrate QualityScorerService
     - Migrate quality-scorer.js
     - Implement calculateQualityScore() method
     - _Requirements: 11.4_
@@ -488,13 +488,13 @@ Dokumen ini berisi rencana implementasi untuk refactor backend PR Review Agent d
     - Aggregate metrics untuk developer dashboard
     - _Requirements: 11.6_
   
-  - [ ] 16.6 Write unit tests untuk metrics services
+  - [x] 16.6 Write unit tests untuk metrics services
     - Test metrics collection
     - Test score calculations
     - **Property 20: Metrics Storage**
     - **Validates: Requirements 11.2**
   
-  - [ ] 16.7 Write property test untuk score consistency
+  - [x] 16.7 Write property test untuk score consistency
     - **Property 21: Score Calculation Consistency**
     - **Validates: Requirements 11.3, 11.4**
     - Test same input produces same output
@@ -583,7 +583,7 @@ Dokumen ini berisi rencana implementasi untuk refactor backend PR Review Agent d
     - Test data export
     - Test audit logging
 
-- [ ] 20. Checkpoint - Verify additional services
+- [x] 20. Checkpoint - Verify additional services
   - Ensure all tests pass, ask the user if questions arise.
 
 
