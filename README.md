@@ -18,7 +18,12 @@ GitHub Pull Request assistant with optional Gemini CLI delegation.
 
 ```bash
 yarn install
+
+# Rebuild native modules (required for better-sqlite3)
+npm rebuild better-sqlite3
 ```
+
+**Note**: If you encounter `Could not locate the bindings file` errors, run `npm rebuild better-sqlite3` to compile the native module for your Node.js version.
 
 ## Configuration
 
@@ -237,6 +242,43 @@ This will show what prompts would be sent to Gemini without executing them.
 ```
 
 ## Desktop Application
+
+### Quick Start
+
+To run the desktop app:
+
+```bash
+# Development mode (recommended)
+yarn app:dev          # Linux/Mac
+yarn app:dev:win      # Windows
+```
+
+The backend server will **automatically start** when you open the Electron app. No need to run it separately!
+
+**What happens automatically:**
+1. Backend server starts on port 3000 (if not already running)
+2. Vite dev server starts on port 5173
+3. Electron app launches with hot reload
+4. Backend server stops when you close the app
+
+### Manual Backend Server (Optional)
+
+If you want to run the backend server separately:
+
+```bash
+# Terminal 1: Start backend server
+yarn server
+
+# Terminal 2: Start Electron app
+yarn app:dev
+```
+
+### Troubleshooting
+
+If you see WebSocket connection errors:
+- Make sure the backend server is running on port 3000
+- Check `.env` file for correct `API_PORT` setting
+- See `RUNNING.md` for detailed troubleshooting
 
 Run the desktop app with GUI:
 

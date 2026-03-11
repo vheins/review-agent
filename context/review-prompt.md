@@ -55,7 +55,7 @@ Fokus pada:
 - Performance issue (N+1, heavy loop, unindexed query)
 - Arsitektur (separation of concern, mixing controller dengan logic)
 - Code quality (duplikasi, naming, unused variable)
-- Missing test
+- Missing test (opsional - unit testing tidak wajib, tidak perlu di-reject jika tidak ada test)
 
 ### STEP 5: Tambah komentar inline ATOMIK
 
@@ -125,6 +125,8 @@ Scoring per issue:
 - HIGH = {{severityHigh}} poin (logic error, missing critical handling, vulnerable dependency)
 - MEDIUM = {{severityMedium}} poin (quality issue, minor bug, inconsistent pattern)
 - LOW = {{severityLow}} poin (style, unused var, minor optimization)
+
+**Catatan**: Missing unit test TIDAK dihitung sebagai issue yang perlu di-reject. Unit testing bersifat opsional.
 
 Decision rules:
 1. Ada CRITICAL atau HIGH → selalu `REQUEST_CHANGES`

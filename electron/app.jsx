@@ -357,66 +357,111 @@ function App() {
 
         let reconnectTimer;
         let reconnectDelay = 1000;
+        let reconnectAttempts = 0;
+        const maxReconnectAttempts = 3; // Reduced from 5 to 3
         let socket;
+        let isIntentionallyClosed = false;
 
         const connect = () => {
+            // Stop reconnecting after max attempts
+            if (reconnectAttempts >= maxReconnectAttempts) {
+                setWsStatus('Disconnected');
+                console.log(`WebSocket: Stopped reconnecting after ${maxReconnectAttempts} attempts. Backend server may not be running.`);
+                return;
+            }
+
             setWsStatus('Connecting');
-            socket = new WebSocket(runtimeConfig.wsUrl);
-            socket.addEventListener('open', () => {
-                reconnectDelay = 1000;
-                setWsStatus('Connected');
-                socket.send(JSON.stringify({
-                    type: 'auth',
-                    userId: runtimeConfig.wsUserId,
-                    token: runtimeConfig.wsToken
-                }));
-            });
+            
+            try {
+                socket = new WebSocket(runtimeConfig.wsUrl);
+                
+                socket.addEventListener('open', () => {
+                    reconnectDelay = 1000;
+                    reconnectAttempts = 0; // Reset on successful connection
+                    setWsStatus('Connected');
+                    console.log('WebSocket: Connected successfully');
+                    socket.send(JSON.stringify({
+                        type: 'auth',
+                        userId: runtimeConfig.wsUserId,
+                        token: runtimeConfig.wsToken
+                    }));
+                });
 
-            socket.addEventListener('message', async (event) => {
-                const data = JSON.parse(event.data);
-                if (data.type === 'auth_success') {
-                    prependLog('info', 'WebSocket authenticated');
-                    socket.send(JSON.stringify({ type: 'subscribe', channel: 'dashboard' }));
-                    return;
-                }
-                if (data.type === 'subscription_success') {
-                    prependLog('info', `Subscribed to ${data.channel}`);
-                    return;
-                }
-                if (['review_started', 'review_progress', 'review_completed', 'review_failed'].includes(data.type)) {
-                    prependLog(data.type === 'review_failed' ? 'warn' : 'info', `${data.type}: ${JSON.stringify(data.payload)}`);
-                    await refreshSnapshot();
-                    await refreshPRs();
-                    return;
-                }
-                if (['metrics_update', 'pr_update'].includes(data.type)) {
-                    prependLog('info', `Realtime update: ${data.type}`);
-                    await refreshSnapshot();
-                    await refreshPRs();
-                    return;
-                }
-                if (data.type === 'health_alert') {
-                    prependLog('error', `Health alert: ${JSON.stringify(data.payload)}`);
-                    await refreshTeamSecurity();
-                }
-            });
+                socket.addEventListener('message', async (event) => {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'auth_success') {
+                        prependLog('info', 'WebSocket authenticated');
+                        socket.send(JSON.stringify({ type: 'subscribe', channel: 'dashboard' }));
+                        return;
+                    }
+                    if (data.type === 'subscription_success') {
+                        prependLog('info', `Subscribed to ${data.channel}`);
+                        return;
+                    }
+                    if (['review_started', 'review_progress', 'review_completed', 'review_failed'].includes(data.type)) {
+                        prependLog(data.type === 'review_failed' ? 'warn' : 'info', `${data.type}: ${JSON.stringify(data.payload)}`);
+                        await refreshSnapshot();
+                        await refreshPRs();
+                        return;
+                    }
+                    if (['metrics_update', 'pr_update'].includes(data.type)) {
+                        prependLog('info', `Realtime update: ${data.type}`);
+                        await refreshSnapshot();
+                        await refreshPRs();
+                        return;
+                    }
+                    if (data.type === 'health_alert') {
+                        prependLog('error', `Health alert: ${JSON.stringify(data.payload)}`);
+                        await refreshTeamSecurity();
+                    }
+                });
 
-            socket.addEventListener('close', () => {
-                setWsStatus('Reconnecting');
-                reconnectTimer = window.setTimeout(connect, reconnectDelay);
-                reconnectDelay = Math.min(reconnectDelay * 2, 15000);
-            });
+                socket.addEventListener('close', (event) => {
+                    if (isIntentionallyClosed) {
+                        setWsStatus('Disconnected');
+                        return;
+                    }
+                    
+                    if (event.wasClean) {
+                        setWsStatus('Disconnected');
+                        console.log('WebSocket: Connection closed cleanly');
+                    } else {
+                        reconnectAttempts++;
+                        console.log(`WebSocket: Connection lost. Reconnect attempt ${reconnectAttempts}/${maxReconnectAttempts}`);
+                        
+                        if (reconnectAttempts < maxReconnectAttempts) {
+                            setWsStatus('Reconnecting');
+                            reconnectTimer = window.setTimeout(connect, reconnectDelay);
+                            reconnectDelay = Math.min(reconnectDelay * 2, 15000);
+                        } else {
+                            setWsStatus('Disconnected');
+                        }
+                    }
+                });
 
-            socket.addEventListener('error', () => {
+                socket.addEventListener('error', () => {
+                    // Silently handle error - will be caught by close event
+                    reconnectAttempts++;
+                });
+            } catch (error) {
+                console.log('WebSocket: Connection error', error.message);
                 setWsStatus('Error');
-            });
+                reconnectAttempts++;
+                if (reconnectAttempts < maxReconnectAttempts) {
+                    reconnectTimer = window.setTimeout(connect, reconnectDelay);
+                    reconnectDelay = Math.min(reconnectDelay * 2, 15000);
+                }
+            }
         };
 
         connect();
 
         return () => {
+            isIntentionallyClosed = true;
             window.clearTimeout(reconnectTimer);
-            socket?.close();
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.close(1000, 'Component unmounting');
+            }
         };
     }, [runtimeConfig]);
 
@@ -626,7 +671,13 @@ function App() {
                                     API Health
                                 </div>
                                 <div className="text-2xl font-semibold">{apiStatus}</div>
-                                <p className="mt-1 text-sm text-muted-foreground">Dashboard snapshot and control endpoints.</p>
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                    {apiStatus === 'Connected' 
+                                        ? 'Dashboard snapshot and control endpoints.' 
+                                        : apiStatus.includes('Database not initialized')
+                                        ? 'Start backend server with: yarn server'
+                                        : 'Backend server not running. Run: yarn server'}
+                                </p>
                             </div>
                             <div className="rounded-xl border border-border bg-panel p-4">
                                 <div className="mb-3 flex items-center gap-2 text-sm font-medium text-muted-foreground">
@@ -634,7 +685,13 @@ function App() {
                                     Live Stream
                                 </div>
                                 <div className="text-2xl font-semibold">{wsStatus}</div>
-                                <p className="mt-1 text-sm text-muted-foreground">Realtime dashboard events and health alerts.</p>
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                    {wsStatus === 'Connected' 
+                                        ? 'Realtime dashboard events and health alerts.' 
+                                        : wsStatus === 'Disconnected'
+                                        ? 'Backend server not running. Run: yarn server'
+                                        : 'Attempting to connect to backend...'}
+                                </p>
                             </div>
                         </div>
                     </Card>

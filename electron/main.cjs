@@ -46,6 +46,74 @@ if (process.env.NODE_ENV === 'development') {
 
 let mainWindow;
 let reviewProcess = null;
+let backendServerProcess = null;
+
+// Function to check if server is already running
+async function isServerRunning(port = 3000) {
+    return new Promise((resolve) => {
+        const http = require('http');
+        const req = http.get(`http://127.0.0.1:${port}/health`, (res) => {
+            resolve(res.statusCode === 200);
+        });
+        req.on('error', () => resolve(false));
+        req.setTimeout(2000, () => {
+            req.destroy();
+            resolve(false);
+        });
+    });
+}
+
+// Function to start backend server
+async function startBackendServer() {
+    const port = process.env.API_PORT || 3000;
+
+    // Check if server is already running
+    const isRunning = await isServerRunning(port);
+    if (isRunning) {
+        console.log(`✓ Backend server already running on port ${port}`);
+        return true;
+    }
+
+    console.log('🚀 Starting backend server...');
+
+    const serverPath = path.join(__dirname, '..', 'src', 'server.js');
+
+    backendServerProcess = spawn('node', [serverPath], {
+        cwd: path.join(__dirname, '..'),
+        env: { ...process.env },
+        stdio: ['ignore', 'pipe', 'pipe']
+    });
+
+    backendServerProcess.stdout.on('data', (data) => {
+        console.log(`[Backend] ${data.toString().trim()}`);
+    });
+
+    backendServerProcess.stderr.on('data', (data) => {
+        console.error(`[Backend Error] ${data.toString().trim()}`);
+    });
+
+    backendServerProcess.on('close', (code) => {
+        console.log(`Backend server exited with code ${code}`);
+        backendServerProcess = null;
+    });
+
+    backendServerProcess.on('error', (error) => {
+        console.error('Failed to start backend server:', error.message);
+        backendServerProcess = null;
+    });
+
+    // Wait for server to be ready
+    for (let i = 0; i < 30; i++) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        if (await isServerRunning(port)) {
+            console.log(`✓ Backend server started successfully on port ${port}`);
+            return true;
+        }
+    }
+
+    console.error('⚠ Backend server failed to start within 30 seconds');
+    return false;
+}
 
 async function loadRuntimeModules() {
     const dbPath = path.join(__dirname, '..', 'src', 'database.js');
@@ -141,11 +209,21 @@ function createWindow() {
     }
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(async () => {
+    // Start backend server first
+    await startBackendServer();
+
+    // Then create window
+    createWindow();
+});
 
 app.on('window-all-closed', () => {
     if (reviewProcess) {
         reviewProcess.kill();
+    }
+    if (backendServerProcess) {
+        console.log('Stopping backend server...');
+        backendServerProcess.kill();
     }
     if (process.platform !== 'darwin') {
         app.quit();
@@ -295,6 +373,12 @@ ipcMain.handle('get-runtime-config', async () => {
 ipcMain.handle('get-dashboard-snapshot', async (event, { rangeDays = 30 } = {}) => {
     try {
         const { dbManager, configManager, metricsEngine } = await loadRuntimeModules();
+
+        // Ensure database is initialized
+        if (!dbManager.isAvailable()) {
+            return { success: false, error: 'Database not initialized' };
+        }
+
         const filters = buildDateFilters(rangeDays);
 
         const overview = dbManager.db.prepare(`
@@ -479,6 +563,12 @@ ipcMain.handle('get-dashboard-snapshot', async (event, { rangeDays = 30 } = {}) 
 ipcMain.handle('list-prs', async (event, { status = '', repositoryId = '', authorId = '', search = '' } = {}) => {
     try {
         const { dbManager } = await loadRuntimeModules();
+
+        // Ensure database is initialized
+        if (!dbManager.isAvailable()) {
+            return { success: false, error: 'Database not initialized', prs: [] };
+        }
+
         let query = `
             SELECT
                 pr.id,

@@ -9,6 +9,7 @@
     "once": "node src/index.js --once",
     "dry-run": "node src/index.js --once --dry-run",
     "review": "node src/review-pr.js",
+    "server": "node src/server.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "ui:build": "vite build --config electron/vite.config.mjs",
