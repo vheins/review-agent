@@ -556,8 +556,8 @@ Dokumen ini berisi rencana implementasi untuk refactor backend PR Review Agent d
     - Test excessive requests blocked
 
 
-- [ ] 18. Migrate team dan developer services
-  - [ ] 18.1 Create TeamModule dan services
+- [x] 18. Migrate team dan developer services
+  - [x] 18.1 Create TeamModule dan services
     - Buat TeamModule dengan providers
     - Migrate developer-dashboard.js ke DeveloperDashboardService
     - Migrate assignment-engine.js ke AssignmentEngineService
@@ -565,7 +565,7 @@ Dokumen ini berisi rencana implementasi untuk refactor backend PR Review Agent d
     - Migrate gamification-engine.js ke GamificationService
     - _Requirements: 11.6_
   
-  - [ ] 18.2 Write unit tests untuk team services
+  - [x] 18.2 Write unit tests untuk team services
     - Test developer metrics aggregation
     - Test reviewer assignment logic
     - Test capacity planning

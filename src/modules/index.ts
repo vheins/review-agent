@@ -12,6 +12,7 @@ export * from './metrics/index.js';
 export * from './compliance/index.js';
 export * from './pull-request/index.js';
 export * from './security/index.js';
+export * from './team/index.js';
 
 // Future modules:
 // export * from './pull-request/index.js';

@@ -13,6 +13,7 @@ import { DataExporterModule } from './common/exporter/data-exporter.module.js';
 import { HealthModule } from './common/health/health.module.js';
 import { WebSocketModule } from './modules/websocket/websocket.module.js';
 import { SecurityModule } from './modules/security/security.module.js';
+import { TeamModule } from './modules/team/team.module.js';
 
 /**
  * AppModule - Root NestJS Module
@@ -50,6 +51,7 @@ import { SecurityModule } from './modules/security/security.module.js';
     HealthModule, // Health check
     WebSocketModule, // Real-time updates
     SecurityModule, // Security scanning
+    TeamModule, // Team and developer services
     
     // Future feature modules will be added here:
     // PullRequestModule,
