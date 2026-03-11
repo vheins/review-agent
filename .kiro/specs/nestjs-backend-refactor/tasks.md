@@ -89,14 +89,14 @@ Dokumen ini berisi rencana implementasi untuk refactor backend PR Review Agent d
     - Create typed configuration interfaces
     - _Requirements: 9.1, 9.2_
   
-  - [~] 3.2 Implement repository-specific configuration overrides
+  - [x] 3.2 Implement repository-specific configuration overrides
     - Create AppConfigService yang extend ConfigService
     - Implement getRepositoryConfig() method
     - Load repository configs dari database
     - Implement config validation logic
     - _Requirements: 9.3, 9.4, 9.6_
   
-  - [~] 3.3 Write unit tests untuk configuration loading
+  - [x] 3.3 Write unit tests untuk configuration loading
     - Test environment variable loading
     - Test repository-specific overrides
     - Test config validation
@@ -225,7 +225,7 @@ Dokumen ini berisi rencana implementasi untuk refactor backend PR Review Agent d
     - **Validates: Requirements 8.5**
     - Test parsing correctness untuk various formats
 
-- [ ] 8. Checkpoint - Verify core services
+- [~] 8. Checkpoint - Verify core services
   - Ensure all tests pass, ask the user if questions arise.
 
 
@@ -301,7 +301,7 @@ Dokumen ini berisi rencana implementasi untuk refactor backend PR Review Agent d
     - Test checklist generation
     - Test checklist tracking
 
-- [ ] 11. Checkpoint - Verify review engine
+- [~] 11. Checkpoint - Verify review engine
   - Ensure all tests pass, ask the user if questions arise.
 
 
@@ -455,7 +455,7 @@ Dokumen ini berisi rencana implementasi untuk refactor backend PR Review Agent d
     - **Validates: Requirements 18.2**
     - Test invalid input rejection
 
-- [ ] 15. Checkpoint - Verify API layer
+- [~] 15. Checkpoint - Verify API layer
   - Ensure all tests pass, ask the user if questions arise.
 
 

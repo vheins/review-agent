@@ -1,11 +1,14 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule as NestConfigModule } from '@nestjs/config';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import * as path from 'path';
 import appConfig from './app.config';
 import reviewConfig from './review.config';
 import aiExecutorConfig from './ai-executor.config';
 import databaseConfig from './database.config';
 import { validationSchema } from './validation.schema';
+import { AppConfigService } from './app-config.service.js';
+import { RepositoryConfig } from '../database/entities/repository-config.entity.js';
 
 /**
  * ConfigModule - Application Configuration Module
@@ -18,6 +21,7 @@ import { validationSchema } from './validation.schema';
  * - Makes ConfigService available globally
  * - Validates required environment variables using Joi schema
  * - Provides typed configuration objects via factory functions
+ * - Provides AppConfigService for repository-specific configuration overrides
  * 
  * Configuration Namespaces:
  * - app: General application settings (port, intervals, workspace)
@@ -27,13 +31,13 @@ import { validationSchema } from './validation.schema';
  * 
  * Usage:
  * ```typescript
- * constructor(private configService: ConfigService) {}
+ * constructor(private appConfig: AppConfigService) {}
  * 
- * const port = this.configService.get<number>('app.apiPort');
- * const reviewMode = this.configService.get<string>('review.reviewMode');
+ * const port = this.appConfig.get<number>('app.apiPort');
+ * const repoConfig = await this.appConfig.getRepositoryConfig('owner/repo');
  * ```
  * 
- * Requirements: 9.1, 9.2, 9.4, 9.5
+ * Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6
  */
 @Module({
   imports: [
@@ -54,6 +58,10 @@ import { validationSchema } from './validation.schema';
         databaseConfig,
       ],
     }),
+    // Import TypeOrmModule to inject RepositoryConfig repository
+    TypeOrmModule.forFeature([RepositoryConfig]),
   ],
+  providers: [AppConfigService],
+  exports: [AppConfigService],
 })
 export class ConfigModule {}
