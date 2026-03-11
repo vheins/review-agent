@@ -1,0 +1,2 @@
+# Common utilities directory
+# This directory will contain shared utilities, decorators, guards, interceptors, filters, etc.

@@ -1,0 +1,34 @@
+import { registerAs } from '@nestjs/config';
+
+/**
+ * Application Configuration
+ * 
+ * Typed configuration for general application settings.
+ * 
+ * Requirements: 9.1, 9.2, 9.5
+ */
+export interface AppConfig {
+  nodeEnv: string;
+  apiPort: number;
+  reviewInterval: number;
+  logLevel: string;
+  workspaceDir: string;
+  excludeRepoOwners: string[];
+  prScope: string[];
+  autoMerge: boolean;
+}
+
+export default registerAs('app', (): AppConfig => ({
+  nodeEnv: process.env.NODE_ENV || 'development',
+  apiPort: parseInt(process.env.API_PORT || '3000', 10),
+  reviewInterval: parseInt(process.env.REVIEW_INTERVAL || '600', 10),
+  logLevel: process.env.LOG_LEVEL || 'info',
+  workspaceDir: process.env.WORKSPACE_DIR || './workspace',
+  excludeRepoOwners: process.env.EXCLUDE_REPO_OWNERS
+    ? process.env.EXCLUDE_REPO_OWNERS.split(',').map(s => s.trim())
+    : [],
+  prScope: process.env.PR_SCOPE
+    ? process.env.PR_SCOPE.split(',').map(s => s.trim())
+    : ['authored', 'assigned', 'review-requested'],
+  autoMerge: process.env.AUTO_MERGE === 'true',
+}));

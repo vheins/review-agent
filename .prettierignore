@@ -1,0 +1,29 @@
+# Build outputs
+dist
+build
+.next
+out
+
+# Dependencies
+node_modules
+
+# Logs
+logs
+*.log
+
+# Database
+data
+
+# Workspace
+workspace
+
+# Electron
+electron
+
+# Coverage
+coverage
+
+# Misc
+.env
+.env.*
+*.md

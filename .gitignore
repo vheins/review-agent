@@ -9,3 +9,13 @@ logs/*
 !logs/.gitkeep
 playwright-report
 test-results
+
+# TypeScript build artifacts
+*.tsbuildinfo
+*.js.map
+*.d.ts
+*.d.ts.map
+
+# NestJS build output
+dist/
+build/
