@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ReviewEngineService } from './review-engine.service.js';
+import { ReviewQueueService } from './review-queue.service.js';
 import { GitHubModule } from '../github/github.module.js';
 import { AiModule } from '../ai/ai.module.js';
 import { ConfigModule } from '../../config/config.module.js';
@@ -21,7 +22,7 @@ import { ReviewMetrics } from '../../database/entities/review-metrics.entity.js'
     AiModule,
     ConfigModule,
   ],
-  providers: [ReviewEngineService],
-  exports: [ReviewEngineService],
+  providers: [ReviewEngineService, ReviewQueueService],
+  exports: [ReviewEngineService, ReviewQueueService],
 })
 export class ReviewModule {}
