@@ -1,33 +1,17 @@
 /**
  * Modules barrel export
  * 
- * This file provides clean imports for all feature modules.
- * 
- * Usage:
- * import { ReviewModule, PullRequestModule } from '@/modules';
+ * This file provides clean imports for all feature modules in the application.
  */
 
-// Export feature modules here as they are created
-// Example:
-// export * from './review/review.module';
-// export * from './pull-request/pull-request.module';
-// export * from './github/github.module';
-// export * from './ai/ai.module';
-// export * from './metrics/metrics.module';
-// export * from './team/team.module';
-// export * from './security/security.module';
-// export * from './websocket/websocket.module';
+// Core modules will be added here as they are migrated
+export * from './github/index.js';
 
-// Note: Feature modules will be organized in subdirectories:
-// - src/modules/review/
-// - src/modules/pull-request/
-// - src/modules/github/
-// - src/modules/ai/
-// - src/modules/metrics/
-// - src/modules/team/
-// - src/modules/security/
-// - src/modules/websocket/
-
-// Empty export to make this a valid module
-export {};
-
+// Future modules:
+// export * from './pull-request/index.js';
+// export * from './review/index.ts';
+// export * from './ai/index.ts';
+// export * from './metrics/index.ts';
+// export * from './team/index.ts';
+// export * from './security/index.ts';
+// export * from './websocket/index.ts';

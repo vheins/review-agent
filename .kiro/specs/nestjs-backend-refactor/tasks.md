@@ -131,49 +131,49 @@ Dokumen ini berisi rencana implementasi untuk refactor backend PR Review Agent d
     - **Validates: Requirements 12.4**
 
 
-- [ ] 6. Migrate GitHubClientService
-  - [ ] 6.1 Create GitHubModule dan GitHubClientService
+- [x] 6. Migrate GitHubClientService
+  - [x] 6.1 Create GitHubModule dan GitHubClientService
     - Buat GitHubModule dengan providers dan exports
     - Implement GitHubClientService dengan @Injectable decorator
     - Inject ConfigService dan LoggerService via DI
     - _Requirements: 10.1_
   
-  - [ ] 6.2 Implement PR scanning functionality
+  - [x] 6.2 Implement PR scanning functionality
     - Migrate scanPullRequests() method dari github-client.js
     - Implement scope filtering (authored, assigned, review-requested)
     - Use execa untuk execute gh CLI commands
     - Parse JSON output menjadi PullRequest objects
     - _Requirements: 10.3_
   
-  - [ ] 6.3 Implement repository cloning dan branch operations
+  - [x] 6.3 Implement repository cloning dan branch operations
     - Migrate cloneRepository() method
     - Implement branch checkout logic
     - Handle workspace directory management
     - _Requirements: 7.4_
   
-  - [ ] 6.4 Implement comment posting functionality
+  - [x] 6.4 Implement comment posting functionality
     - Migrate postComment() method
     - Implement atomic comment posting
     - Handle comment formatting
     - _Requirements: 10.4_
   
-  - [ ] 6.5 Implement auto-merge functionality
+  - [x] 6.5 Implement auto-merge functionality
     - Migrate autoMerge() method dengan health checks
     - Verify CI status, review approval, no conflicts
     - Implement master/main branch protection
     - _Requirements: 10.5_
   
-  - [ ] 6.6 Write unit tests dengan mocked gh CLI
+  - [x] 6.6 Write unit tests dengan mocked gh CLI
     - Mock execa calls untuk gh commands
     - Test PR scanning dengan different scopes
     - Test error handling
   
-  - [ ] 6.7 Write property test untuk scanning scopes
+  - [x] 6.7 Write property test untuk scanning scopes
     - **Property 17: GitHub PR Scanning Scope**
     - **Validates: Requirements 10.3**
     - Test scope filtering correctness
   
-  - [ ] 6.8 Write property test untuk atomic comment posting
+  - [x] 6.8 Write property test untuk atomic comment posting
     - **Property 18: Atomic Comment Posting**
     - **Validates: Requirements 10.4**
     - Test rollback pada comment posting failure
