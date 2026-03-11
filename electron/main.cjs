@@ -32,13 +32,13 @@ if (process.env.NODE_ENV === 'development') {
         require('electron-reload')(__dirname, {
             electron: path.join(__dirname, '..', 'node_modules', '.bin', 'electron'),
             hardResetMethod: 'exit',
-            ignored: /node_modules|[\/\\]\./,
+            ignored: /node_modules|[\/\\]\.|dist/,
             awaitWriteFinish: {
                 stabilityThreshold: 100,
                 pollInterval: 100
             }
         });
-        console.log('✓ Hot reload enabled for renderer files');
+        console.log('✓ Hot reload enabled for main process');
     } catch (err) {
         console.log('⚠ electron-reload not found, install with: yarn add electron-reload');
     }
@@ -506,7 +506,7 @@ ipcMain.handle('list-prs', async (event, { status = '', repositoryId = '', autho
             LEFT JOIN developers dev ON dev.id = pr.author_id
             WHERE 1 = 1
         `;
-            const params = {};
+        const params = {};
 
         if (status) {
             query += ' AND pr.status = @status';

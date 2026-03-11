@@ -32,19 +32,28 @@
   }
 
   html {
-    @apply overflow-x-hidden;
+    /* Removed overflow-x-hidden to fix sticky positioning */
   }
 
   body {
-    @apply min-h-screen overflow-x-hidden bg-background text-foreground antialiased selection:bg-sky-400/30 selection:text-white;
+    @apply min-h-screen bg-background text-foreground antialiased selection:bg-sky-400/30 selection:text-white;
     font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     background: rgb(var(--background));
+    overflow-x: hidden;
+    overflow-y: auto;
   }
 }
 
 @layer components {
   .shell-grid {
-    @apply relative min-h-screen xl:grid xl:grid-cols-[23rem_minmax(0,1fr)];
+    @apply relative;
+  }
+
+  @media (min-width: 1280px) {
+    .shell-grid {
+      display: grid;
+      grid-template-columns: 23rem minmax(0, 1fr);
+    }
   }
 
   .panel-surface {
@@ -52,7 +61,14 @@
   }
 
   .sidebar-stack {
-    @apply xl:sticky xl:top-0 xl:h-screen xl:overflow-y-auto xl:pr-1;
+    @apply xl:sticky xl:overflow-y-auto xl:pr-1;
+  }
+
+  @media (min-width: 1280px) {
+    .sidebar-stack {
+      top: 3.5rem;
+      height: calc(100vh - 3.5rem);
+    }
   }
 
   .eyebrow {

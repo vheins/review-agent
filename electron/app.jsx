@@ -1,4 +1,4 @@
-import React, { startTransition, useDeferredValue, useEffect, useEffectEvent, useMemo, useState } from 'react';
+import React, { startTransition, useDeferredValue, useEffect, useEffectEvent, useMemo, useState, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
     Activity,
@@ -18,6 +18,7 @@ import {
     Bot,
     PanelLeft,
     PlayCircle,
+    Plus,
     RefreshCw,
     Settings2,
     ShieldCheck,
@@ -25,7 +26,9 @@ import {
     Sparkles,
     SquareTerminal,
     SunMedium,
-    Users
+    Users,
+    MessageSquarePlus,
+    ListTodo
 } from 'lucide-react';
 import './styles.css';
 import { Button } from './components/ui/button.jsx';
@@ -149,6 +152,8 @@ function App() {
     const [selectedTab, setSelectedTab] = useState('overview');
     const [rangeDays, setRangeDays] = useState(30);
     const [themeMode, setThemeMode] = useState(getStoredThemeMode());
+    const [showCreateMenu, setShowCreateMenu] = useState(false);
+    const createMenuRef = useRef(null);
     const [runtimeConfig, setRuntimeConfig] = useState(null);
     const [snapshot, setSnapshot] = useState(null);
     const [prs, setPrs] = useState([]);
@@ -207,6 +212,20 @@ function App() {
         media.addEventListener('change', handleChange);
         return () => media.removeEventListener('change', handleChange);
     }, [themeMode, applyTheme]);
+
+    // Close create menu when clicking outside
+    useEffect(() => {
+        function handleClickOutside(event) {
+            if (createMenuRef.current && !createMenuRef.current.contains(event.target) && !event.target.closest('button[type="button"]')) {
+                setShowCreateMenu(false);
+            }
+        }
+        
+        if (showCreateMenu) {
+            document.addEventListener('mousedown', handleClickOutside);
+            return () => document.removeEventListener('mousedown', handleClickOutside);
+        }
+    }, [showCreateMenu]);
 
     const prependLog = useEffectEvent((type, message) => {
         startTransition(() => {
@@ -1329,7 +1348,77 @@ function App() {
     const ThemeIcon = themeIcon;
 
     return (
-        <div className="relative min-h-screen overflow-hidden">
+        <div className="relative min-h-screen">
+            {/* Sticky Top Navigation */}
+            <nav className="sticky top-0 z-50 border-b border-border bg-card/95 backdrop-blur-sm supports-[backdrop-filter]:bg-card/80">
+                <div className="flex h-14 items-center justify-between gap-4 px-4 md:px-6">
+                    <div className="flex items-center gap-3">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-panel text-base">🥷</div>
+                        <h1 className="hidden text-lg font-bold tracking-tight sm:block">Agentic Bunshin</h1>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                        {/* Create Button with Dropdown */}
+                        <div className="relative">
+                            <button
+                                type="button"
+                                onClick={() => setShowCreateMenu(!showCreateMenu)}
+                                className="flex items-center gap-2 rounded-lg border border-border bg-panel px-3 py-1.5 text-sm font-medium text-foreground transition hover:bg-secondary"
+                            >
+                                <Plus className="h-4 w-4" />
+                                <span className="hidden sm:inline">New</span>
+                            </button>
+                            {showCreateMenu && (
+                                <div
+                                    ref={createMenuRef}
+                                    className="absolute right-0 top-full z-[60] mt-2 w-48 rounded-lg border border-border bg-card shadow-lg"
+                                >
+                                    <div className="p-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setShowCreateMenu(false);
+                                                prependLog('info', 'Create Task clicked');
+                                            }}
+                                            className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm font-medium text-foreground transition hover:bg-secondary"
+                                        >
+                                            <ListTodo className="h-4 w-4" />
+                                            Create Task
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setShowCreateMenu(false);
+                                                prependLog('info', 'New Chat clicked');
+                                            }}
+                                            className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm font-medium text-foreground transition hover:bg-secondary"
+                                        >
+                                            <MessageSquarePlus className="h-4 w-4" />
+                                            New Chat
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        
+                        {/* Theme Switcher */}
+                        <button
+                            type="button"
+                            onClick={() => {
+                                const modes = ['system', 'dark', 'light'];
+                                const currentIndex = modes.indexOf(themeMode);
+                                const nextMode = modes[(currentIndex + 1) % modes.length];
+                                setThemeMode(nextMode);
+                            }}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-panel text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+                            title={`Theme: ${themeMode}`}
+                        >
+                            <ThemeIcon className="h-4 w-4" />
+                        </button>
+                    </div>
+                </div>
+            </nav>
+
             <div className="shell-grid">
                 <aside className="border-b border-border bg-card px-4 py-5 md:px-5 xl:border-b-0 xl:border-r">
                     <div className="sidebar-stack mx-auto flex max-w-7xl flex-col gap-6 xl:max-w-none">
@@ -1404,17 +1493,6 @@ function App() {
                                             <option value="30">Last 30 Days</option>
                                             <option value="90">Last 90 Days</option>
                                         </Select>
-                                    </div>
-                                    <div className="grid gap-2">
-                                        <span className="text-sm font-medium text-muted-foreground">Theme</span>
-                                        <div className="relative">
-                                            <ThemeIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                                            <Select id="themeMode" className="pl-10" value={themeMode} onChange={(event) => setThemeMode(event.target.value)}>
-                                                <option value="system">System</option>
-                                                <option value="dark">Dark</option>
-                                                <option value="light">Light</option>
-                                            </Select>
-                                        </div>
                                     </div>
                                     <Button variant="outline" onClick={async () => {
                                         await refreshSnapshot();
