@@ -7,6 +7,7 @@ import { AiModule } from './modules/ai/ai.module.js';
 import { ReviewModule } from './modules/review/review.module.js';
 import { MetricsModule } from './modules/metrics/metrics.module.js';
 import { ComplianceModule } from './modules/compliance/compliance.module.js';
+import { DataExporterModule } from './common/exporter/data-exporter.module.js';
 
 /**
  * AppModule - Root NestJS Module
@@ -33,6 +34,7 @@ import { ComplianceModule } from './modules/compliance/compliance.module.js';
     ReviewModule, // Core review orchestration
     MetricsModule, // Metrics and quality scoring
     ComplianceModule, // Compliance reporting
+    DataExporterModule, // Data exporting
     
     // Future feature modules will be added here:
     // PullRequestModule,
