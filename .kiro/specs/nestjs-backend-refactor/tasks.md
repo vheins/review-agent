@@ -239,7 +239,7 @@ Dokumen ini berisi rencana implementasi untuk refactor backend PR Review Agent d
     - Inject DataSource untuk transaction support
     - _Requirements: 7.1, 7.3_
   
-  - [ ] 9.2 Implement reviewPullRequest() method dengan TypeORM
+  - [x] 9.2 Implement reviewPullRequest() method dengan TypeORM
     - Create QueryRunner untuk manual transaction control
     - Create review record dengan reviewRepository
     - Clone repository via GitHubClientService
@@ -250,50 +250,50 @@ Dokumen ini berisi rencana implementasi untuk refactor backend PR Review Agent d
     - Commit transaction atau rollback on error
     - _Requirements: 7.2, 7.4, 7.5_
   
-  - [ ] 9.3 Implement review completion actions
+  - [x] 9.3 Implement review completion actions
     - Post comments jika mode='comment'
     - Apply auto-fix jika mode='auto-fix'
     - Emit WebSocket events untuk real-time updates
     - _Requirements: 7.5, 7.6_
   
-  - [ ] 9.4 Implement continuous mode dan once mode
+  - [x] 9.4 Implement continuous mode dan once mode
     - Migrate continuousMode() method
     - Migrate onceMode() method
     - Implement periodic PR scanning
     - _Requirements: 7.7_
   
-  - [ ] 9.5 Write integration tests untuk full review flow
+  - [x] 9.5 Write integration tests untuk full review flow
     - Test complete review cycle end-to-end
     - Test transaction rollback on errors
     - Test WebSocket event emission
     - **Property 10: Review Process Functional Compatibility**
     - **Validates: Requirements 7.2**
   
-  - [ ] 9.6 Write property test untuk repository cloning
+  - [x] 9.6 Write property test untuk repository cloning
     - **Property 11: Repository Clone Before Review**
     - **Validates: Requirements 7.4**
     - Test repository clone dan checkout correctness
   
-  - [ ] 9.7 Write property test untuk review completion action
+  - [x] 9.7 Write property test untuk review completion action
     - **Property 12: Review Completion Action**
     - **Validates: Requirements 7.5**
     - Test correct action berdasarkan mode
 
 
 - [ ] 10. Migrate supporting review services
-  - [ ] 10.1 Migrate CommentParserService
+  - [x] 10.1 Migrate CommentParserService
     - Buat CommentParserService
     - Migrate parsing logic dari comment-parser.js
     - Implement structured comment extraction
     - _Requirements: 8.5_
   
-  - [ ] 10.2 Migrate ChecklistService
+  - [x] 10.2 Migrate ChecklistService
     - Buat ChecklistService
     - Migrate checklist logic dari checklist-manager.js
     - Implement checklist generation dan tracking
     - _Requirements: 7.2_
   
-  - [ ] 10.3 Write unit tests untuk comment parser
+  - [x] 10.3 Write unit tests untuk comment parser
     - Test parsing various AI output formats
     - Test edge cases dan malformed input
   

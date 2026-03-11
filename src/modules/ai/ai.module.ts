@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AiExecutorService } from './ai-executor.service.js';
 import { AiFixGeneratorService } from './ai-fix-generator.service.js';
 import { ConfigModule } from '../../config/config.module.js';
+import { CommentParserModule } from '../../common/parser/comment-parser.module.js';
 
 /**
  * AiModule - Module for AI-powered review operations
@@ -11,7 +12,7 @@ import { ConfigModule } from '../../config/config.module.js';
  * Requirements: 8.1
  */
 @Module({
-  imports: [ConfigModule],
+  imports: [ConfigModule, CommentParserModule],
   providers: [AiExecutorService, AiFixGeneratorService],
   exports: [AiExecutorService, AiFixGeneratorService],
 })
