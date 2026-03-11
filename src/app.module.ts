@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { ConfigModule } from './config/config.module.js';
 import { DatabaseModule } from './database/database.module.js';
 import { LoggerModule } from './common/logger.module.js';
@@ -11,6 +12,7 @@ import { PullRequestModule } from './modules/pull-request/pull-request.module.js
 import { DataExporterModule } from './common/exporter/data-exporter.module.js';
 import { HealthModule } from './common/health/health.module.js';
 import { WebSocketModule } from './modules/websocket/websocket.module.js';
+import { SecurityModule } from './modules/security/security.module.js';
 
 /**
  * AppModule - Root NestJS Module
@@ -31,6 +33,12 @@ import { WebSocketModule } from './modules/websocket/websocket.module.js';
     DatabaseModule, // TypeORM with SQLite
     LoggerModule, // Custom logger with daily rotation
     
+    // Rate limiting
+    ThrottlerModule.forRoot([{
+      ttl: 60000,
+      limit: 100,
+    }]),
+    
     // Feature modules
     GitHubModule, // GitHub CLI operations
     AiModule, // AI-powered review operations
@@ -41,6 +49,7 @@ import { WebSocketModule } from './modules/websocket/websocket.module.js';
     DataExporterModule, // Data exporting
     HealthModule, // Health check
     WebSocketModule, // Real-time updates
+    SecurityModule, // Security scanning
     
     // Future feature modules will be added here:
     // PullRequestModule,

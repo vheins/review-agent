@@ -1,4 +1,5 @@
 import { NestFactory } from '@nestjs/core';
+import helmet from 'helmet';
 import { AppModule } from './app.module.js';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor.js';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter.js';
@@ -17,6 +18,9 @@ import 'reflect-metadata';
  */
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // Apply security headers
+  app.use(helmet());
 
   // Apply LoggingInterceptor globally
   app.useGlobalInterceptors(new LoggingInterceptor());
