@@ -6,6 +6,7 @@ import http from 'http';
 import { logger } from './logger.js';
 import { wsManager } from './websocket-server.js';
 import { config } from './config.js';
+import dashboardRoutes from './routes/dashboard.js';
 import prRoutes from './routes/prs.js';
 import reviewRoutes from './routes/reviews.js';
 import metricsRoutes from './routes/metrics.js';
@@ -30,17 +31,8 @@ export class APIServer {
     this.app.use(express.json());
     this.app.use(morgan('dev'));
 
-    // 2. Auth Middleware (Simulation)
-    this.app.use((req, res, next) => {
-      const apiKey = req.headers['x-api-key'];
-      if (apiKey || req.path.startsWith('/api/webhooks') || req.path === '/health') {
-        next();
-      } else {
-        next(new AppError('Unauthorized', 401, 'UNAUTHORIZED'));
-      }
-    });
-
-    // 3. API Routes
+    // 2. API Routes
+    this.app.use('/api/dashboard', dashboardRoutes);
     this.app.use('/api/prs', prRoutes);
     this.app.use('/api/reviews', reviewRoutes);
     this.app.use('/api/metrics', metricsRoutes);
@@ -54,7 +46,7 @@ export class APIServer {
       res.json({ status: 'ok', timestamp: new Date().toISOString() });
     });
 
-    // 4. WebSocket integration
+    // 3. WebSocket integration
     wsManager.init(this.server);
 
     // 5. Error Handler

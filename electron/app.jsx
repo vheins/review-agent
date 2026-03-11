@@ -38,6 +38,7 @@ import { Input } from './components/ui/input.jsx';
 import { Select } from './components/ui/select.jsx';
 import { Textarea } from './components/ui/textarea.jsx';
 import { cn } from './lib/utils.js';
+import { api } from './api-helper.js';
 
 const tabs = [
     { id: 'overview', label: 'Overview', icon: Sparkles },
@@ -228,12 +229,15 @@ function App() {
     }, [showCreateMenu]);
 
     const prependLog = useEffectEvent((type, message) => {
+        // Convert message to string if it's not already
+        const messageStr = typeof message === 'string' ? message : JSON.stringify(message);
+        
         startTransition(() => {
-            setLogs((current) => [{ id: `${Date.now()}-${Math.random()}`, type, message: `[${new Date().toLocaleTimeString()}] ${message.trim()}` }, ...current].slice(0, 200));
+            setLogs((current) => [{ id: `${Date.now()}-${Math.random()}`, type, message: `[${new Date().toLocaleTimeString()}] ${messageStr.trim()}` }, ...current].slice(0, 200));
             setActivityItems((current) => [{
                 id: `${Date.now()}-${Math.random()}`,
                 title: type === 'error' ? 'Runtime warning' : 'Live event',
-                description: message.trim(),
+                description: messageStr.trim(),
                 occurred_at: new Date().toISOString(),
                 tone: type
             }, ...current].slice(0, 8));
@@ -241,10 +245,11 @@ function App() {
     });
 
     const refreshSnapshot = useEffectEvent(async (days = rangeDays) => {
-        const result = await window.electronAPI.getDashboardSnapshot({ rangeDays: days });
+        const result = await api.getDashboardSnapshot({ rangeDays: days });
         if (!result.success) {
-            setApiStatus(result.error);
-            prependLog('error', result.error);
+            const errorMsg = typeof result.error === 'string' ? result.error : JSON.stringify(result.error);
+            setApiStatus(errorMsg);
+            prependLog('error', errorMsg);
             return null;
         }
 
@@ -255,7 +260,7 @@ function App() {
     });
 
     const refreshPRs = useEffectEvent(async () => {
-        const result = await window.electronAPI.listPRs({
+        const result = await api.listPRs({
             status: '',
             repositoryId: '',
             authorId: '',
@@ -271,7 +276,7 @@ function App() {
     });
 
     const refreshTeamSecurity = useEffectEvent(async () => {
-        const result = await window.electronAPI.getTeamSecurityData();
+        const result = await api.getTeamSecurityData();
         if (result.success) {
             setTeamSecurity(result.data);
         } else {
@@ -282,7 +287,7 @@ function App() {
     const refreshRepositoryConfig = useEffectEvent(async (nextRepositoryId) => {
         const currentRepositoryId = Number(nextRepositoryId || repositoryId);
         if (!currentRepositoryId) return;
-        const result = await window.electronAPI.getRepositoryConfigData(currentRepositoryId);
+        const result = await api.getRepositoryConfigData(currentRepositoryId);
         if (!result.success) {
             setConfigValidation(result.error);
             return;
@@ -345,7 +350,7 @@ function App() {
     useEffect(() => {
         if (!selectedPrId) return;
         (async () => {
-            const result = await window.electronAPI.getPRDetail(selectedPrId);
+            const result = await api.getPRDetail(selectedPrId);
             if (result.success) {
                 setPrDetail(result.detail);
             }
@@ -547,7 +552,7 @@ function App() {
     const selectedPr = prDetail?.pr ?? null;
 
     async function toggleAvailability(developer) {
-        const result = await window.electronAPI.setDeveloperAvailability({
+        const result = await api.setDeveloperAvailability({
             developerId: developer.id,
             isAvailable: !developer.is_available,
             unavailableUntil: developer.is_available ? new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString() : null
@@ -584,7 +589,7 @@ function App() {
     }
 
     async function handleExport() {
-        const result = await window.electronAPI.exportMetricsData({
+        const result = await api.exportMetricsData({
             filters: {
                 startDate: new Date(Date.now() - rangeDays * 24 * 60 * 60 * 1000).toISOString(),
                 endDate: new Date().toISOString()
@@ -596,7 +601,7 @@ function App() {
 
     async function handleSaveConfig(event) {
         event.preventDefault();
-        const result = await window.electronAPI.saveRepositoryConfigData({
+        const result = await api.saveRepositoryConfigData({
             repositoryId: Number(repositoryId),
             config: {
                 ...configForm,
@@ -614,7 +619,7 @@ function App() {
     }
 
     async function handleTestRule() {
-        const result = await window.electronAPI.testCustomRule({
+        const result = await api.testCustomRule({
             rule: {
                 id: ruleForm.id ? Number(ruleForm.id) : undefined,
                 rule_name: ruleForm.rule_name,
@@ -630,7 +635,7 @@ function App() {
 
     async function handleSaveRule(event) {
         event.preventDefault();
-        const result = await window.electronAPI.saveCustomRule({
+        const result = await api.saveCustomRule({
             repositoryId: Number(repositoryId),
             rule: {
                 id: ruleForm.id ? Number(ruleForm.id) : undefined,
@@ -674,7 +679,7 @@ function App() {
                                 <p className="mt-1 text-sm text-muted-foreground">
                                     {apiStatus === 'Connected' 
                                         ? 'Dashboard snapshot and control endpoints.' 
-                                        : apiStatus.includes('Database not initialized')
+                                        : (typeof apiStatus === 'string' && apiStatus.includes('Database not initialized'))
                                         ? 'Start backend server with: yarn server'
                                         : 'Backend server not running. Run: yarn server'}
                                 </p>
@@ -1367,7 +1372,7 @@ function App() {
                                             <div className="flex flex-wrap gap-3">
                                                 <Button size="sm" variant="outline" onClick={() => setRuleForm({ ...rule, id: String(rule.id), sampleCode: defaultRuleSample })}>Edit</Button>
                                                 <Button size="sm" variant="ghost" onClick={async () => {
-                                                    const result = await window.electronAPI.deleteCustomRule(rule.id);
+                                                    const result = await api.deleteCustomRule(rule.id);
                                                     setRuleFeedback(result.success ? 'Rule deleted.' : result.error);
                                                     if (result.success) await refreshRepositoryConfig(repositoryId);
                                                 }}>Delete</Button>

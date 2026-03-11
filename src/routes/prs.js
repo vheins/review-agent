@@ -30,7 +30,7 @@ router.get('/', async (req, res) => {
   const total = dbManager.db.prepare(totalQuery).get(...params).total;
 
   res.json({
-    data: prs,
+    prs: prs,
     pagination: {
       total,
       limit,
@@ -57,7 +57,7 @@ router.post('/:id/review', async (req, res) => {
 
   // Start review asynchronously
   reviewEngine.reviewPR(pr, './workspace/temp').catch(e => console.error(e));
-  
+
   res.json({ message: 'Review triggered', status: 'processing' });
 });
 
