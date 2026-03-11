@@ -7,6 +7,7 @@
 // Core modules will be added here as they are migrated
 export * from './github/index.js';
 export * from './ai/index.js';
+export * from './review/index.js';
 
 // Future modules:
 // export * from './pull-request/index.js';

@@ -4,6 +4,7 @@ import { DatabaseModule } from './database/database.module.js';
 import { LoggerModule } from './common/logger.module.js';
 import { GitHubModule } from './modules/github/github.module.js';
 import { AiModule } from './modules/ai/ai.module.js';
+import { ReviewModule } from './modules/review/review.module.js';
 
 /**
  * AppModule - Root NestJS Module
@@ -27,6 +28,7 @@ import { AiModule } from './modules/ai/ai.module.js';
     // Feature modules
     GitHubModule, // GitHub CLI operations
     AiModule, // AI-powered review operations
+    ReviewModule, // Core review orchestration
     
     // Future feature modules will be added here:
     // PullRequestModule,

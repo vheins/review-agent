@@ -1,0 +1,27 @@
+import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { ReviewEngineService } from './review-engine.service.js';
+import { GitHubModule } from '../github/github.module.js';
+import { AiModule } from '../ai/ai.module.js';
+import { ConfigModule } from '../../config/config.module.js';
+import { Review } from '../../database/entities/review.entity.js';
+import { PullRequest } from '../../database/entities/pull-request.entity.js';
+import { Comment } from '../../database/entities/comment.entity.js';
+import { ReviewMetrics } from '../../database/entities/review-metrics.entity.js';
+
+/**
+ * ReviewModule - Module for core review orchestration
+ * 
+ * Requirements: 7.1
+ */
+@Module({
+  imports: [
+    TypeOrmModule.forFeature([Review, PullRequest, Comment, ReviewMetrics]),
+    GitHubModule,
+    AiModule,
+    ConfigModule,
+  ],
+  providers: [ReviewEngineService],
+  exports: [ReviewEngineService],
+})
+export class ReviewModule {}
