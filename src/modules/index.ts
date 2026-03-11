@@ -9,6 +9,7 @@ export * from './github/index.js';
 export * from './ai/index.js';
 export * from './review/index.js';
 export * from './metrics/index.js';
+export * from './compliance/index.js';
 
 // Future modules:
 // export * from './pull-request/index.js';

@@ -6,6 +6,7 @@ import { GitHubModule } from './modules/github/github.module.js';
 import { AiModule } from './modules/ai/ai.module.js';
 import { ReviewModule } from './modules/review/review.module.js';
 import { MetricsModule } from './modules/metrics/metrics.module.js';
+import { ComplianceModule } from './modules/compliance/compliance.module.js';
 
 /**
  * AppModule - Root NestJS Module
@@ -31,6 +32,7 @@ import { MetricsModule } from './modules/metrics/metrics.module.js';
     AiModule, // AI-powered review operations
     ReviewModule, // Core review orchestration
     MetricsModule, // Metrics and quality scoring
+    ComplianceModule, // Compliance reporting
     
     // Future feature modules will be added here:
     // PullRequestModule,
