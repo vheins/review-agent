@@ -1,14 +1,17 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { AiExecutorService } from '../src/modules/ai/ai-executor.service.js';
+import { CommentParserService } from '../src/common/parser/comment-parser.service.js';
 import * as fc from 'fast-check';
 
 describe('AiExecutorService Property Tests', () => {
   let service: AiExecutorService;
   let configService: any;
+  let parserService: CommentParserService;
 
   beforeEach(() => {
     configService = {};
-    service = new AiExecutorService(configService as any);
+    parserService = new CommentParserService();
+    service = new AiExecutorService(configService as any, parserService);
   });
 
   describe('Property 15: AI Output Parsing', () => {

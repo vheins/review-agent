@@ -1,10 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { AiExecutorService } from '../src/modules/ai/ai-executor.service.js';
+import { CommentParserService } from '../src/common/parser/comment-parser.service.js';
 import { PullRequest } from '../src/modules/github/github.service.js';
 
 describe('AiExecutorService', () => {
   let service: AiExecutorService;
   let configService: any;
+  let parserService: CommentParserService;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -13,7 +15,8 @@ describe('AiExecutorService', () => {
       getRepositoryConfig: vi.fn(),
     };
 
-    service = new AiExecutorService(configService as any);
+    parserService = new CommentParserService();
+    service = new AiExecutorService(configService as any, parserService);
   });
 
   describe('Executor Selection', () => {
