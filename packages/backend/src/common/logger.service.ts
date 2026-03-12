@@ -1,5 +1,5 @@
-import { Injectable, LoggerService as NestLoggerService, Scope } from '@nestjs/common';
-import * as fs from 'fs-extra';
+import { Injectable, LoggerService as NestLoggerService, Scope, Optional } from '@nestjs/common';
+import fs from 'fs-extra';
 import * as path from 'path';
 
 /**
@@ -13,7 +13,7 @@ export class LoggerService implements NestLoggerService {
   private readonly LOG_RETENTION_DAYS = 7;
   private context?: string;
 
-  constructor(context?: string) {
+  constructor(@Optional() context?: string) {
     this.context = context;
     this.LOG_DIR = path.join(process.cwd(), 'logs');
     this.ensureLogDirectory();

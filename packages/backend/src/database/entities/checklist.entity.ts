@@ -5,8 +5,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToMany,
-  ManyToOne,
-  JoinColumn,
+  type Relation,
 } from 'typeorm';
 import { ChecklistItem } from './checklist-item.entity.js';
 
@@ -34,5 +33,5 @@ export class Checklist {
   updatedAt: Date;
 
   @OneToMany(() => ChecklistItem, (item) => item.checklist)
-  items: ChecklistItem[];
+  items: Relation<ChecklistItem>[];
 }

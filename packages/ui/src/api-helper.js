@@ -1,7 +1,7 @@
 // Helper functions for HTTP API calls to backend server
 // ESM version for Electron renderer process (Vite)
 
-const API_BASE_URL = 'http://127.0.0.1:3000/api';
+let API_BASE_URL = 'http://127.0.0.1:3000/api';
 
 async function apiCall(endpoint, options = {}) {
     try {
@@ -28,6 +28,10 @@ async function apiCall(endpoint, options = {}) {
 }
 
 export const api = {
+    setBaseUrl: (url) => {
+        API_BASE_URL = url;
+    },
+
     // Dashboard
     getDashboardSnapshot: async ({ rangeDays = 30 } = {}) => {
         return apiCall(`/dashboard?rangeDays=${rangeDays}`);

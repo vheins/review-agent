@@ -4,7 +4,7 @@ import {
   Column,
   ManyToOne,
   JoinColumn,
-  CreateDateColumn,
+  type Relation,
 } from 'typeorm';
 import { Review } from './review.entity.js';
 import { ChecklistItem } from './checklist-item.entity.js';
@@ -34,9 +34,9 @@ export class ReviewChecklist {
 
   @ManyToOne(() => Review, (review) => review.comments, { createForeignKeyConstraints: false })
   @JoinColumn({ name: 'review_id', referencedColumnName: 'id' })
-  review?: Review;
+  review?: Relation<Review>;
 
   @ManyToOne(() => ChecklistItem, (item) => item.reviewChecklists, { createForeignKeyConstraints: false })
   @JoinColumn({ name: 'checklist_item_id', referencedColumnName: 'id' })
-  checklistItem?: ChecklistItem;
+  checklistItem?: Relation<ChecklistItem>;
 }

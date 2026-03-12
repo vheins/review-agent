@@ -5,6 +5,7 @@ import {
   ManyToOne,
   JoinColumn,
   OneToMany,
+  type Relation,
 } from 'typeorm';
 import { Checklist } from './checklist.entity.js';
 import { ReviewChecklist } from './review-checklist.entity.js';
@@ -28,8 +29,8 @@ export class ChecklistItem {
 
   @ManyToOne(() => Checklist, (checklist) => checklist.items, { createForeignKeyConstraints: false })
   @JoinColumn({ name: 'checklist_id', referencedColumnName: 'id' })
-  checklist?: Checklist;
+  checklist?: Relation<Checklist>;
 
   @OneToMany(() => ReviewChecklist, (rc) => rc.checklistItem)
-  reviewChecklists: ReviewChecklist[];
+  reviewChecklists: Relation<ReviewChecklist>[];
 }

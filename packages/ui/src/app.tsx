@@ -311,14 +311,28 @@ function App() {
         let mounted = true;
 
         (async () => {
-            const runtimeResult = await window.electronAPI.getRuntimeConfig();
+            const runtimeResult = await window.electronAPI?.getRuntimeConfig();
             if (!mounted) return;
-            if (!runtimeResult.success) {
+            
+            if (!runtimeResult) {
+                // Not in Electron or bridge failed
+                console.warn('Electron API not available. Using default config.');
+                const defaultConfig = {
+                    apiBaseUrl: 'http://127.0.0.1:3000/api',
+                    wsUrl: 'ws://127.0.0.1:3000',
+                    wsUserId: 'web-user',
+                    wsToken: 'web-token'
+                };
+                setRuntimeConfig(defaultConfig);
+                api.setBaseUrl(defaultConfig.apiBaseUrl);
+            } else if (!runtimeResult.success) {
                 prependLog('error', runtimeResult.error);
                 return;
+            } else {
+                setRuntimeConfig(runtimeResult.config);
+                api.setBaseUrl(runtimeResult.config.apiBaseUrl);
             }
 
-            setRuntimeConfig(runtimeResult.config);
             const latestSnapshot = await refreshSnapshot(rangeDays);
             await refreshPRs(prFilters);
             await refreshTeamSecurity();
@@ -328,8 +342,8 @@ function App() {
             }
         })();
 
-        window.electronAPI.onLogOutput?.((data) => prependLog(data.type, data.message));
-        window.electronAPI.onReviewStopped?.((data) => {
+        window.electronAPI?.onLogOutput?.((data) => prependLog(data.type, data.message));
+        window.electronAPI?.onReviewStopped?.((data) => {
             setRunning(false);
             prependLog('info', `Review process exited with code ${data.code}`);
         });
@@ -566,7 +580,11 @@ function App() {
     }
 
     async function handleStart(once) {
-        const result = await window.electronAPI.startReview({ once });
+        const result = await window.electronAPI?.startReview({ once });
+        if (!result) {
+            prependLog('warn', 'Start command only available in Electron');
+            return;
+        }
         if (result.success) {
             setRunning(true);
             prependLog('info', once ? 'Single review started' : 'Review loop started');
@@ -576,12 +594,20 @@ function App() {
     }
 
     async function handleExecuteNow() {
-        const result = await window.electronAPI.executeNow();
+        const result = await window.electronAPI?.executeNow();
+        if (!result) {
+            prependLog('warn', 'Execute command only available in Electron');
+            return;
+        }
         prependLog(result.success ? 'info' : 'error', result.message);
     }
 
     async function handleStop() {
-        const result = await window.electronAPI.stopReview();
+        const result = await window.electronAPI?.stopReview();
+        if (!result) {
+            prependLog('warn', 'Stop command only available in Electron');
+            return;
+        }
         if (result.success) {
             setRunning(false);
         }
@@ -929,12 +955,22 @@ function App() {
                                                     </div>
                                                 </div>
                                                 <div className="flex flex-wrap gap-3">
-                                                    <Button size="sm" variant="outline" onClick={() => window.electronAPI.openExternal(`https://github.com/${selectedPr.repository}/pull/${selectedPr.github_pr_id}`)}>
+                                                    <Button size="sm" variant="outline" onClick={() => {
+                                                        if (window.electronAPI) {
+                                                            window.electronAPI.openExternal(`https://github.com/${selectedPr.repository}/pull/${selectedPr.github_pr_id}`);
+                                                        } else {
+                                                            window.open(`https://github.com/${selectedPr.repository}/pull/${selectedPr.github_pr_id}`, '_blank');
+                                                        }
+                                                    }}>
                                                         View
                                                     </Button>
                                                     <Button size="sm" variant="secondary" onClick={async () => {
-                                                        const result = await window.electronAPI.executeNow();
-                                                        prependLog(result.success ? 'info' : 'error', result.message);
+                                                        const result = await window.electronAPI?.executeNow();
+                                                        if (result) {
+                                                            prependLog(result.success ? 'info' : 'error', result.message);
+                                                        } else {
+                                                            prependLog('warn', 'Execute command only available in Electron');
+                                                        }
                                                     }}>
                                                         Auto-fix
                                                     </Button>

@@ -4,6 +4,7 @@ import {
   Column,
   OneToOne,
   JoinColumn,
+  type Relation,
 } from 'typeorm';
 import { Review } from './review.entity.js';
 
@@ -53,5 +54,5 @@ export class ReviewMetrics {
 
   @OneToOne(() => Review, review => review.metrics, { createForeignKeyConstraints: false })
   @JoinColumn({ name: 'review_id', referencedColumnName: 'id' })
-  review?: Review;
+  review?: Relation<Review>;
 }

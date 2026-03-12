@@ -5,6 +5,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToMany,
+  type Relation,
 } from 'typeorm';
 import { Review } from './review.entity.js';
 
@@ -55,5 +56,5 @@ export class PullRequest {
   labels: string[];
 
   @OneToMany(() => Review, review => review.pullRequest)
-  reviews: Review[];
+  reviews: Relation<Review>[];
 }

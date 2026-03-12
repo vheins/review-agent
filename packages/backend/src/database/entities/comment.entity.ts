@@ -4,6 +4,7 @@ import {
   Column,
   ManyToOne,
   JoinColumn,
+  type Relation,
 } from 'typeorm';
 import { Review } from './review.entity.js';
 
@@ -46,5 +47,5 @@ export class Comment {
 
   @ManyToOne(() => Review, review => review.comments, { createForeignKeyConstraints: false })
   @JoinColumn({ name: 'review_id', referencedColumnName: 'id' })
-  review?: Review;
+  review?: Relation<Review>;
 }

@@ -7,6 +7,7 @@ import {
   OneToMany,
   OneToOne,
   JoinColumn,
+  type Relation,
 } from 'typeorm';
 import { PullRequest } from './pull-request.entity.js';
 import { Comment } from './comment.entity.js';
@@ -52,11 +53,11 @@ export class Review {
   // Relations - without JoinColumn to avoid FK constraints
   @ManyToOne(() => PullRequest, pr => pr.reviews, { createForeignKeyConstraints: false })
   @JoinColumn({ name: 'pr_number', referencedColumnName: 'number' })
-  pullRequest?: PullRequest;
+  pullRequest?: Relation<PullRequest>;
 
   @OneToMany(() => Comment, comment => comment.review)
-  comments: Comment[];
+  comments: Relation<Comment>[];
 
   @OneToOne(() => ReviewMetrics, metrics => metrics.review)
-  metrics: ReviewMetrics;
+  metrics: Relation<ReviewMetrics>;
 }

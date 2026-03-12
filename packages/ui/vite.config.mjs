@@ -4,7 +4,7 @@ import path from 'node:path';
 
 export default defineConfig({
     plugins: [react()],
-    root: path.resolve(import.meta.dirname),
+    root: path.resolve(import.meta.dirname, 'src'),
     base: './',
     server: {
         host: '127.0.0.1',
@@ -17,7 +17,7 @@ export default defineConfig({
         }
     },
     build: {
-        outDir: 'dist',
+        outDir: path.resolve(import.meta.dirname, 'dist'),
         emptyOutDir: true
     }
 });

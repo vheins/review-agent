@@ -4,7 +4,7 @@ import {
   OnGatewayConnection,
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
-import { Server } from 'ws';
+import type { Server } from 'ws';
 import { Logger } from '@nestjs/common';
 
 /**

@@ -1,0 +1,17 @@
+{
+  "name": "@review-agent/desktop",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "src/main.cjs",
+  "scripts": {
+    "dev": "electron src/main.cjs",
+    "start": "electron src/main.cjs"
+  },
+  "dependencies": {
+    "electron-reload": "^2.0.0-alpha.1"
+  },
+  "devDependencies": {
+    "electron": "^40.8.0",
+    "electron-builder": "^26.8.1"
+  }
+}

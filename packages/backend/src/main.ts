@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import helmet from 'helmet';
 import compression from 'compression';
+import { WsAdapter } from '@nestjs/platform-ws';
 import { AppModule } from './app.module.js';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor.js';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter.js';
@@ -14,6 +15,9 @@ import 'reflect-metadata';
  */
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // Apply WebSocket adapter
+  app.useWebSocketAdapter(new WsAdapter(app));
 
   // Apply security headers
   app.use(helmet());
