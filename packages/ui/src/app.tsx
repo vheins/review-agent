@@ -30,7 +30,9 @@ import {
     MessageSquarePlus,
     ListTodo,
     Zap,
-    ExternalLink
+    ExternalLink,
+    LayoutList,
+    Columns
 } from 'lucide-react';
 import './styles.css';
 import { Button } from './components/ui/button.jsx';
@@ -161,6 +163,7 @@ function App() {
     const [snapshot, setSnapshot] = useState(null);
     const [prs, setPrs] = useState([]);
     const [selectedPrId, setSelectedPrId] = useState(null);
+    const [isListView, setIsListView] = useState(false);
     const [prDetail, setPrDetail] = useState(null);
     const [teamSecurity, setTeamSecurity] = useState(null);
     const [configData, setConfigData] = useState(null);
@@ -373,12 +376,15 @@ function App() {
     useEffect(() => {
         if (!selectedPrId) return;
         (async () => {
-            const result = await api.getPRDetail(selectedPrId);
+            const pr = prs.find(p => p.id === selectedPrId);
+            if (!pr) return;
+            
+            const result = await api.getPRDetail(pr.repository, pr.number);
             if (result.success) {
                 setPrDetail(result.detail);
             }
         })();
-    }, [selectedPrId]);
+    }, [selectedPrId, prs]);
 
     useEffect(() => {
         if (!runtimeConfig?.wsUrl) return undefined;
@@ -1562,6 +1568,18 @@ function App() {
                             }}>
                                 <GitPullRequest className="h-3.5 w-3.5" />
                                 <span className="hidden lg:inline">Fetch PRs</span>
+                            </Button>
+                            <Button size="sm" variant="ghost" className="h-8 gap-1.5 px-2.5 text-xs font-bold text-indigo-400 hover:bg-indigo-500/10" onClick={async () => {
+                                appendLog('info', 'Scanning for new issues...');
+                                const result = await api.scanIssues();
+                                if (result.success) {
+                                    appendLog('info', 'Issue scan completed successfully');
+                                } else {
+                                    appendLog('error', `Issue scan failed: ${result.error}`);
+                                }
+                            }}>
+                                <ListTodo className="h-3.5 w-3.5" />
+                                <span className="hidden lg:inline">Fetch Issues</span>
                             </Button>
                         </div>
 

@@ -1,5 +1,24 @@
-import { describe, it, expect, beforeEach, vi, Mock } from 'vitest';
-import { GitHubClientService, PullRequest } from '../src/modules/github/github.service.js';
+import { vi } from 'vitest';
+
+// Mock fs-extra BEFORE other imports
+vi.mock('fs-extra', () => {
+  const mock = {
+    pathExists: vi.fn().mockResolvedValue(false),
+    stat: vi.fn().mockResolvedValue({ isFile: () => true }),
+    readFile: vi.fn().mockResolvedValue(''),
+    remove: vi.fn().mockResolvedValue(undefined),
+    ensureDir: vi.fn().mockResolvedValue(undefined),
+    pathExistsSync: vi.fn().mockReturnValue(false),
+  };
+  return {
+    ...mock,
+    default: mock,
+    __esModule: true,
+  };
+});
+
+import { describe, it, expect, beforeEach, Mock } from 'vitest';
+import { GitHubClientService, PullRequest } from '../packages/backend/src/modules/github/github.service.ts';
 import { execa } from 'execa';
 import * as fs from 'fs-extra';
 import { EventEmitter } from 'events';
@@ -9,17 +28,9 @@ vi.mock('execa', () => ({
   execa: vi.fn()
 }));
 
-// Mock fs-extra
-vi.mock('fs-extra', async () => {
-  const actual = await vi.importActual('fs-extra');
-  return {
-    ...actual as any,
-    pathExists: vi.fn(),
-  };
-});
-
 describe('GitHubClientService', () => {
   let service: GitHubClientService;
+  let appConfig: any;
   let configService: any;
 
   const mockAppConfig = {
@@ -32,11 +43,15 @@ describe('GitHubClientService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    configService = {
+    appConfig = {
       getAppConfig: vi.fn().mockReturnValue(mockAppConfig),
     };
 
-    service = new GitHubClientService(configService as any);
+    configService = {
+      get: vi.fn().mockReturnValue('mock-token'),
+    };
+
+    service = new GitHubClientService(appConfig as any, configService as any);
   });
 
   /**
@@ -69,6 +84,7 @@ describe('GitHubClientService', () => {
           repository: { nameWithOwner: 'owner/repo' },
           url: 'https://github.com/owner/repo/pull/1',
           updatedAt: '2026-03-11T00:00:00Z',
+          state: 'open',
         }
       ];
 
@@ -100,6 +116,7 @@ describe('GitHubClientService', () => {
           repository: { nameWithOwner: 'owner/repo' },
           url: 'https://github.com/owner/repo/pull/1',
           updatedAt: '2026-03-11T00:00:00Z',
+          state: 'open',
         }
       ];
 
@@ -122,6 +139,7 @@ describe('GitHubClientService', () => {
           repository: { nameWithOwner: 'ignored-owner/repo' },
           url: 'https://github.com/ignored-owner/repo/pull/1',
           updatedAt: '2026-03-11T00:00:00Z',
+          state: 'open',
         }
       ];
 
@@ -144,8 +162,10 @@ describe('GitHubClientService', () => {
       repository: { nameWithOwner: 'owner/repo' },
       url: 'https://github.com/owner/repo/pull/1',
       updatedAt: '2026-03-11T00:00:00Z',
+      state: 'open',
       headRefName: 'feature',
       baseRefName: 'main',
+      author: { login: 'user' }
     };
 
     it('should clone repository if it does not exist', async () => {
@@ -175,6 +195,8 @@ describe('GitHubClientService', () => {
   describe('addReview', () => {
     it('should add a review comment via gh CLI', async () => {
       (execa as Mock).mockImplementation(() => createMockExecaProcess(''));
+      // No token to trigger CLI fallback
+      configService.get.mockReturnValue(null);
 
       const result = await service.addReview('owner/repo', 1, 'Great job!', 'APPROVE');
 
@@ -189,6 +211,7 @@ describe('GitHubClientService', () => {
 
     it('should return false if gh CLI fails', async () => {
       (execa as Mock).mockImplementation(() => createMockExecaProcess('', 1));
+      configService.get.mockReturnValue(null);
 
       const result = await service.addReview('owner/repo', 1, 'message', 'COMMENT');
 
@@ -199,6 +222,7 @@ describe('GitHubClientService', () => {
   describe('mergePR', () => {
     it('should merge PR via gh CLI', async () => {
       (execa as Mock).mockImplementation(() => createMockExecaProcess(''));
+      configService.get.mockReturnValue(null);
 
       const result = await service.mergePR('owner/repo', 1, 'squash');
 
@@ -215,6 +239,7 @@ describe('GitHubClientService', () => {
   describe('assignReviewers', () => {
     it('should assign reviewers via gh CLI', async () => {
       (execa as Mock).mockImplementation(() => createMockExecaProcess(''));
+      configService.get.mockReturnValue(null);
 
       const result = await service.assignReviewers('owner/repo', 1, ['user1', 'user2']);
 

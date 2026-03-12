@@ -19,26 +19,33 @@ export interface PullRequest {
   };
   url: string;
   updatedAt: string;
+  state: string;
   headRefName?: string;
   baseRefName?: string;
+  author: {
+    login: string;
+  };
 }
 
 /**
- * GitHubClientService - NestJS Service for GitHub CLI operations
- * 
- * This service handles all interactions with GitHub via the `gh` CLI tool.
- * Features:
- * - PR scanning with configurable scopes
- * - Repository cloning and branch operations
- * - Review and comment posting
- * - PR merging with health checks
- * 
- * Architecture:
- * - Uses execa for CLI execution
- * - Integrates with AppConfigService for configuration
- * - Integrates with LoggerService for logging
- * 
- * Requirements: 10.1, 10.3, 10.4, 10.5, 7.4
+ * Issue Interface
+ */
+export interface Issue {
+  number: number;
+  title: string;
+  repository: {
+    nameWithOwner: string;
+  };
+  url: string;
+  updatedAt: string;
+  state: string;
+  author: {
+    login: string;
+  };
+}
+
+/**
+ * GitHubClientService - NestJS Service for GitHub CLI and API operations
  */
 @Injectable()
 export class GitHubClientService {
@@ -78,11 +85,6 @@ export class GitHubClientService {
 
   /**
    * Execute a command with verbose logging
-   * 
-   * @param cmd - Command to execute
-   * @param args - Command arguments
-   * @param opts - Execa options
-   * @returns Command execution result
    */
   async execaVerbose(cmd: string, args: string[], opts: any = {}): Promise<{ stdout: string; stderr: string; exitCode: number }> {
     const label = chalk.magenta(`[exec]`) + ' ' + chalk.white(`${cmd} ${args.join(' ')}`);
@@ -156,29 +158,25 @@ export class GitHubClientService {
 
   /**
    * Fetch open Pull Requests based on configured scope
-   * 
-   * @returns List of open Pull Requests
-   * 
-   * Requirements: 10.3
    */
   async fetchOpenPRs(): Promise<PullRequest[]> {
     try {
-      this.logger.log('╔══ STEP: fetchOpenPRs');
+      this.logger.log('╔══ STEP: fetchOpenPRs (Last 100, All States)');
       const appConfig = this.config.getAppConfig();
       const token = this.configService.get<string>('GITHUB_TOKEN');
 
       // Try API first if token is available
       if (token) {
         try {
-          this.logger.log('► Attempting to fetch PRs via GitHub API...');
-          let queryParts = ['is:open', 'is:pr'];
+          this.logger.log('► Attempting to fetch last 100 PRs via GitHub API...');
+          let queryParts = ['is:pr'];
           
           if (appConfig.prScope.includes('authored')) queryParts.push('author:@me');
           if (appConfig.prScope.includes('assigned')) queryParts.push('assignee:@me');
           if (appConfig.prScope.includes('review-requested')) queryParts.push('review-requested:@me');
 
           const query = encodeURIComponent(queryParts.join(' '));
-          const result = await this.fetchApi(`/search/issues?q=${query}`);
+          const result = await this.fetchApi(`/search/issues?q=${query}&per_page=100&sort=updated&order=desc`);
           
           const prs: PullRequest[] = result.items.map(item => ({
             number: item.number,
@@ -187,7 +185,11 @@ export class GitHubClientService {
               nameWithOwner: item.repository_url.split('repos/')[1]
             },
             url: item.html_url,
-            updatedAt: item.updated_at
+            updatedAt: item.updated_at,
+            state: item.state,
+            author: {
+              login: item.user?.login || 'unknown'
+            }
           }));
 
           this.logger.log(`  Found ${prs.length} PRs via API`);
@@ -208,12 +210,12 @@ export class GitHubClientService {
       for (const { scope, flag, label } of scopeActions) {
         if (!appConfig.prScope.includes(scope)) continue;
 
-        this.logger.log(`► Fetching PRs ${label} via CLI...`);
+        this.logger.log(`► Fetching last 100 PRs ${label} via CLI...`);
         const { stdout } = await this.execaVerbose('gh', [
           'search', 'prs',
-          '--state=open',
           flag,
-          '--json', 'number,title,repository,url,updatedAt',
+          '--limit', '100',
+          '--json', 'number,title,repository,url,updatedAt,state,author',
         ]);
         const items = JSON.parse(stdout || '[]');
         this.logger.log(`  Found ${items.length} PRs (${label})`);
@@ -223,6 +225,51 @@ export class GitHubClientService {
       return this.processPRs(allPRs);
     } catch (error) {
       this.logger.error(`Failed to fetch PRs: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  /**
+   * Fetch open issues
+   */
+  async fetchOpenIssues(): Promise<Issue[]> {
+    try {
+      this.logger.log('╔══ STEP: fetchOpenIssues');
+      const token = this.configService.get<string>('GITHUB_TOKEN');
+
+      if (token) {
+        try {
+          this.logger.log('► Fetching last 100 issues via GitHub API...');
+          const result = await this.fetchApi(`/search/issues?q=is:issue+is:open+mentions:@me&per_page=100&sort=updated&order=desc`);
+          
+          return result.items.map(item => ({
+            number: item.number,
+            title: item.title,
+            repository: {
+              nameWithOwner: item.repository_url.split('repos/')[1]
+            },
+            url: item.html_url,
+            updatedAt: item.updated_at,
+            state: item.state,
+            author: {
+              login: item.user?.login || 'unknown'
+            }
+          }));
+        } catch (apiError) {
+          this.logger.warn(`GitHub API issue fetch failed, falling back to CLI: ${apiError.message}`);
+        }
+      }
+
+      const { stdout } = await this.execaVerbose('gh', [
+        'search', 'issues',
+        '--state=open',
+        '--mentions=@me',
+        '--limit', '100',
+        '--json', 'number,title,repository,url,updatedAt,state,author',
+      ]);
+      return JSON.parse(stdout || '[]');
+    } catch (error) {
+      this.logger.error(`Failed to fetch issues: ${error.message}`);
       throw error;
     }
   }
@@ -241,10 +288,12 @@ export class GitHubClientService {
       return !appConfig.excludeRepoOwners.includes(owner);
     });
 
-    filteredPRs.sort((a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime());
+    filteredPRs.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 
-    // Fetch headRefName and baseRefName for each PR
+    // Fetch headRefName and baseRefName for each PR (only for open ones)
     for (const pr of filteredPRs) {
+      if (pr.state !== 'OPEN' && pr.state !== 'open') continue;
+      
       try {
         const token = this.configService.get<string>('GITHUB_TOKEN');
         if (token) {
@@ -256,14 +305,18 @@ export class GitHubClientService {
         }
       } catch (e) {
         // Fallback to CLI for details
-        const { stdout: detailJson } = await this.execaVerbose('gh', [
-          'pr', 'view', pr.number.toString(),
-          '--repo', pr.repository.nameWithOwner,
-          '--json', 'headRefName,baseRefName',
-        ]);
-        const detail = JSON.parse(detailJson || '{}');
-        pr.headRefName = detail.headRefName;
-        pr.baseRefName = detail.baseRefName;
+        try {
+          const { stdout: detailJson } = await this.execaVerbose('gh', [
+            'pr', 'view', pr.number.toString(),
+            '--repo', pr.repository.nameWithOwner,
+            '--json', 'headRefName,baseRefName',
+          ], { allowFail: true });
+          const detail = JSON.parse(detailJson || '{}');
+          pr.headRefName = detail.headRefName;
+          pr.baseRefName = detail.baseRefName;
+        } catch (err) {
+          // Ignore if detail fetch fails
+        }
       }
     }
 
@@ -272,11 +325,6 @@ export class GitHubClientService {
 
   /**
    * Prepare repository locally for review (clone/fetch and checkout)
-   * 
-   * @param pr - Pull Request to prepare
-   * @returns Local path to the repository
-   * 
-   * Requirements: 7.4
    */
   async prepareRepository(pr: PullRequest): Promise<string> {
     const repoName = pr.repository.nameWithOwner;
@@ -304,14 +352,6 @@ export class GitHubClientService {
 
   /**
    * Add a review comment to a Pull Request
-   * 
-   * @param repoName - Repository name (owner/repo)
-   * @param prNumber - PR number
-   * @param body - Comment body
-   * @param event - Review event (APPROVE, REQUEST_CHANGES, COMMENT)
-   * @returns Success status
-   * 
-   * Requirements: 10.4
    */
   async addReview(repoName: string, prNumber: number, body: string, event: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT' = 'COMMENT'): Promise<boolean> {
     try {
@@ -348,13 +388,6 @@ export class GitHubClientService {
 
   /**
    * Merge a Pull Request
-   * 
-   * @param repoName - Repository name (owner/repo)
-   * @param prNumber - PR number
-   * @param method - Merge method (squash, merge, rebase)
-   * @returns Success status
-   * 
-   * Requirements: 10.5
    */
   async mergePR(repoName: string, prNumber: number, method: 'squash' | 'merge' | 'rebase' = 'squash'): Promise<boolean> {
     try {
@@ -390,11 +423,6 @@ export class GitHubClientService {
 
   /**
    * Assign reviewers to a Pull Request
-   * 
-   * @param repoName - Repository name (owner/repo)
-   * @param prNumber - PR number
-   * @param reviewers - List of usernames to assign
-   * @returns Success status
    */
   async assignReviewers(repoName: string, prNumber: number, reviewers: string[] = []): Promise<boolean> {
     if (reviewers.length === 0) return true;
@@ -430,10 +458,6 @@ export class GitHubClientService {
 
   /**
    * Get files changed in a Pull Request
-   * 
-   * @param repoDir - Local repository directory
-   * @param pr - Pull Request metadata
-   * @returns List of changed files with content
    */
   async getChangedFiles(repoDir: string, pr: PullRequest): Promise<{ path: string; content: string }[]> {
     try {

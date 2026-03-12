@@ -1,4 +1,5 @@
 import Joi from 'joi';
+import path from 'path';
 
 /**
  * Configuration Validation Schema
@@ -18,7 +19,7 @@ export const validationSchema = Joi.object({
   LOG_LEVEL: Joi.string()
     .valid('error', 'warn', 'info', 'debug')
     .default('info'),
-  WORKSPACE_DIR: Joi.string().default('./workspace'),
+  WORKSPACE_DIR: Joi.string().default(process.cwd().includes('packages/backend') ? path.resolve(process.cwd(), '../../workspace') : path.resolve(process.cwd(), 'workspace')),
   EXCLUDE_REPO_OWNERS: Joi.string().allow('').default(''),
   PR_SCOPE: Joi.string().default('authored,assigned,review-requested'),
   AUTO_MERGE: Joi.boolean().default(false),

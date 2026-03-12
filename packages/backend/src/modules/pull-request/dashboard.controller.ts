@@ -31,11 +31,11 @@ export class DashboardController {
     const repositories = await this.configRepo.find();
     
     const configSummaries = repositories.map(repo => ({
-      repository: repo.repositoryName,
+      repository: repo.repository,
       mode: repo.reviewMode,
-      interval: repo.reviewInterval,
+      interval: 600, // Default fallback as it's not in the entity yet
       autoMerge: repo.autoMerge,
-      threshold: repo.severityThreshold
+      threshold: 80  // Default fallback as it's not in the entity yet
     }));
 
     return {
@@ -51,8 +51,8 @@ export class DashboardController {
           total_reviews: totalReviews,
         },
         reviewQueue,
-        recentActivity: [], // To be implemented with AuditTrail
-        teamWorkload: [],   // To be implemented with DeveloperMetrics
+        recentActivity: [], 
+        teamWorkload: [],   
         configSummaries,
         repositories,
         trendData: [],

@@ -23,7 +23,7 @@ export class DataExporterService implements OnModuleInit {
     } catch (e) {
       this.logger.error(`Failed to initialize export directory: ${e.message}`);
       // Fallback to local exports if config is not ready
-      this.exportDir = path.join(process.cwd(), 'workspace', 'exports');
+      this.exportDir = path.join(process.cwd().includes('packages/backend') ? path.resolve(process.cwd(), '../../') : process.cwd(), 'workspace', 'exports');
       fs.ensureDirSync(this.exportDir);
     }
   }

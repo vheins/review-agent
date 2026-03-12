@@ -62,8 +62,10 @@ export class WebhookService implements OnModuleInit {
         repository: { nameWithOwner: repoName },
         url: payload.pull_request.html_url,
         updatedAt: payload.pull_request.updated_at,
+        state: payload.pull_request.state,
         headRefName: payload.pull_request.head.ref,
         baseRefName: payload.pull_request.base.ref,
+        author: { login: payload.pull_request.user.login },
       });
     }
   }

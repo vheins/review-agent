@@ -1,4 +1,5 @@
 import express from 'express';
+import path from 'path';
 import { dbManager } from '../database.js';
 import { reviewEngine } from '../review-engine.js';
 import { healthScoreCalculator } from '../health-score-calculator.js';
@@ -56,7 +57,7 @@ router.post('/:id/review', async (req, res) => {
   }
 
   // Start review asynchronously
-  reviewEngine.reviewPR(pr, './workspace/temp').catch(e => console.error(e));
+  reviewEngine.reviewPR(pr, process.cwd().includes('packages/backend') ? path.resolve(process.cwd(), '../../workspace/temp') : path.resolve(process.cwd(), 'workspace/temp')).catch(e => console.error(e));
 
   res.json({ message: 'Review triggered', status: 'processing' });
 });

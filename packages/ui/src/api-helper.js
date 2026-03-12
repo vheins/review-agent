@@ -42,6 +42,10 @@ export const api = {
         return apiCall('/prs/scan');
     },
 
+    scanIssues: async () => {
+        return apiCall('/github/issues/scan');
+    },
+
     listPRs: async (filters = {}) => {
         const params = new URLSearchParams();
         if (filters.status) params.append('status', filters.status);
@@ -52,8 +56,9 @@ export const api = {
         return apiCall(`/prs?${params.toString()}`);
     },
 
-    getPRDetail: async (prId) => {
-        return apiCall(`/prs/${prId}`);
+    getPRDetail: async (repo, number) => {
+        const repoParam = repo.replace('/', '-');
+        return apiCall(`/prs/${repoParam}/${number}`);
     },
 
     // Team & Security

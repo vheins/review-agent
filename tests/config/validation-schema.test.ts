@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validationSchema } from '../../src/config/validation.schema.js';
+import { validationSchema } from '../../packages/backend/src/config/validation.schema.js';
 
 /**
  * Configuration Validation Schema Tests
@@ -225,7 +225,7 @@ describe('Configuration Validation Schema', () => {
       expect(value.API_PORT).toBe(3000);
       expect(value.REVIEW_INTERVAL).toBe(600);
       expect(value.LOG_LEVEL).toBe('info');
-      expect(value.WORKSPACE_DIR).toBe('./workspace');
+      expect(value.WORKSPACE_DIR).toMatch(/\/workspace$/);
       expect(value.AUTO_MERGE).toBe(false);
       expect(value.DELEGATE).toBe(false);
       expect(value.REVIEW_MODE).toBe('comment');
