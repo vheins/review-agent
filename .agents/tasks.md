@@ -1,0 +1,74 @@
+# Refactor Legacy Scripts to NestJS
+
+This task involves refactoring the existing legacy scripts into a structured NestJS application. Each legacy file will be systematically refactored and then removed once successfully integrated.
+
+## Checklist
+
+- [x] Analyze legacy folder structure
+- [/] Create NestJS components for each legacy file
+    - [ ] ai-executors.js
+    - [ ] ai-fix-generator.js
+    - [ ] api-server.js
+    - [ ] assignment-engine.js
+    - [ ] audit-logger.js
+    - [ ] auto-fix-service.js
+    - [ ] auto-merge-service.js
+    - [ ] batch-processor.js
+    - [ ] capacity-planner.js
+    - [ ] checklist-manager.js
+    - [ ] ci-integration.js
+    - [ ] comment-parser.js
+    - [ ] compliance-reporter.js
+    - [ ] config.js
+    - [ ] coverage-tracker.js
+    - [ ] data-exporter.js
+    - [ ] database-transaction.js
+    - [ ] database.js
+    - [ ] delegate.js
+    - [ ] dependency-scanner.js
+    - [ ] developer-dashboard.js
+    - [ ] discussion-tracker.js
+    - [ ] elapsed-time-tracker.js
+    - [ ] email-delivery-service.js
+    - [ ] error-handler.js
+    - [ ] escalation-service.js
+    - [ ] false-positive-tracker.js
+    - [ ] feedback-analyzer.js
+    - [ ] gamification-engine.js
+    - [ ] github.js
+    - [ ] graceful-shutdown.js
+    - [ ] health-score-calculator.js
+    - [ ] health-service.js
+    - [ ] index.js
+    - [ ] license-scanner.js
+    - [ ] logger.js
+    - [ ] metrics-engine.js
+    - [ ] notification-service.js
+    - [ ] orchestration-set.js
+    - [ ] performance-alert.js
+    - [ ] quality-scorer.js
+    - [ ] rejection-categorizer.js
+    - [ ] repository-manager.js
+    - [ ] resource-cleanup.js
+    - [ ] resource-manager.js
+    - [ ] response-cache.js
+    - [ ] retry-strategy.js
+    - [ ] review-engine.js
+    - [ ] review-pr.js
+    - [ ] review-queue.js
+    - [ ] rule-engine.js
+    - [ ] security-scanner.js
+    - [ ] sensitive-data-handler.js
+    - [ ] server.js
+    - [ ] sla-monitor.js
+    - [ ] smart-notification-engine.js
+    - [ ] stuck-task-detector.js
+    - [ ] task-lock-manager.js
+    - [ ] template-manager.js
+    - [ ] test-and-heal-service.js
+    - [ ] visualization-formatter.js
+    - [ ] webhook-handler.js
+    - [ ] websocket-server.js
+    - [ ] workflow-orchestrator.js
+- [ ] Verify functionality of refactored components
+- [ ] Delete legacy files one by one

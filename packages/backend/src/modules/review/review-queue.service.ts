@@ -1,6 +1,8 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ReviewEngineService } from './review-engine.service.js';
 import { PullRequest } from '../github/github.service.js';
+import { MissionControlService } from '../orchestration/services/mission-control.service.js';
+import { ConfigService } from '@nestjs/config';
 
 export enum QueueStatus {
   PENDING = 'pending',
@@ -17,6 +19,7 @@ export interface QueueItem {
   completedAt?: Date;
   error?: string;
   retryCount: number;
+  missionId?: string;
 }
 
 /**
@@ -38,11 +41,16 @@ export class ReviewQueueService implements OnModuleInit {
   private readonly maxConcurrency = 2; // Default limit
   private readonly maxRetries = 3;
   private isRunning = false;
+  private missionControlEnabled = false;
 
-  constructor(private readonly reviewEngine: ReviewEngineService) {}
+  constructor(
+    private readonly reviewEngine: ReviewEngineService,
+    private readonly missionControl: MissionControlService,
+    private readonly configService: ConfigService,
+  ) {}
 
   onModuleInit() {
-    // We don't start automatically, wait for explicit start call if needed
+    this.missionControlEnabled = this.configService.get<boolean>('MISSION_CONTROL_ENABLED', false);
   }
 
   /**
@@ -104,6 +112,12 @@ export class ReviewQueueService implements OnModuleInit {
           item.error = 'Task timed out (stuck detector)';
           item.retryCount++;
           this.activeCount = Math.max(0, this.activeCount - 1);
+          
+          if (this.missionControlEnabled && item.missionId) {
+            this.missionControl.pauseMission(item.missionId, 'Task timed out').catch(e => 
+              this.logger.error(`Failed to pause mission ${item.missionId}: ${e.message}`)
+            );
+          }
         }
       }
     }
@@ -133,6 +147,16 @@ export class ReviewQueueService implements OnModuleInit {
     this.logger.log(`Processing PR #${nextItem.pr.number} (${this.activeCount}/${this.maxConcurrency} active)`);
 
     try {
+      // Start mission session if enabled and not already started
+      if (this.missionControlEnabled) {
+        if (!nextItem.missionId) {
+          const session = await this.missionControl.startMission(nextItem.pr, 'review-only', 'review-only');
+          nextItem.missionId = session.id;
+        } else {
+          await this.missionControl.resumeMission(nextItem.missionId);
+        }
+      }
+
       // Execute review with a timeout
       const success = await Promise.race([
         this.reviewEngine.reviewPullRequest(nextItem.pr),
@@ -145,6 +169,19 @@ export class ReviewQueueService implements OnModuleInit {
         nextItem.status = QueueStatus.COMPLETED;
         nextItem.completedAt = new Date();
         this.logger.log(`Completed PR #${nextItem.pr.number} successfully`);
+        
+        if (this.missionControlEnabled && nextItem.missionId) {
+          const session = await (this.missionControl as any).sessionRepository.findOne({ 
+            where: { id: nextItem.missionId },
+            relations: ['steps']
+          });
+          
+          for (const step of session?.steps || []) {
+            if (step.status === 'pending') {
+              await this.missionControl.completeStep(step.id, 'completed');
+            }
+          }
+        }
       } else {
         throw new Error('Review failed without specific error');
       }
@@ -159,6 +196,19 @@ export class ReviewQueueService implements OnModuleInit {
       } else {
         nextItem.status = QueueStatus.FAILED;
         nextItem.completedAt = new Date();
+        
+        if (this.missionControlEnabled && nextItem.missionId) {
+          const session = await (this.missionControl as any).sessionRepository.findOne({ 
+            where: { id: nextItem.missionId },
+            relations: ['steps']
+          });
+          
+          for (const step of session?.steps || []) {
+            if (step.status === 'pending') {
+              await this.missionControl.completeStep(step.id, 'failed', { error: error.message });
+            }
+          }
+        }
       }
     } finally {
       this.activeCount--;

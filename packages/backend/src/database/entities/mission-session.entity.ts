@@ -7,6 +7,7 @@ import {
   OneToMany,
   ManyToOne,
   JoinColumn,
+  Index,
   type Relation,
 } from 'typeorm';
 import { PullRequest } from './pull-request.entity.js';
@@ -17,15 +18,18 @@ export class MissionSession {
   @PrimaryColumn('text')
   id: string;
 
+  @Index()
   @Column('integer')
   prNumber: number;
 
+  @Index()
   @Column('varchar')
   repository: string;
 
   @Column({ name: 'runbook_type', type: 'varchar' })
   runbookType: string;
 
+  @Index()
   @Column('varchar')
   status: string;
 

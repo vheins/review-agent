@@ -1,7 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { SessionLedgerEntry } from '../../../database/entities/session-ledger-entry.entity.js';
+import { OrchestrationGateway } from '../orchestration.gateway.js';
 
 @Injectable()
 export class SessionLedgerService {
@@ -10,6 +11,8 @@ export class SessionLedgerService {
   constructor(
     @InjectRepository(SessionLedgerEntry)
     private readonly ledgerRepository: Repository<SessionLedgerEntry>,
+    @Optional()
+    private readonly gateway: OrchestrationGateway,
   ) {}
 
   /**
@@ -33,7 +36,10 @@ export class SessionLedgerService {
       timestamp: new Date(),
     });
 
-    return await this.ledgerRepository.save(entry);
+    const savedEntry = await this.ledgerRepository.save(entry);
+    this.gateway?.broadcastLedgerEntry(savedEntry);
+    
+    return savedEntry;
   }
 
   /**

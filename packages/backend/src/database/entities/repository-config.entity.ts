@@ -51,6 +51,27 @@ export class RepositoryConfig {
   @Column('integer')
   version: number;
 
+  @Column({ name: 'criticality', type: 'real', default: 1.0 })
+  criticality: number;
+
+  @Column({ name: 'queue_weights', type: 'simple-json', nullable: true })
+  queueWeights: {
+    age?: number;
+    sla?: number;
+    severity?: number;
+    blocking?: number;
+    criticality?: number;
+    health?: number;
+    memory?: number;
+  } | null;
+
+  @Column({ name: 'confidence_thresholds', type: 'simple-json', nullable: true })
+  confidenceThresholds: {
+    fix?: number;
+    merge?: number;
+    resume?: number;
+  } | null;
+
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 }

@@ -1,6 +1,6 @@
 export * from './pull-request.entity.js';
 export * from './review.entity.js';
-export * from './comment.entity.ts';
+export * from './comment.entity.js';
 export * from './review-metrics.entity.js';
 export * from './audit-trail.entity.js';
 export * from './checklist.entity.js';

@@ -9,6 +9,7 @@ import { ConfigModule } from '../../config/config.module.js';
 import { SecurityModule } from '../security/security.module.js';
 import { TeamModule } from '../team/team.module.js';
 import { MetricsModule } from '../metrics/metrics.module.js';
+import { OrchestrationModule } from '../orchestration/orchestration.module.js';
 import { Review, PullRequest, Comment, ReviewMetrics, Checklist, ChecklistItem, ReviewChecklist } from '../../database/entities/index.js';
 
 import { ReviewController } from './review.controller.js';
@@ -27,6 +28,7 @@ import { ReviewController } from './review.controller.js';
     SecurityModule,
     TeamModule,
     MetricsModule,
+    OrchestrationModule,
   ],
   controllers: [ReviewController],
   providers: [ReviewEngineService, ReviewQueueService, ChecklistService],

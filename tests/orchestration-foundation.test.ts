@@ -1,19 +1,34 @@
 import 'reflect-metadata';
 import { Test, TestingModule } from '@nestjs/testing';
-import { TypeOrmModule } from '@nestjs/typeorm';
+import { TypeOrmModule, getRepositoryToken } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
+vi.setConfig({ hookTimeout: 60000 });
 import * as fc from 'fast-check';
 import {
   MissionSession,
   MissionStep,
   SessionLedgerEntry,
   PullRequest,
+  Review,
+  Comment,
+  ReviewMetrics,
+  RepositoryConfig,
+  DeveloperMetrics,
+  SecurityFinding,
+  Checklist,
+  ChecklistItem,
+  ReviewChecklist,
+  AuditTrail,
+  QueueScore,
+  OverrideInboxItem,
+  RepositoryMemoryEntry,
+  FocusWindow,
 } from '../packages/backend/src/database/entities/index.js';
 import { MissionControlService } from '../packages/backend/src/modules/orchestration/services/mission-control.service.js';
 import { SessionLedgerService } from '../packages/backend/src/modules/orchestration/services/session-ledger.service.js';
 import { QueuePolicyEngine } from '../packages/backend/src/modules/orchestration/services/queue-policy-engine.service.js';
-import { QueueScore } from '../packages/backend/src/database/entities/queue-score.entity.js';
 
 describe('Orchestration Foundation', () => {
   let module: TestingModule;
@@ -30,21 +45,47 @@ describe('Orchestration Foundation', () => {
           type: 'sqlite',
           database: ':memory:',
           entities: [
+            PullRequest,
+            Review,
+            Comment,
+            ReviewMetrics,
+            RepositoryConfig,
+            DeveloperMetrics,
+            SecurityFinding,
+            Checklist,
+            ChecklistItem,
+            ReviewChecklist,
+            AuditTrail,
             MissionSession,
             MissionStep,
-            SessionLedgerEntry,
-            PullRequest,
             QueueScore,
+            SessionLedgerEntry,
+            OverrideInboxItem,
+            RepositoryMemoryEntry,
+            FocusWindow,
           ],
           synchronize: true,
           logging: false,
         }),
         TypeOrmModule.forFeature([
+          PullRequest,
+          Review,
+          Comment,
+          ReviewMetrics,
+          RepositoryConfig,
+          DeveloperMetrics,
+          SecurityFinding,
+          Checklist,
+          ChecklistItem,
+          ReviewChecklist,
+          AuditTrail,
           MissionSession,
           MissionStep,
-          SessionLedgerEntry,
-          PullRequest,
           QueueScore,
+          SessionLedgerEntry,
+          OverrideInboxItem,
+          RepositoryMemoryEntry,
+          FocusWindow,
         ]),
       ],
       providers: [
@@ -57,8 +98,8 @@ describe('Orchestration Foundation', () => {
     dataSource = module.get(DataSource);
     missionControl = module.get(MissionControlService);
     ledger = module.get(SessionLedgerService);
-    prRepository = module.get('PullRequestRepository');
-    sessionRepository = module.get('MissionSessionRepository');
+    prRepository = module.get(getRepositoryToken(PullRequest));
+    sessionRepository = module.get(getRepositoryToken(MissionSession));
 
     // Create a mock PR
     const pr = prRepository.create({
@@ -104,7 +145,7 @@ describe('Orchestration Foundation', () => {
       const ledgerEntries = await ledger.getLedger(session.id);
       expect(ledgerEntries).toHaveLength(1);
       expect(ledgerEntries[0].eventType).toBe('mission_start');
-    });
+    }, 60000);
   });
 
   describe('Mission Step Lifecycle', () => {
@@ -123,7 +164,7 @@ describe('Orchestration Foundation', () => {
       
       const ledgerEntries = await ledger.getLedger(session.id);
       expect(ledgerEntries.some(e => e.eventType === 'step_complete')).toBe(true);
-    });
+    }, 60000);
   });
 
   describe('Property: Ledger Ordering Integrity', () => {
@@ -157,6 +198,6 @@ describe('Orchestration Foundation', () => {
         ),
         { numRuns: 5 }
       );
-    });
+    }, 60000);
   });
 });

@@ -14,6 +14,14 @@ import {
   Checklist,
   ChecklistItem,
   ReviewChecklist,
+  AuditTrail,
+  MissionSession,
+  MissionStep,
+  QueueScore,
+  SessionLedgerEntry,
+  OverrideInboxItem,
+  RepositoryMemoryEntry,
+  FocusWindow,
 } from './entities/index.js';
 
 // ES module equivalent of __dirname
@@ -59,6 +67,14 @@ const __dirname = path.dirname(__filename);
             Checklist,
             ChecklistItem,
             ReviewChecklist,
+            AuditTrail,
+            MissionSession,
+            MissionStep,
+            QueueScore,
+            SessionLedgerEntry,
+            OverrideInboxItem,
+            RepositoryMemoryEntry,
+            FocusWindow,
           ],
           synchronize: isDevelopment, // Auto-sync schema in development
           logging: isDevelopment ? ['query', 'error', 'warn'] : ['error'], // Log queries in development
@@ -78,6 +94,14 @@ const __dirname = path.dirname(__filename);
       Checklist,
       ChecklistItem,
       ReviewChecklist,
+      AuditTrail,
+      MissionSession,
+      MissionStep,
+      QueueScore,
+      SessionLedgerEntry,
+      OverrideInboxItem,
+      RepositoryMemoryEntry,
+      FocusWindow,
     ]),
   ],
   exports: [TypeOrmModule], // Export TypeOrmModule so other modules can inject repositories

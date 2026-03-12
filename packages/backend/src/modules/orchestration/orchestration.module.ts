@@ -7,12 +7,22 @@ import { SessionLedgerEntry } from '../../database/entities/session-ledger-entry
 import { OverrideInboxItem } from '../../database/entities/override-inbox-item.entity.js';
 import { RepositoryMemoryEntry } from '../../database/entities/repository-memory-entry.entity.js';
 import { FocusWindow } from '../../database/entities/focus-window.entity.js';
+import { PullRequest } from '../../database/entities/pull-request.entity.js';
+import { RepositoryConfig } from '../../database/entities/repository-config.entity.js';
+import { Review } from '../../database/entities/review.entity.js';
+import { Comment } from '../../database/entities/comment.entity.js';
+import { AuditTrail } from '../../database/entities/audit-trail.entity.js';
 
 import { MissionControlService } from './services/mission-control.service.js';
 import { QueuePolicyEngine } from './services/queue-policy-engine.service.js';
 import { SessionLedgerService } from './services/session-ledger.service.js';
 import { HumanOverrideService } from './services/human-override.service.js';
 import { RepositoryMemoryService } from './services/repository-memory.service.js';
+import { ConfidenceScorerService } from './services/confidence-scorer.service.js';
+import { FocusWindowSchedulerService } from './services/focus-window-scheduler.service.js';
+import { AuditService } from './services/audit.service.js';
+import { OrchestrationController } from './orchestration.controller.js';
+import { OrchestrationGateway } from './orchestration.gateway.js';
 
 @Module({
   imports: [
@@ -24,14 +34,24 @@ import { RepositoryMemoryService } from './services/repository-memory.service.js
       OverrideInboxItem,
       RepositoryMemoryEntry,
       FocusWindow,
+      PullRequest,
+      RepositoryConfig,
+      Review,
+      Comment,
+      AuditTrail,
     ]),
   ],
+  controllers: [OrchestrationController],
   providers: [
     MissionControlService,
     QueuePolicyEngine,
     SessionLedgerService,
     HumanOverrideService,
     RepositoryMemoryService,
+    ConfidenceScorerService,
+    FocusWindowSchedulerService,
+    AuditService,
+    OrchestrationGateway,
   ],
   exports: [
     MissionControlService,
@@ -39,6 +59,10 @@ import { RepositoryMemoryService } from './services/repository-memory.service.js
     SessionLedgerService,
     HumanOverrideService,
     RepositoryMemoryService,
+    ConfidenceScorerService,
+    FocusWindowSchedulerService,
+    AuditService,
+    OrchestrationGateway,
   ],
 })
 export class OrchestrationModule {}

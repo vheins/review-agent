@@ -5,6 +5,7 @@ import {
   CreateDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
   type Relation,
 } from 'typeorm';
 import { MissionSession } from './mission-session.entity.js';
@@ -14,6 +15,7 @@ export class SessionLedgerEntry {
   @PrimaryGeneratedColumn()
   id: number;
 
+  @Index()
   @Column('text')
   sessionId: string;
 
@@ -29,6 +31,7 @@ export class SessionLedgerEntry {
   @Column({ type: 'simple-json', nullable: true })
   metadata: any | null;
 
+  @Index()
   @CreateDateColumn({ name: 'timestamp' })
   timestamp: Date;
 
