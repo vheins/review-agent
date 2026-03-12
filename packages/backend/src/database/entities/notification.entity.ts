@@ -26,6 +26,12 @@ export class Notification {
   @Column('boolean', { default: false })
   isRead: boolean;
 
+  @Column('boolean', { default: false })
+  isBatched: boolean;
+
+  @Column('varchar', { nullable: true })
+  batchId: string | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

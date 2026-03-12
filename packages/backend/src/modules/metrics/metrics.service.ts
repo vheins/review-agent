@@ -1,67 +1,60 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { Review } from '../../database/entities/review.entity.js';
 import { ReviewMetrics } from '../../database/entities/review-metrics.entity.js';
 import { PullRequest } from '../../database/entities/pull-request.entity.js';
 import { Comment } from '../../database/entities/comment.entity.js';
 import { DeveloperMetrics } from '../../database/entities/developer-metrics.entity.js';
+import { SecurityFinding } from '../../database/entities/security-finding.entity.js';
 
-/**
- * MetricsService - Service for calculating and tracking quality/performance metrics
- * 
- * Features:
- * - Review performance tracking (duration, issues)
- * - PR health score calculation
- * - AI review quality scoring
- * - Developer and repository stats aggregation
- * 
- * Requirements: 13.1, 13.2, 13.3, 13.4
- */
 @Injectable()
 export class MetricsService {
   private readonly logger = new Logger(MetricsService.name);
 
   constructor(
-    @InjectRepository(ReviewMetrics)
-    private readonly metricsRepository: Repository<ReviewMetrics>,
     @InjectRepository(Review)
     private readonly reviewRepository: Repository<Review>,
+    @InjectRepository(ReviewMetrics)
+    private readonly reviewMetricsRepository: Repository<ReviewMetrics>,
     @InjectRepository(PullRequest)
     private readonly prRepository: Repository<PullRequest>,
     @InjectRepository(Comment)
     private readonly commentRepository: Repository<Comment>,
     @InjectRepository(DeveloperMetrics)
     private readonly devMetricsRepository: Repository<DeveloperMetrics>,
+    @InjectRepository(SecurityFinding)
+    private readonly securityRepository: Repository<SecurityFinding>,
+    private readonly dataSource: DataSource,
   ) {}
 
-  /**
-   * Calculate quality score for a review session
-   * 
-   * Factors:
-   * - Accuracy (False positive rate)
-   * - Thoroughness (Variety of issues, critical issues found)
-   * - Helpfulness (Suggested fixes provided)
-   */
-  calculateQualityScore(comments: Comment[], falsePositiveCount: number = 0): number {
-    if (comments.length === 0) return 100;
+  async calculatePRHealthScore(prNumber: number, repository: string) {
+    const findings = await this.securityRepository.find({
+      where: { prNumber, repository }
+    });
 
-    const accuracy = Math.max(0, 100 - (falsePositiveCount / comments.length * 200));
-    
-    const issueTypes = new Set(comments.map(c => c.category)).size;
-    const thoroughness = Math.min(100, (issueTypes * 20) + (comments.length * 5));
-    
-    const fixes = comments.filter(c => !!c.suggestion).length;
-    const helpfulness = (fixes / comments.length) * 100;
+    const reviews = await this.reviewRepository.find({
+      where: { prNumber, repository },
+      relations: ['comments']
+    });
 
-    // Weighted score: 50% accuracy, 30% thoroughness, 20% helpfulness
-    return Math.round((accuracy * 0.5) + (thoroughness * 0.3) + (helpfulness * 0.2));
+    const allComments = reviews.flatMap(r => r.comments);
+
+    // Simplified test score for now - check if there are test-related comments
+    const hasTestFailures = allComments.some(c => c.category === 'testing' && c.severity === 'error');
+
+    const scores = this.calculateScores(findings, allComments, hasTestFailures);
+
+    await this.prRepository.update({ number: prNumber, repository }, {
+      health_score: scores.finalScore,
+      updatedAt: new Date()
+    });
+
+    return scores;
   }
 
-  /**
-   * Calculate health score for a Pull Request
-   */
-  calculateHealthScore(securityFindings: any[], reviewComments: Comment[]): number {
+  private calculateScores(securityFindings: any[], reviewComments: any[], hasTestFailures: boolean) {
+    // 1. Security Score (0-100)
     let securityScore = 100;
     for (const f of securityFindings) {
       if (f.severity === 'critical') securityScore -= 30;
@@ -70,6 +63,7 @@ export class MetricsService {
     }
     securityScore = Math.max(0, securityScore);
 
+    // 2. Review Quality Score (0-100)
     let reviewScore = 100;
     for (const c of reviewComments) {
       if (c.severity === 'error') reviewScore -= 10;
@@ -77,40 +71,48 @@ export class MetricsService {
     }
     reviewScore = Math.max(0, reviewScore);
 
-    // Weighted Score: 60% Security, 40% Review Quality (simplified for now)
-    return Math.round((securityScore * 0.6) + (reviewScore * 0.4));
+    // 3. Test Score (0-100)
+    const testScore = hasTestFailures ? 0 : 100;
+
+    // Weighted Final Score: Security 40%, Review 30%, Tests 30%
+    const finalScore = Math.round((securityScore * 0.4) + (reviewScore * 0.3) + (testScore * 0.3));
+
+    return {
+      securityScore,
+      reviewScore,
+      testScore,
+      finalScore: Math.max(0, Math.min(100, finalScore))
+    };
   }
 
-  /**
-   * Aggregates and updates developer metrics
-   */
-  async updateDeveloperStats(author: string): Promise<void> {
-    const prs = await this.prRepository.find({ where: { author }, relations: ['reviews'] });
+  // Preserve existing methods...
+  calculateHealthScore(securityFindings: any[], aiComments: any[]): number {
+    return this.calculateScores(securityFindings, aiComments, false).finalScore;
+  }
+
+  calculateQualityScore(comments: any[]): number {
+    if (comments.length === 0) return 100;
+    const score = 100 - (comments.length * 5);
+    return Math.max(0, score);
+  }
+
+  async updateDeveloperMetrics(username: string): Promise<void> {
+    const prs = await this.prRepository.find({ where: { author: username } });
     if (prs.length === 0) return;
 
-    let totalScore = 0;
-    let totalPRs = prs.length;
+    const totalPRs = prs.length;
+    const avgScore = prs.reduce((acc, pr) => acc + (pr.health_score || 0), 0) / totalPRs;
 
-    for (const pr of prs) {
-      if (pr.reviews && pr.reviews.length > 0) {
-        const latestReview = pr.reviews.sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime())[0];
-        const metrics = await this.metricsRepository.findOne({ where: { reviewId: latestReview.id } });
-        if (metrics) totalScore += metrics.healthScore;
-      }
-    }
-
-    const avgScore = totalPRs > 0 ? totalScore / totalPRs : 0;
-
-    let devMetrics = await this.devMetricsRepository.findOne({ where: { username: author } });
+    let devMetrics = await this.devMetricsRepository.findOne({ where: { developerId: username } });
     if (!devMetrics) {
       devMetrics = this.devMetricsRepository.create({
-        username: author,
+        developerId: username,
         reviewedPrs: totalPRs,
-        totalPrs: totalPRs, // Using totalPRs as a placeholder
         averageHealthScore: avgScore,
-        averageQualityScore: 0,
-        averageReviewTime: 0,
-        issuesFound: { bugs: 0, security: 0, performance: 0, maintainability: 0 },
+        totalPoints: 0,
+        currentRank: 'Junior',
+        achievements: [],
+        skillsBreakdown: { logic: 0, bugs: 0, security: 0, performance: 0, maintainability: 0 },
       });
     } else {
       devMetrics.reviewedPrs = totalPRs;

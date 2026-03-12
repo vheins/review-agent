@@ -45,6 +45,9 @@ async function bootstrap() {
   const errorLogger = app.get(ErrorLoggerService);
   app.useGlobalFilters(new GlobalExceptionFilter(errorLogger));
 
+  // Enable shutdown hooks
+  app.enableShutdownHooks();
+
   // Get port from environment or use default
   const port = process.env.API_PORT || 3000;
 

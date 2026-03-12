@@ -54,6 +54,15 @@ export class Comment {
   @Column({ name: 'resolved_at', type: 'datetime', nullable: true })
   resolvedAt: Date | null;
 
+  @Column({ name: 'is_false_positive', type: 'boolean', default: false })
+  isFalsePositive: boolean;
+
+  @Column({ name: 'false_positive_justification', type: 'text', nullable: true })
+  falsePositiveJustification: string | null;
+
+  @Column({ name: 'marked_by_developer_id', type: 'integer', nullable: true })
+  markedByDeveloperId: number | null;
+
   @ManyToOne(() => Review, review => review.comments, { createForeignKeyConstraints: false })
   @JoinColumn({ name: 'review_id', referencedColumnName: 'id' })
   review?: Relation<Review>;

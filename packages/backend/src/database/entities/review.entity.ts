@@ -50,6 +50,15 @@ export class Review {
   @Column({ name: 'completed_at', type: 'datetime', nullable: true })
   completedAt: Date | null;
 
+  @Column({ name: 'updated_at', type: 'datetime', default: () => 'CURRENT_TIMESTAMP' })
+  updatedAt: Date;
+
+  @Column({ name: 'lock_owner', type: 'varchar', nullable: true })
+  lockOwner: string | null;
+
+  @Column({ name: 'lock_timestamp', type: 'datetime', nullable: true })
+  lockTimestamp: Date | null;
+
   // Relations - without JoinColumn to avoid FK constraints
   @ManyToOne(() => PullRequest, pr => pr.reviews, { createForeignKeyConstraints: false })
   @JoinColumn({ name: 'pr_number', referencedColumnName: 'number' })

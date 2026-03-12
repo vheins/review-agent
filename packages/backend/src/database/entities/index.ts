@@ -12,6 +12,10 @@ export * from './developer-metrics.entity.js';
 export * from './export.entity.js';
 export * from './error-log.entity.js';
 export * from './notification.entity.js';
+export * from './repository.entity.js';
+export * from './custom-rule.entity.js';
+export * from './review-template.entity.js';
+export * from './test-run.entity.js';
 
 // Orchestration Entities
 export * from './mission-session.entity.js';

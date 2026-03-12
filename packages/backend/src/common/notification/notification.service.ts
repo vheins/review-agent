@@ -1,6 +1,6 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, MoreThanOrEqual } from 'typeorm';
+import { Repository, MoreThanOrEqual, IsNull } from 'typeorm';
 import { Notification } from '../../database/entities/notification.entity.js';
 import { EmailService } from './email.service.js';
 
@@ -24,10 +24,7 @@ export class NotificationService {
     data: any = {}
   ): Promise<Notification | null> {
     const shouldNotify = await this.shouldNotify(recipientId, type);
-    if (!shouldNotify) {
-      this.logger.log(`Notification of type ${type} suppressed for user ${recipientId}`);
-      return null;
-    }
+    if (!shouldNotify) return null;
 
     const notification = this.notificationRepository.create({
       recipientId,
@@ -42,19 +39,61 @@ export class NotificationService {
     const saved = await this.notificationRepository.save(notification);
 
     if (priority === 'urgent' && this.emailService) {
-      // In a real app, fetch user email from developer repository
       const userEmail = 'dev@example.com'; 
       const emailContent = this.emailService.formatNotificationEmail(saved);
       await this.emailService.sendEmail(userEmail, emailContent.subject, emailContent.text, emailContent.html);
-      
       await this.notificationRepository.update(saved.id, { sentAt: new Date() });
     }
 
     return saved;
   }
 
+  async processSmartNotification(recipientId: number, type: string, title: string, message: string, priority: string = 'normal', data: any = {}) {
+    if (priority === 'low') {
+      const batchId = `batch-${new Date().toISOString().split('T')[0]}`;
+      const notification = this.notificationRepository.create({
+        recipientId,
+        notificationType: type,
+        title,
+        message,
+        priority,
+        data,
+        isBatched: true,
+        batchId,
+        createdAt: new Date(),
+      });
+      return await this.notificationRepository.save(notification);
+    }
+
+    return await this.sendNotification(recipientId, type, title, message, priority, data);
+  }
+
+  async flushBatches() {
+    const batched = await this.notificationRepository.find({
+      where: { isBatched: true, sentAt: IsNull() }
+    });
+
+    const recipientIds = [...new Set(batched.map(n => n.recipientId))];
+
+    for (const rid of recipientIds) {
+      const userNotifications = batched.filter(n => n.recipientId === rid);
+      this.logger.log(`Flushing ${userNotifications.length} batched notifications for user ${rid}`);
+      
+      if (this.emailService && userNotifications.length > 0) {
+        const summary = `You have ${userNotifications.length} new notifications.`;
+        const combinedMessage = userNotifications.map(n => `- ${n.title}: ${n.message}`).join('\n');
+        
+        await this.emailService.sendEmail('dev@example.com', `[PR Review Agent] Notification Digest`, combinedMessage);
+        
+        for (const n of userNotifications) {
+          await this.notificationRepository.update(n.id, { sentAt: new Date() });
+        }
+      }
+    }
+  }
+
   async shouldNotify(recipientId: number, type: string): Promise<boolean> {
-    return true; // Simplified
+    return true; 
   }
 
   async markAsRead(notificationId: number): Promise<void> {

@@ -25,6 +25,10 @@ import {
   Export,
   ErrorLog,
   Notification,
+  Repository,
+  CustomRule,
+  ReviewTemplate,
+  TestRun,
 } from './entities/index.js';
 
 // ES module equivalent of __dirname
@@ -69,6 +73,10 @@ const __dirname = path.dirname(__filename);
             Export,
             ErrorLog,
             Notification,
+            Repository,
+            CustomRule,
+            ReviewTemplate,
+            TestRun,
           ],
           synchronize: isDevelopment,
           logging: isDevelopment ? ['query', 'error', 'warn'] : ['error'],
@@ -98,6 +106,10 @@ const __dirname = path.dirname(__filename);
       Export,
       ErrorLog,
       Notification,
+      Repository,
+      CustomRule,
+      ReviewTemplate,
+      TestRun,
     ]),
   ],
   exports: [TypeOrmModule],

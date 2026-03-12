@@ -18,6 +18,8 @@ import { TeamModule } from './modules/team/team.module.js';
 import { AuditLoggerModule } from './common/audit/audit-logger.module.js';
 import { ErrorHandlingModule } from './common/filters/error-handling.module.js';
 import { NotificationModule } from './common/notification/notification.module.js';
+import { ShutdownModule } from './common/shutdown/shutdown.module.js';
+import { CleanupModule } from './common/cleanup/cleanup.module.js';
 
 /**
  * AppModule - Root NestJS Module
@@ -51,6 +53,8 @@ import { NotificationModule } from './common/notification/notification.module.js
     AuditLoggerModule,
     ErrorHandlingModule,
     NotificationModule,
+    ShutdownModule,
+    CleanupModule,
   ],
   controllers: [],
   providers: [],
