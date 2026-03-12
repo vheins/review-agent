@@ -23,7 +23,7 @@ async function launchElectronApp() {
 }
 
 async function waitForDashboardReady(page) {
-    await expect(page.getByRole('heading', { name: '🥷 Agentic Bunshin 🥷' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Agentic Bunshin' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Review Queue' })).toBeVisible();
 }

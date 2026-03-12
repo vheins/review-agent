@@ -28,7 +28,8 @@ import {
     SunMedium,
     Users,
     MessageSquarePlus,
-    ListTodo
+    ListTodo,
+    Zap
 } from 'lucide-react';
 import './styles.css';
 import { Button } from './components/ui/button.jsx';
@@ -271,8 +272,8 @@ function App() {
             return;
         }
 
-        setPrs(result.prs);
-        setSelectedPrId((current) => current ?? result.prs[0]?.id ?? null);
+        setPrs(result.prs || []);
+        setSelectedPrId((current) => current ?? result.prs?.[0]?.id ?? null);
     });
 
     const refreshTeamSecurity = useEffectEvent(async () => {
@@ -319,7 +320,7 @@ function App() {
                 console.warn('Electron API not available. Using default config.');
                 const defaultConfig = {
                     apiBaseUrl: 'http://127.0.0.1:3000/api',
-                    wsUrl: 'ws://127.0.0.1:3000',
+                    wsUrl: 'ws://127.0.0.1:3000/ws',
                     wsUserId: 'web-user',
                     wsToken: 'web-token'
                 };
@@ -545,12 +546,6 @@ function App() {
         autoMerge: item.autoMerge ? 'Enabled' : 'Disabled',
         threshold: item.threshold
     }));
-    const workspaceStatusCards = [
-        { label: 'Agent Loop', value: running ? 'Live' : 'Standby', tone: running ? 'success' : 'default' },
-        { label: 'Realtime', value: wsStatus, tone: toneForStatus(wsStatus) },
-        { label: 'Repositories', value: String(repositories.length), tone: 'default' }
-    ];
-
     const securityTrend = useMemo(() => {
         const findings = teamSecurity?.securityFindings ?? [];
         const byDate = new Map();
@@ -560,8 +555,6 @@ function App() {
         });
         return [...byDate.entries()].map(([label, value]) => ({ label, value }));
     }, [teamSecurity]);
-
-    const activeTitle = tabs.find((tab) => tab.id === selectedTab)?.label ?? 'Overview';
 
     const selectedPr = prDetail?.pr ?? null;
 
@@ -682,72 +675,76 @@ function App() {
     function renderOverview() {
         return (
             <div className="tab-page">
-                <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
-                    {overviewCards.map((card) => <MetricCard key={card.label} {...card} />)}
-                </div>
-                <div className="grid gap-4 lg:grid-cols-[1.4fr_0.9fr]">
-                    <Card className="p-5">
-                        <div className="grid gap-4 md:grid-cols-3">
-                            <div className="rounded-xl border border-border bg-panel p-4">
-                                <div className="mb-3 flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                                    <SquareTerminal className="h-4 w-4" />
-                                    Agent Loop
-                                </div>
-                                <div className="text-2xl font-semibold">{running ? 'Active' : 'Standby'}</div>
-                                <p className="mt-1 text-sm text-muted-foreground">Ready for continuous review execution.</p>
+                <Section 
+                    eyebrow="Analytics" 
+                    title="System Overview" 
+                    description="Performance snapshots and operational health for the current time window."
+                    action={
+                        <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2 rounded-lg border border-border bg-panel/30 px-2 py-1">
+                                <Clock3 className="h-3.5 w-3.5 text-muted-foreground" />
+                                <select 
+                                    id="globalRange" 
+                                    value={String(rangeDays)} 
+                                    onChange={(event) => setRangeDays(Number(event.target.value))}
+                                    className="bg-transparent text-xs font-bold text-foreground outline-none focus:ring-0"
+                                >
+                                    <option value="7">7D</option>
+                                    <option value="30">30D</option>
+                                    <option value="90">90D</option>
+                                </select>
                             </div>
-                            <div className="rounded-xl border border-border bg-panel p-4">
-                                <div className="mb-3 flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                                    <Gauge className="h-4 w-4" />
-                                    API Health
+                            <Button size="sm" variant="outline" className="h-8" onClick={async () => {
+                                await refreshSnapshot();
+                                await refreshPRs();
+                                await refreshTeamSecurity();
+                                await refreshRepositoryConfig();
+                            }}>
+                                <RefreshCw className="mr-2 h-3.5 w-3.5" />
+                                Refresh
+                            </Button>
+                        </div>
+                    }
+                >
+                    <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
+                        {overviewCards.map((card) => <MetricCard key={card.label} {...card} />)}
+                    </div>
+                </Section>
+                <div className="grid gap-5 2xl:grid-cols-2">
+                    <Section eyebrow="Runbook" title="Quick Actions">
+                        <div className="grid gap-3 sm:grid-cols-3">
+                            <Button variant="outline" className="h-20 flex-col gap-2 rounded-2xl" onClick={() => setSelectedTab('prs')}>
+                                <GitPullRequest className="h-5 w-5 text-sky-500" />
+                                Review queue
+                            </Button>
+                            <Button variant="outline" className="h-20 flex-col gap-2 rounded-2xl" onClick={() => setSelectedTab('security')}>
+                                <ShieldAlert className="h-5 w-5 text-rose-500" />
+                                Security triage
+                            </Button>
+                            <Button variant="outline" className="h-20 flex-col gap-2 rounded-2xl" onClick={() => setSelectedTab('config')}>
+                                <Settings2 className="h-5 w-5 text-amber-500" />
+                                Policy settings
+                            </Button>
+                        </div>
+                    </Section>
+                    <Section eyebrow="Execution" title="Active Engine" description="Real-time agent loop and communication status.">
+                        <div className="grid gap-3 sm:grid-cols-2">
+                            <div className="rounded-2xl border border-border bg-panel p-4">
+                                <p className="eyebrow">Backend API</p>
+                                <div className="mt-2 flex items-center gap-2 font-bold">
+                                    <span className={cn('h-2 w-2 rounded-full', apiStatus === 'Connected' ? 'bg-emerald-500' : 'bg-amber-500')} />
+                                    {apiStatus}
                                 </div>
-                                <div className="text-2xl font-semibold">{apiStatus}</div>
-                                <p className="mt-1 text-sm text-muted-foreground">
-                                    {apiStatus === 'Connected' 
-                                        ? 'Dashboard snapshot and control endpoints.' 
-                                        : (typeof apiStatus === 'string' && apiStatus.includes('Database not initialized'))
-                                        ? 'Start backend server with: yarn server'
-                                        : 'Backend server not running. Run: yarn server'}
-                                </p>
                             </div>
-                            <div className="rounded-xl border border-border bg-panel p-4">
-                                <div className="mb-3 flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                                    <BellRing className="h-4 w-4" />
-                                    Live Stream
+                            <div className="rounded-2xl border border-border bg-panel p-4">
+                                <p className="eyebrow">Event Stream</p>
+                                <div className="mt-2 flex items-center gap-2 font-bold">
+                                    <span className={cn('h-2 w-2 rounded-full', wsStatus === 'Connected' ? 'bg-emerald-500' : 'bg-rose-500')} />
+                                    {wsStatus}
                                 </div>
-                                <div className="text-2xl font-semibold">{wsStatus}</div>
-                                <p className="mt-1 text-sm text-muted-foreground">
-                                    {wsStatus === 'Connected' 
-                                        ? 'Realtime dashboard events and health alerts.' 
-                                        : wsStatus === 'Disconnected'
-                                        ? 'Backend server not running. Run: yarn server'
-                                        : 'Attempting to connect to backend...'}
-                                </p>
                             </div>
                         </div>
-                    </Card>
-                    <Card className="p-5">
-                        <div className="space-y-4">
-                            <div>
-                                <p className="eyebrow">Quick Actions</p>
-                                <h3 className="mt-2 text-xl font-bold">Runbook</h3>
-                            </div>
-                            <div className="grid gap-2">
-                                <Button variant="outline" className="justify-between" onClick={() => setSelectedTab('prs')}>
-                                    Review queue
-                                    <ChevronRight className="h-4 w-4" />
-                                </Button>
-                                <Button variant="outline" className="justify-between" onClick={() => setSelectedTab('security')}>
-                                    Security triage
-                                    <ChevronRight className="h-4 w-4" />
-                                </Button>
-                                <Button variant="outline" className="justify-between" onClick={() => setSelectedTab('config')}>
-                                    Repository settings
-                                    <ChevronRight className="h-4 w-4" />
-                                </Button>
-                            </div>
-                        </div>
-                    </Card>
+                    </Section>
                 </div>
                 <div className="grid gap-5 2xl:grid-cols-2">
                     <Section eyebrow="Priority Queue" title="Review Queue">
@@ -1427,14 +1424,31 @@ function App() {
     function renderLogs() {
         return (
             <div className="tab-page">
-                <Section eyebrow="Execution" title="Live Process Logs" action={<Button variant="ghost" onClick={() => setLogs([])}>Clear</Button>}>
-                    <div className="scroll-slim min-h-[28rem] rounded-[1.5rem] border border-border bg-panel/80 p-4 font-mono text-sm">
-                        <div className="grid gap-3">
+                <Section eyebrow="Execution" title="Terminal Output" action={<Button size="sm" variant="ghost" className="h-8" onClick={() => setLogs([])}><SquareTerminal className="mr-2 h-3.5 w-3.5" />Clear Console</Button>}>
+                    <div className="scroll-slim flex min-h-[32rem] flex-col-reverse overflow-y-auto rounded-xl border border-white/5 bg-black p-5 font-mono text-[13px] leading-relaxed shadow-2xl">
+                        <div className="flex flex-col gap-1.5">
                             {logs.length ? logs.map((entry) => (
-                                <div key={entry.id} className={cn('rounded-xl border px-4 py-3 leading-6', entry.type === 'error' ? 'border-rose-500/20 bg-rose-500/10 text-foreground' : entry.type === 'warn' ? 'border-amber-500/20 bg-amber-500/10 text-foreground' : 'border-border bg-background text-foreground')}>
-                                    {entry.message}
+                                <div key={entry.id} className="flex gap-3">
+                                    <span className={cn('shrink-0 select-none font-bold opacity-50', 
+                                        entry.type === 'error' ? 'text-rose-500' : 
+                                        entry.type === 'warn' ? 'text-amber-500' : 
+                                        'text-emerald-500'
+                                    )}>$</span>
+                                    <span className={cn('break-all', 
+                                        entry.type === 'error' ? 'text-rose-400' : 
+                                        entry.type === 'warn' ? 'text-amber-300' : 
+                                        'text-emerald-400/90'
+                                    )}>
+                                        {entry.message}
+                                    </span>
                                 </div>
-                            )) : <EmptyState message="No logs yet. Start the agent to stream process output." />}
+                            )) : (
+                                <div className="flex animate-pulse items-center gap-2 text-emerald-500/50">
+                                    <span>$</span>
+                                    <span>Waiting for process output...</span>
+                                    <span className="h-4 w-2 bg-emerald-500/50" />
+                                </div>
+                            )}
                         </div>
                     </div>
                 </Section>
@@ -1452,10 +1466,56 @@ function App() {
                 <div className="flex h-14 items-center justify-between gap-4 px-4 md:px-6">
                     <div className="flex items-center gap-3">
                         <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-panel text-base">🥷</div>
-                        <h1 className="hidden text-lg font-bold tracking-tight sm:block">Agentic Bunshin</h1>
+                        <div className="hidden flex-col sm:flex">
+                            <h1 className="text-sm font-bold leading-tight tracking-tight">Agentic Bunshin</h1>
+                            <div className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-muted-foreground">
+                                <div className="flex items-center gap-1">
+                                    <span className={cn('h-1.5 w-1.5 rounded-full', statusDotClass(running))} />
+                                    {running ? 'Loop Active' : 'Standby'}
+                                </div>
+                                <span className="opacity-30">•</span>
+                                <div className="flex items-center gap-1">
+                                    <span className={cn('h-1.5 w-1.5 rounded-full', wsStatus === 'Connected' ? 'bg-emerald-500' : 'bg-rose-500')} />
+                                    Realtime
+                                </div>
+                                <span className="opacity-30">•</span>
+                                <div className="flex items-center gap-1">
+                                    <span className={cn('h-1.5 w-1.5 rounded-full', apiStatus === 'Connected' ? 'bg-emerald-500' : 'bg-amber-500')} />
+                                    API
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     
                     <div className="flex items-center gap-2">
+                        {/* Repositories Counter */}
+                        {snapshot?.repositories && (
+                            <div className="mr-2 hidden items-center gap-2 rounded-lg border border-border bg-panel/30 px-2.5 py-1 text-xs font-medium xl:flex">
+                                <span className="text-muted-foreground">Repos</span>
+                                <Badge variant="secondary" className="h-5 min-w-[1.25rem] justify-center px-1 font-bold">{snapshot.repositories.length}</Badge>
+                            </div>
+                        )}
+
+                        {/* Agent Controls */}
+                        <div className="mr-2 flex items-center gap-1.5 rounded-lg border border-border bg-panel/50 p-1">
+                            <Button size="sm" variant="ghost" disabled={running} className="h-8 gap-1.5 px-2.5 text-xs font-bold text-emerald-500 hover:bg-emerald-500/10" onClick={() => handleStart(false)}>
+                                <PlayCircle className="h-3.5 w-3.5" />
+                                <span className="hidden lg:inline">Start</span>
+                            </Button>
+                            <Button size="sm" variant="ghost" disabled={running} className="h-8 gap-1.5 px-2.5 text-xs font-bold text-amber-500 hover:bg-amber-500/10" onClick={() => handleStart(true)}>
+                                <RefreshCw className="h-3.5 w-3.5" />
+                                <span className="hidden lg:inline">Run Once</span>
+                            </Button>
+                            <Button size="sm" variant="ghost" disabled={!running} className="h-8 gap-1.5 px-2.5 text-xs font-bold text-sky-500 hover:bg-sky-500/10" onClick={handleExecuteNow}>
+                                <Zap className="h-3.5 w-3.5" />
+                                <span className="hidden lg:inline">Execute Now</span>
+                            </Button>
+                            <Button size="sm" variant="ghost" disabled={!running} className="h-8 gap-1.5 px-2.5 text-xs font-bold text-rose-500 hover:bg-rose-500/10" onClick={handleStop}>
+                                <SquareTerminal className="h-3.5 w-3.5" />
+                                <span className="hidden lg:inline">Stop</span>
+                            </Button>
+                        </div>
+
                         {/* Create Button with Dropdown */}
                         <div className="relative">
                             <button
@@ -1525,7 +1585,7 @@ function App() {
                                 <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-panel text-lg">🥷</div>
                                 <div className="min-w-0">
                                     <p className="eyebrow">Personal AI Ops</p>
-                                    <h1 className="whitespace-nowrap text-[1.2rem] font-black tracking-tight md:text-[1.35rem]">🥷 Agentic Bunshin 🥷</h1>
+                                    <h1 className="whitespace-nowrap text-[1.2rem] font-black tracking-tight md:text-[1.35rem]">Agentic Bunshin</h1>
                                 </div>
                             </div>
                             <p className="mt-4 text-sm leading-6 text-muted-foreground">Daily-use review console for queue pressure, repository policy, and agent execution.</p>
@@ -1546,65 +1606,10 @@ function App() {
                                 );
                             })}
                         </nav>
-                        <Card className="p-4">
-                            <div className="mb-4 flex items-center justify-between gap-3">
-                                <div>
-                                    <p className="eyebrow">Runtime</p>
-                                    <div className="mt-1 text-sm font-medium">Agent Status</div>
-                                </div>
-                                <PanelLeft className="h-4 w-4 text-muted-foreground" />
-                            </div>
-                            <div className={cn('inline-flex items-center gap-3 rounded-lg border px-4 py-3 text-sm font-medium', running ? 'border-emerald-500/20 bg-emerald-500/10 text-foreground' : 'border-border bg-panel text-foreground')}>
-                                <span className={cn('h-2.5 w-2.5 rounded-full', statusDotClass(running))} />
-                                {running ? 'Running' : 'Stopped'}
-                            </div>
-                            <div className="mt-4 grid gap-3 rounded-xl bg-panel p-4 text-sm">
-                                <div className="flex items-center justify-between gap-3"><span className="eyebrow">WebSocket</span><strong>{wsStatus}</strong></div>
-                                <div className="flex items-center justify-between gap-3"><span className="eyebrow">API</span><strong>{apiStatus}</strong></div>
-                            </div>
-                        </Card>
                     </div>
                 </aside>
                 <main className="px-3 py-3 md:px-6 md:py-4 xl:px-8">
                     <div className="mx-auto flex max-w-7xl flex-col gap-5">
-                        <Card className="p-5">
-                            <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-                                <div>
-                                    <p className="eyebrow">Operations</p>
-                                    <h2 className="mt-2 text-3xl font-black tracking-tight">{activeTitle}</h2>
-                                    <p className="mt-2 text-sm text-muted-foreground">Operate the review agent like a personal enterprise console: inspect, act, and adjust policy from one surface.</p>
-                                    <div className="mt-4 flex flex-wrap gap-2">
-                                        {workspaceStatusCards.map((item) => (
-                                            <div key={item.label} className="inline-flex items-center gap-2 rounded-full border border-border bg-panel px-3 py-1.5 text-xs font-medium text-foreground">
-                                                <span className={cn('h-2 w-2 rounded-full', item.tone === 'success' ? 'bg-emerald-500' : item.tone === 'danger' ? 'bg-rose-500' : item.tone === 'warn' ? 'bg-amber-500' : 'bg-slate-400')} />
-                                                <span className="text-muted-foreground">{item.label}</span>
-                                                <span>{item.value}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                                <div className="grid gap-3 sm:grid-cols-2 xl:flex xl:flex-wrap xl:items-end">
-                                    <div className="grid gap-2">
-                                        <span className="text-sm font-medium text-muted-foreground">Range</span>
-                                        <Select id="globalRange" value={String(rangeDays)} onChange={(event) => setRangeDays(Number(event.target.value))}>
-                                            <option value="7">Last 7 Days</option>
-                                            <option value="30">Last 30 Days</option>
-                                            <option value="90">Last 90 Days</option>
-                                        </Select>
-                                    </div>
-                                    <Button variant="outline" onClick={async () => {
-                                        await refreshSnapshot();
-                                        await refreshPRs();
-                                        await refreshTeamSecurity();
-                                        await refreshRepositoryConfig();
-                                    }}><RefreshCw className="mr-2 h-4 w-4" />Refresh</Button>
-                                    <Button onClick={() => handleStart(false)}><PlayCircle className="mr-2 h-4 w-4" />Start</Button>
-                                    <Button variant="secondary" onClick={() => handleStart(true)}>Run Once</Button>
-                                    <Button variant="warning" disabled={!running} onClick={handleExecuteNow}>Execute Now</Button>
-                                    <Button variant="danger" disabled={!running} onClick={handleStop}>Stop</Button>
-                                </div>
-                            </div>
-                        </Card>
                         {selectedTab === 'overview' && renderOverview()}
                         {selectedTab === 'prs' && renderPRs()}
                         {selectedTab === 'metrics' && renderMetrics()}

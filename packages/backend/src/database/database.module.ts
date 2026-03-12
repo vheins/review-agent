@@ -10,6 +10,10 @@ import {
   ReviewMetrics,
   RepositoryConfig,
   DeveloperMetrics,
+  SecurityFinding,
+  Checklist,
+  ChecklistItem,
+  ReviewChecklist,
 } from './entities/index.js';
 
 // ES module equivalent of __dirname
@@ -50,6 +54,10 @@ const __dirname = path.dirname(__filename);
             ReviewMetrics,
             RepositoryConfig,
             DeveloperMetrics,
+            SecurityFinding,
+            Checklist,
+            ChecklistItem,
+            ReviewChecklist,
           ],
           synchronize: isDevelopment, // Auto-sync schema in development
           logging: isDevelopment ? ['query', 'error', 'warn'] : ['error'], // Log queries in development
@@ -65,6 +73,10 @@ const __dirname = path.dirname(__filename);
       ReviewMetrics,
       RepositoryConfig,
       DeveloperMetrics,
+      SecurityFinding,
+      Checklist,
+      ChecklistItem,
+      ReviewChecklist,
     ]),
   ],
   exports: [TypeOrmModule], // Export TypeOrmModule so other modules can inject repositories

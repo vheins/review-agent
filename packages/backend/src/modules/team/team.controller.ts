@@ -17,16 +17,25 @@ export class TeamController {
 
   @Get('security')
   async getSecurity() {
-    const developers = await this.devRepo.find();
-    const securityFindings = await this.securityRepo.find({ order: { detectedAt: 'DESC' }, take: 20 });
-    
-    return {
-      data: {
-        developers,
-        securityFindings,
-        recentAlerts: [],
-      }
-    };
+    try {
+      const developers = await this.devRepo.find();
+      const securityFindings = await this.securityRepo.find({ 
+        order: { detectedAt: 'DESC' }, 
+        take: 20,
+        relations: ['pullRequest']
+      });
+      
+      return {
+        data: {
+          developers,
+          securityFindings,
+          recentAlerts: [],
+        }
+      };
+    } catch (error) {
+      console.error('[TeamController] Error in getSecurity:', error);
+      throw error;
+    }
   }
 
   @Get('workload')

@@ -31,7 +31,7 @@ test.describe('Sticky Top Navigation', () => {
             await page.setViewportSize({ width: 1280, height: 900 });
 
             // Wait for app to load
-            await expect(page.getByRole('heading', { name: '🥷 Agentic Bunshin 🥷' })).toBeVisible();
+            await expect(page.getByRole('heading', { name: 'Agentic Bunshin' })).toBeVisible();
 
             // Take initial screenshot
             await page.screenshot({
@@ -108,7 +108,7 @@ test.describe('Sticky Top Navigation', () => {
             await page.setViewportSize({ width: 1280, height: 900 });
 
             // Wait for app to load
-            await expect(page.getByRole('heading', { name: '🥷 Agentic Bunshin 🥷' })).toBeVisible();
+            await expect(page.getByRole('heading', { name: 'Agentic Bunshin' })).toBeVisible();
 
             // Click New button to open dropdown
             const newButton = page.getByRole('button', { name: 'New' });

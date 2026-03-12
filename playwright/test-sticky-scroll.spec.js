@@ -31,7 +31,7 @@ test.describe('Sticky Navigation Scroll Test', () => {
             await page.setViewportSize({ width: 1280, height: 900 });
 
             // Wait for app to load
-            await expect(page.getByRole('heading', { name: '🥷 Agentic Bunshin 🥷' })).toBeVisible();
+            await expect(page.getByRole('heading', { name: 'Agentic Bunshin' })).toBeVisible();
 
             // Get initial navigation position
             const navBefore = await page.evaluate(() => {
@@ -104,7 +104,7 @@ test.describe('Sticky Navigation Scroll Test', () => {
             await page.setViewportSize({ width: 1280, height: 900 });
 
             // Wait for app to load
-            await expect(page.getByRole('heading', { name: '🥷 Agentic Bunshin 🥷' })).toBeVisible();
+            await expect(page.getByRole('heading', { name: 'Agentic Bunshin' })).toBeVisible();
 
             // Go to Metrics tab (has more content)
             await page.getByRole('button', { name: 'Metrics', exact: true }).click();

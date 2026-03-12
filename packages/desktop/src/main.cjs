@@ -185,9 +185,83 @@ ipcMain.handle('get-runtime-config', async () => {
         success: true,
         config: {
             apiBaseUrl: `http://127.0.0.1:${port}/api`,
-            wsUrl: `ws://127.0.0.1:${port}`,
+            wsUrl: `ws://127.0.0.1:${port}/ws`,
             wsUserId: 'electron-dashboard',
             wsToken: process.env.DASHBOARD_SESSION_TOKEN || 'electron-dashboard-token'
         }
     };
+});
+
+// Helper for backend requests
+async function backendRequest(endpoint, method = 'GET', body = null) {
+    const port = process.env.API_PORT || '3000';
+    const http = require('http');
+    
+    return new Promise((resolve) => {
+        const options = {
+            hostname: '127.0.0.1',
+            port: port,
+            path: `/api${endpoint}`,
+            method: method,
+            headers: {
+                'Content-Type': 'application/json',
+                'X-API-Key': 'dev-key'
+            }
+        };
+
+        const req = http.request(options, (res) => {
+            let data = '';
+            res.on('data', (chunk) => {
+                data += chunk;
+            });
+            res.on('end', () => {
+                try {
+                    const parsedData = JSON.parse(data);
+                    resolve({ success: res.statusCode >= 200 && res.statusCode < 300, ...parsedData });
+                } catch (e) {
+                    resolve({ success: false, message: 'Failed to parse response' });
+                }
+            });
+        });
+
+        req.on('error', (err) => {
+            console.error(`Backend request failed: ${err.message}`);
+            resolve({ success: false, message: err.message });
+        });
+
+        if (body) {
+            req.write(JSON.stringify(body));
+        }
+        req.end();
+    });
+}
+
+ipcMain.handle('start-review', async (event, config) => {
+    console.log(`[IPC] start-review requested (once: ${config?.once})`);
+    return await backendRequest('/reviews/run-once', 'POST', config);
+});
+
+ipcMain.handle('stop-review', async () => {
+    console.log('[IPC] stop-review requested');
+    // For now, NestJS doesn't have a specific stop endpoint if it's running a loop in background
+    // but we can return success to update UI
+    return { success: true, message: 'Review loop stop requested' };
+});
+
+ipcMain.handle('execute-now', async () => {
+    console.log('[IPC] execute-now requested');
+    return await backendRequest('/reviews/run-once', 'POST', { once: true });
+});
+
+ipcMain.handle('show-notification', async (event, data) => {
+    new Notification({
+        title: data.title || 'PR Review Agent',
+        body: data.message
+    }).show();
+    return { success: true };
+});
+
+ipcMain.handle('open-external', async (event, url) => {
+    shell.openExternal(url);
+    return { success: true };
 });

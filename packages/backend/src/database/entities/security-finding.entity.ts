@@ -5,6 +5,7 @@ import {
   CreateDateColumn,
   ManyToOne,
   JoinColumn,
+  type Relation,
 } from 'typeorm';
 import { PullRequest } from './pull-request.entity.js';
 
@@ -43,10 +44,7 @@ export class SecurityFinding {
   @CreateDateColumn({ name: 'detected_at' })
   detectedAt: Date;
 
-  @ManyToOne(() => PullRequest, pr => pr.reviews, { createForeignKeyConstraints: false })
-  @JoinColumn([
-    { name: 'pr_number', referencedColumnName: 'number' },
-    { name: 'repository', referencedColumnName: 'repository' }
-  ])
-  pullRequest?: PullRequest;
+  @ManyToOne(() => PullRequest, { createForeignKeyConstraints: false })
+  @JoinColumn({ name: 'pr_number', referencedColumnName: 'number' })
+  pullRequest?: Relation<PullRequest>;
 }
