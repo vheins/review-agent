@@ -323,8 +323,12 @@ export class GitHubClientService {
           pr.headRefName = detail.headRefName;
           pr.baseRefName = detail.baseRefName;
         } catch (err) {
-          // Ignore if detail fetch fails
+          this.logger.warn(`Failed to fetch details for PR ${pr.repository.nameWithOwner}#${pr.number}: ${err.message}`);
         }
+      }
+
+      if (!pr.headRefName) {
+        this.logger.warn(`PR ${pr.repository.nameWithOwner}#${pr.number} has no headRefName after detail fetch`);
       }
     }
 

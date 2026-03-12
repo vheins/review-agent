@@ -63,14 +63,7 @@ export class PullRequestService {
         const isNew = !prEntity;
         
         if (isNew) {
-          this.logger.log(`New PR detected: ${pr.repository.nameWithOwner}#${pr.number}. Generating Lead Insights...`);
-          
-          // Prepare repo to get diff for insights
-          const repoDir = await this.github.prepareRepository(pr);
-          const { stdout: diff } = await this.github.execaVerbose('git', ['diff', `${pr.baseRefName}...${pr.headRefName}`], { cwd: repoDir });
-          
-          // Generate insights
-          const insights = await this.ai.generateLeadInsights(pr, diff);
+          this.logger.log(`New PR detected: ${pr.repository.nameWithOwner}#${pr.number}. Saving to database...`);
           
           prEntity = this.prRepository.create({
             number: pr.number,
@@ -78,19 +71,19 @@ export class PullRequestService {
             title: pr.title,
             url: pr.url,
             status: 'open',
-            author: 'unknown', // Ideally fetch from API
+            author: pr.author?.login || 'unknown',
             branch: pr.headRefName || 'unknown',
             baseBranch: pr.baseRefName || 'unknown',
             isDraft: false,
             labels: [],
-            lead_summary: insights.summary,
-            risk_score: insights.risk,
-            impact_score: insights.impact,
-            pr_category: insights.category,
+            lead_summary: '', // To be generated later or on-demand
+            risk_score: 0,
+            impact_score: 0,
+            pr_category: 'uncategorized',
           });
           
           await this.prRepository.save(prEntity);
-          this.logger.log(`Saved PR with category: ${insights.category}, risk: ${insights.risk}`);
+          this.logger.log(`Saved new PR: ${pr.repository.nameWithOwner}#${pr.number}`);
         } else {
           // Update existing PR metadata if needed
           prEntity.title = pr.title;
