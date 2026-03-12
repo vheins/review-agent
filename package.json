@@ -13,7 +13,7 @@
     "ui:dev": "yarn workspace @review-agent/ui dev",
     "ui:build": "yarn workspace @review-agent/ui build",
     "desktop:dev": "cross-env NODE_ENV=development yarn workspace @review-agent/desktop dev",
-    "dev": "concurrently -k \"yarn backend:dev\" \"yarn ui:dev\" \"wait-on tcp:5173 && yarn desktop:dev\"",
+    "dev": "./scripts/cleanup.sh && concurrently -k \"yarn backend:dev\" \"yarn ui:dev\" \"wait-on tcp:5173 && yarn desktop:dev\"",
     "test": "vitest run",
     "lint": "eslint \"packages/**/*.{ts,tsx}\" --fix",
     "format": "prettier --write \"packages/**/*.{ts,tsx,js,cjs,mjs,json,css,md}\""
