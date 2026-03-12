@@ -21,6 +21,7 @@ import { RepositoryMemoryService } from './services/repository-memory.service.js
 import { ConfidenceScorerService } from './services/confidence-scorer.service.js';
 import { FocusWindowSchedulerService } from './services/focus-window-scheduler.service.js';
 import { AuditService } from './services/audit.service.js';
+import { EscalationService } from './services/escalation.service.js';
 import { OrchestrationController } from './orchestration.controller.js';
 import { OrchestrationGateway } from './orchestration.gateway.js';
 
@@ -51,6 +52,7 @@ import { OrchestrationGateway } from './orchestration.gateway.js';
     ConfidenceScorerService,
     FocusWindowSchedulerService,
     AuditService,
+    EscalationService,
     OrchestrationGateway,
   ],
   exports: [
@@ -62,6 +64,7 @@ import { OrchestrationGateway } from './orchestration.gateway.js';
     ConfidenceScorerService,
     FocusWindowSchedulerService,
     AuditService,
+    EscalationService,
     OrchestrationGateway,
   ],
 })

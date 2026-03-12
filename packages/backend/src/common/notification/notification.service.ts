@@ -1,7 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, MoreThanOrEqual } from 'typeorm';
 import { Notification } from '../../database/entities/notification.entity.js';
+import { EmailService } from './email.service.js';
 
 @Injectable()
 export class NotificationService {
@@ -10,6 +11,8 @@ export class NotificationService {
   constructor(
     @InjectRepository(Notification)
     private readonly notificationRepository: Repository<Notification>,
+    @Optional()
+    private readonly emailService: EmailService,
   ) {}
 
   async sendNotification(
@@ -22,7 +25,7 @@ export class NotificationService {
   ): Promise<Notification | null> {
     const shouldNotify = await this.shouldNotify(recipientId, type);
     if (!shouldNotify) {
-      this.logger.log(`Notification of type ${type} suppressed for user ${recipientId} due to preferences`);
+      this.logger.log(`Notification of type ${type} suppressed for user ${recipientId}`);
       return null;
     }
 
@@ -36,13 +39,22 @@ export class NotificationService {
       createdAt: new Date(),
     });
 
-    return await this.notificationRepository.save(notification);
+    const saved = await this.notificationRepository.save(notification);
+
+    if (priority === 'urgent' && this.emailService) {
+      // In a real app, fetch user email from developer repository
+      const userEmail = 'dev@example.com'; 
+      const emailContent = this.emailService.formatNotificationEmail(saved);
+      await this.emailService.sendEmail(userEmail, emailContent.subject, emailContent.text, emailContent.html);
+      
+      await this.notificationRepository.update(saved.id, { sentAt: new Date() });
+    }
+
+    return saved;
   }
 
   async shouldNotify(recipientId: number, type: string): Promise<boolean> {
-    // In a real app, fetch preferences from Developer entity
-    // Simulation:
-    return true;
+    return true; // Simplified
   }
 
   async markAsRead(notificationId: number): Promise<void> {

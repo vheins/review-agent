@@ -47,6 +47,34 @@ export class PullRequestService {
     return pr;
   }
 
+  async calculateElapsedTime(repoName: string, number: number) {
+    const pr = await this.findOne(repoName, number);
+    const now = new Date();
+    const elapsedSeconds = Math.floor((now.getTime() - pr.createdAt.getTime()) / 1000);
+
+    return {
+      repository: repoName,
+      number,
+      status: pr.status,
+      elapsedSeconds,
+      createdAt: pr.createdAt
+    };
+  }
+
+  async calculateTimeInCurrentStatus(repoName: string, number: number) {
+    const pr = await this.findOne(repoName, number);
+    const now = new Date();
+    const elapsedSeconds = Math.floor((now.getTime() - pr.updatedAt.getTime()) / 1000);
+
+    return {
+      repository: repoName,
+      number,
+      status: pr.status,
+      timeInStatusSeconds: elapsedSeconds,
+      statusSince: pr.updatedAt
+    };
+  }
+
   /**
    * Scan GitHub for new pull requests and update database with Lead Insights
    */
