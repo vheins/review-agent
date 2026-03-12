@@ -181,7 +181,7 @@ export class GitHubClientService {
           // Note: GitHub search defaults to AND. If we want OR, we need separate queries or use the OR operator.
           // To keep it simple and reliable, we'll join them with OR if multiple filters exist.
           const orQuery = filters.length > 1 
-            ? encodeURIComponent(`is:pr ${filters.join(' OR ')}`)
+            ? encodeURIComponent(`is:pr (${filters.join(' OR ')})`)
             : query;
 
           const result = await this.fetchApi(`/search/issues?q=${orQuery}&per_page=100&sort=updated&order=desc`);

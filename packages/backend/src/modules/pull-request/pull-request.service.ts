@@ -70,7 +70,7 @@ export class PullRequestService {
             repository: pr.repository.nameWithOwner,
             title: pr.title,
             url: pr.url,
-            status: 'open',
+            status: pr.state.toLowerCase(),
             author: pr.author?.login || 'unknown',
             branch: pr.headRefName || 'unknown',
             baseBranch: pr.baseRefName || 'unknown',
@@ -85,8 +85,9 @@ export class PullRequestService {
           await this.prRepository.save(prEntity);
           this.logger.log(`Saved new PR: ${pr.repository.nameWithOwner}#${pr.number}`);
         } else {
-          // Update existing PR metadata if needed
+          // Update existing PR metadata
           prEntity.title = pr.title;
+          prEntity.status = pr.state.toLowerCase();
           prEntity.updatedAt = new Date();
           await this.prRepository.save(prEntity);
         }

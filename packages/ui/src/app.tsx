@@ -1,5 +1,4 @@
 import React, { startTransition, useDeferredValue, useEffect, useEffectEvent, useMemo, useState, useRef } from 'react';
-import { createRoot } from 'react-dom/client';
 import {
     Activity,
     BellRing,
@@ -153,7 +152,7 @@ function EmptyState({ message }) {
     );
 }
 
-function App() {
+export default function App() {
     const [selectedTab, setSelectedTab] = useState('overview');
     const [rangeDays, setRangeDays] = useState(30);
     const [themeMode, setThemeMode] = useState(getStoredThemeMode());
@@ -182,7 +181,12 @@ function App() {
     const [repositoryId, setRepositoryId] = useState('');
     const [configValidation, setConfigValidation] = useState('Select a repository to load its current configuration.');
     const [ruleFeedback, setRuleFeedback] = useState('Rule validation output will appear here.');
-    const [prFilters, setPrFilters] = useState({ status: '', repositoryId: '', authorId: '', search: '' });
+    const [prFilters, setPrFilters] = useState({
+        status: 'open',
+        repositoryId: '',
+        authorId: '',
+        search: ''
+    });
     const [configForm, setConfigForm] = useState({
         reviewInterval: 600,
         reviewMode: 'comment',
@@ -1690,5 +1694,3 @@ function App() {
         </div>
     );
 }
-
-createRoot(document.getElementById('root')).render(<App />);
