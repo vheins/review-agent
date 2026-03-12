@@ -18,15 +18,30 @@ export class DashboardController {
 
   @Get()
   async getSnapshot(@Query('rangeDays') rangeDays: number = 30) {
-    const openPRs = await this.prRepo.count({ where: { status: 'open' } });
+    const openPRsCount = await this.prRepo.count({ where: { status: 'open' } });
     const totalReviews = await this.metricsRepo.count();
     const avgHealth = await this.metricsRepo.average('healthScore') || 0;
     
-    // Mocking some fields that are expected by renderer.js but not yet fully implemented
+    const reviewQueue = await this.prRepo.find({
+      where: { status: 'open' },
+      order: { updatedAt: 'DESC' },
+      take: 10
+    });
+
+    const repositories = await this.configRepo.find();
+    
+    const configSummaries = repositories.map(repo => ({
+      repository: repo.repositoryName,
+      mode: repo.reviewMode,
+      interval: repo.reviewInterval,
+      autoMerge: repo.autoMerge,
+      threshold: repo.severityThreshold
+    }));
+
     return {
       snapshot: {
         overview: {
-          openPRs,
+          openPRs: openPRsCount,
           blockingPRs: 0,
           avgReviewSeconds: 3600,
           slaComplianceRate: 100,
@@ -35,11 +50,11 @@ export class DashboardController {
         metricsOverview: {
           total_reviews: totalReviews,
         },
-        reviewQueue: [],
-        recentActivity: [],
-        teamWorkload: [],
-        configSummaries: [],
-        repositories: await this.configRepo.find(),
+        reviewQueue,
+        recentActivity: [], // To be implemented with AuditTrail
+        teamWorkload: [],   // To be implemented with DeveloperMetrics
+        configSummaries,
+        repositories,
         trendData: [],
         approvalByExecutor: [],
         rejectionReasons: [],

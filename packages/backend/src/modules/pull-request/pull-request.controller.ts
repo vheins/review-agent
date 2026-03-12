@@ -8,7 +8,8 @@ export class PullRequestController {
 
   @Get()
   async list() {
-    return this.prService.findAll();
+    const prs = await this.prService.findAll();
+    return { prs };
   }
 
   @Get('scan')

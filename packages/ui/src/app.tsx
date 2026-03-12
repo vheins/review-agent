@@ -29,7 +29,8 @@ import {
     Users,
     MessageSquarePlus,
     ListTodo,
-    Zap
+    Zap,
+    ExternalLink
 } from 'lucide-react';
 import './styles.css';
 import { Button } from './components/ui/button.jsx';
@@ -165,6 +166,13 @@ function App() {
     const [configData, setConfigData] = useState(null);
     const [running, setRunning] = useState(false);
     const [logs, setLogs] = useState([]);
+    const logContainerRef = useRef(null);
+
+    useEffect(() => {
+        if (logContainerRef.current) {
+            logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+        }
+    }, [logs]);
     const [activityItems, setActivityItems] = useState([]);
     const [wsStatus, setWsStatus] = useState('Disconnected');
     const [apiStatus, setApiStatus] = useState('Unknown');
@@ -229,12 +237,12 @@ function App() {
         }
     }, [showCreateMenu]);
 
-    const prependLog = useEffectEvent((type, message) => {
+    const appendLog = useEffectEvent((type, message) => {
         // Convert message to string if it's not already
         const messageStr = typeof message === 'string' ? message : JSON.stringify(message);
         
         startTransition(() => {
-            setLogs((current) => [{ id: `${Date.now()}-${Math.random()}`, type, message: `[${new Date().toLocaleTimeString()}] ${messageStr.trim()}` }, ...current].slice(0, 200));
+            setLogs((current) => [...current, { id: `${Date.now()}-${Math.random()}`, type, message: `[${new Date().toLocaleTimeString()}] ${messageStr.trim()}` }].slice(-200));
             setActivityItems((current) => [{
                 id: `${Date.now()}-${Math.random()}`,
                 title: type === 'error' ? 'Runtime warning' : 'Live event',
@@ -250,7 +258,7 @@ function App() {
         if (!result.success) {
             const errorMsg = typeof result.error === 'string' ? result.error : JSON.stringify(result.error);
             setApiStatus(errorMsg);
-            prependLog('error', errorMsg);
+            appendLog('error', errorMsg);
             return null;
         }
 
@@ -268,7 +276,7 @@ function App() {
             search: ''
         });
         if (!result.success) {
-            prependLog('error', result.error);
+            appendLog('error', result.error);
             return;
         }
 
@@ -281,7 +289,7 @@ function App() {
         if (result.success) {
             setTeamSecurity(result.data);
         } else {
-            prependLog('error', result.error);
+            appendLog('error', result.error);
         }
     });
 
@@ -327,7 +335,7 @@ function App() {
                 setRuntimeConfig(defaultConfig);
                 api.setBaseUrl(defaultConfig.apiBaseUrl);
             } else if (!runtimeResult.success) {
-                prependLog('error', runtimeResult.error);
+                appendLog('error', runtimeResult.error);
                 return;
             } else {
                 setRuntimeConfig(runtimeResult.config);
@@ -343,10 +351,10 @@ function App() {
             }
         })();
 
-        window.electronAPI?.onLogOutput?.((data) => prependLog(data.type, data.message));
+        window.electronAPI?.onLogOutput?.((data) => appendLog(data.type, data.message));
         window.electronAPI?.onReviewStopped?.((data) => {
             setRunning(false);
-            prependLog('info', `Review process exited with code ${data.code}`);
+            appendLog('info', `Review process exited with code ${data.code}`);
         });
 
         return () => {
@@ -410,28 +418,28 @@ function App() {
                 socket.addEventListener('message', async (event) => {
                     const data = JSON.parse(event.data);
                     if (data.type === 'auth_success') {
-                        prependLog('info', 'WebSocket authenticated');
+                        appendLog('info', 'WebSocket authenticated');
                         socket.send(JSON.stringify({ type: 'subscribe', channel: 'dashboard' }));
                         return;
                     }
                     if (data.type === 'subscription_success') {
-                        prependLog('info', `Subscribed to ${data.channel}`);
+                        appendLog('info', `Subscribed to ${data.channel}`);
                         return;
                     }
                     if (['review_started', 'review_progress', 'review_completed', 'review_failed'].includes(data.type)) {
-                        prependLog(data.type === 'review_failed' ? 'warn' : 'info', `${data.type}: ${JSON.stringify(data.payload)}`);
+                        appendLog(data.type === 'review_failed' ? 'warn' : 'info', `${data.type}: ${JSON.stringify(data.payload)}`);
                         await refreshSnapshot();
                         await refreshPRs();
                         return;
                     }
                     if (['metrics_update', 'pr_update'].includes(data.type)) {
-                        prependLog('info', `Realtime update: ${data.type}`);
+                        appendLog('info', `Realtime update: ${data.type}`);
                         await refreshSnapshot();
                         await refreshPRs();
                         return;
                     }
                     if (data.type === 'health_alert') {
-                        prependLog('error', `Health alert: ${JSON.stringify(data.payload)}`);
+                        appendLog('error', `Health alert: ${JSON.stringify(data.payload)}`);
                         await refreshTeamSecurity();
                     }
                 });
@@ -568,43 +576,43 @@ function App() {
             await refreshTeamSecurity();
             await refreshSnapshot();
         } else {
-            prependLog('error', result.error);
+            appendLog('error', result.error);
         }
     }
 
     async function handleStart(once) {
         const result = await window.electronAPI?.startReview({ once });
         if (!result) {
-            prependLog('warn', 'Start command only available in Electron');
+            appendLog('warn', 'Start command only available in Electron');
             return;
         }
         if (result.success) {
             setRunning(true);
-            prependLog('info', once ? 'Single review started' : 'Review loop started');
+            appendLog('info', once ? 'Single review started' : 'Review loop started');
         } else {
-            prependLog('error', result.message);
+            appendLog('error', result.message);
         }
     }
 
     async function handleExecuteNow() {
         const result = await window.electronAPI?.executeNow();
         if (!result) {
-            prependLog('warn', 'Execute command only available in Electron');
+            appendLog('warn', 'Execute command only available in Electron');
             return;
         }
-        prependLog(result.success ? 'info' : 'error', result.message);
+        appendLog(result.success ? 'info' : 'error', result.message);
     }
 
     async function handleStop() {
         const result = await window.electronAPI?.stopReview();
         if (!result) {
-            prependLog('warn', 'Stop command only available in Electron');
+            appendLog('warn', 'Stop command only available in Electron');
             return;
         }
         if (result.success) {
             setRunning(false);
         }
-        prependLog(result.success ? 'info' : 'error', result.message);
+        appendLog(result.success ? 'info' : 'error', result.message);
     }
 
     async function handleExport() {
@@ -615,7 +623,7 @@ function App() {
             },
             format: 'csv'
         });
-        prependLog(result.success ? 'info' : 'error', result.success ? `Export created: ${result.result.fileName}` : result.error);
+        appendLog(result.success ? 'info' : 'error', result.success ? `Export created: ${result.result.fileName}` : result.error);
     }
 
     async function handleSaveConfig(event) {
@@ -890,49 +898,66 @@ function App() {
                             </Card>
                             <div className="grid gap-3">
                             {filteredPrs.length ? filteredPrs.map((pr) => (
-                                <button
-                                    key={pr.id}
-                                    type="button"
-                                    onClick={() => setSelectedPrId(pr.id)}
-                                    className={cn('panel-surface w-full p-4 text-left transition hover:-translate-y-0.5', selectedPrId === pr.id && 'ring-2 ring-sky-400/30')}
+                                <div
+                                    key={`${pr.repository}-${pr.number}`}
+                                    className={cn('panel-surface flex w-full flex-col overflow-hidden text-left transition hover:-translate-y-0.5', selectedPrId === pr.id && 'ring-2 ring-sky-400/30')}
                                 >
-                                    <div className="grid gap-3">
+                                    <div className="flex flex-1 flex-col p-4" onClick={() => setSelectedPrId(pr.id)}>
                                         <div className="flex flex-wrap items-center justify-between gap-3">
-                                            <strong className="text-base font-semibold">{`#${pr.github_pr_id} ${pr.title}`}</strong>
-                                            <span className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">Triage</span>
+                                            <strong className="text-base font-semibold">{`#${pr.number} ${pr.title}`}</strong>
+                                            <div className="flex items-center gap-2">
+                                                <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    if (window.electronAPI) {
+                                                        window.electronAPI.openExternal(pr.url);
+                                                    } else {
+                                                        window.open(pr.url, '_blank');
+                                                    }
+                                                }}>
+                                                    <ExternalLink className="h-3.5 w-3.5" />
+                                                </Button>
+                                                <span className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">Triage</span>
+                                            </div>
                                         </div>
-                                        <div className="flex flex-wrap gap-2">
+                                        <div className="mt-2 flex flex-wrap gap-2">
                                             <Badge>{pr.status}</Badge>
+                                            {pr.pr_category && <Badge variant="secondary" className="bg-sky-500/10 text-sky-500 border-sky-500/20">{pr.pr_category}</Badge>}
                                             <Badge variant={toneForStatus(pr.latest_outcome ?? 'pending')}>{pr.latest_outcome ?? 'pending'}</Badge>
-                                            <Badge>{pr.review_level ?? 'unassigned'}</Badge>
                                         </div>
-                                        <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
+                                        {pr.lead_summary && (
+                                            <div className="mt-3 text-sm text-muted-foreground line-clamp-2 bg-panel/50 p-2 rounded-lg border border-border/50 italic">
+                                                "{pr.lead_summary}"
+                                            </div>
+                                        )}
+                                        <div className="mt-3 flex flex-wrap gap-3 text-sm text-muted-foreground">
                                             <span>{pr.repository}</span>
                                             <span>{pr.author}</span>
-                                            <span>Priority {pr.priority_score ?? 0}</span>
-                                            <span>Health {pr.health_score ?? 'n/a'}</span>
+                                            <span className={cn(pr.risk_score > 70 ? 'text-rose-500 font-bold' : '')}>Risk {pr.risk_score ?? 0}</span>
+                                            <span>Impact {pr.impact_score ?? 0}</span>
                                         </div>
                                     </div>
-                                </button>
+                                </div>
                             )) : <EmptyState message="No pull requests found." />}
                             </div>
                         </div>
                     </Section>
-                    <Section eyebrow="PR Detail" title={selectedPr ? `#${selectedPr.github_pr_id} ${selectedPr.title}` : 'Select a PR'} description={selectedPr ? `${selectedPr.repository} · ${selectedPr.author}` : 'Choose a pull request from the queue.'}>
+                    <Section eyebrow="PR Detail" title={selectedPr ? `#${selectedPr.number} ${selectedPr.title}` : 'Select a PR'} description={selectedPr ? `${selectedPr.repository} · ${selectedPr.author}` : 'Choose a pull request from the queue.'}>
                         {selectedPr ? (
                             <div className="grid gap-4">
                                 <div className="grid gap-3 md:grid-cols-4">
                                     <Card className="p-4">
-                                        <div className="eyebrow">Status</div>
-                                        <div className="mt-2 text-lg font-semibold">{selectedPr.status}</div>
+                                        <div className="eyebrow">Risk Level</div>
+                                        <div className={cn('mt-2 text-lg font-black', selectedPr.risk_score > 70 ? 'text-rose-500' : selectedPr.risk_score > 40 ? 'text-amber-500' : 'text-emerald-500')}>
+                                            {selectedPr.risk_score ?? 0}%
+                                        </div>
                                     </Card>
                                     <Card className="p-4">
-                                        <div className="eyebrow">Review Level</div>
-                                        <div className="mt-2 text-lg font-semibold">{selectedPr.review_level ?? 'unassigned'}</div>
+                                        <div className="eyebrow">Impact</div>
+                                        <div className="mt-2 text-lg font-black text-sky-500">{selectedPr.impact_score ?? 0}%</div>
                                     </Card>
                                     <Card className="p-4">
-                                        <div className="eyebrow">Priority</div>
-                                        <div className="mt-2 text-lg font-semibold">{selectedPr.priority_score ?? 0}</div>
+                                        <div className="eyebrow">Category</div>
+                                        <div className="mt-2 text-lg font-semibold capitalize">{selectedPr.pr_category ?? 'unassigned'}</div>
                                     </Card>
                                     <Card className="p-4">
                                         <div className="eyebrow">Health</div>
@@ -947,37 +972,46 @@ function App() {
                                                     <strong className="block truncate text-lg font-semibold">{selectedPr.repository}</strong>
                                                     <div className="mt-1 flex flex-wrap gap-2">
                                                         <Badge>{selectedPr.status}</Badge>
-                                                        <Badge>{selectedPr.review_level ?? 'unassigned'}</Badge>
+                                                        <Badge variant="secondary">{selectedPr.pr_category}</Badge>
                                                         <Badge variant={toneForStatus(selectedPr.latest_outcome ?? selectedPr.status)}>{selectedPr.latest_outcome ?? 'pending'}</Badge>
                                                     </div>
                                                 </div>
                                                 <div className="flex flex-wrap gap-3">
                                                     <Button size="sm" variant="outline" onClick={() => {
                                                         if (window.electronAPI) {
-                                                            window.electronAPI.openExternal(`https://github.com/${selectedPr.repository}/pull/${selectedPr.github_pr_id}`);
+                                                            window.electronAPI.openExternal(selectedPr.url);
                                                         } else {
-                                                            window.open(`https://github.com/${selectedPr.repository}/pull/${selectedPr.github_pr_id}`, '_blank');
+                                                            window.open(selectedPr.url, '_blank');
                                                         }
                                                     }}>
-                                                        View
+                                                        <ExternalLink className="mr-2 h-3.5 w-3.5" />
+                                                        GitHub
                                                     </Button>
                                                     <Button size="sm" variant="secondary" onClick={async () => {
                                                         const result = await window.electronAPI?.executeNow();
                                                         if (result) {
-                                                            prependLog(result.success ? 'info' : 'error', result.message);
+                                                            appendLog(result.success ? 'info' : 'error', result.message);
                                                         } else {
-                                                            prependLog('warn', 'Execute command only available in Electron');
+                                                            appendLog('warn', 'Execute command only available in Electron');
                                                         }
                                                     }}>
-                                                        Auto-fix
+                                                        Run AI Review
                                                     </Button>
                                                 </div>
                                             </div>
+                                            {selectedPr.lead_summary && (
+                                                <div className="rounded-xl border border-border/50 bg-panel/50 p-4">
+                                                    <p className="eyebrow mb-2">Technical Lead Summary</p>
+                                                    <p className="text-sm leading-relaxed text-foreground/90 italic">
+                                                        "{selectedPr.lead_summary}"
+                                                    </p>
+                                                </div>
+                                            )}
                                             <div className="grid gap-3 text-sm text-muted-foreground md:grid-cols-2">
                                                 <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-panel/70 px-4 py-3"><span>Author</span><span className="font-medium text-foreground">{selectedPr.author}</span></div>
-                                                <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-panel/70 px-4 py-3"><span>SLA</span><span className="font-medium text-foreground">{selectedPr.sla_hours}h</span></div>
-                                                <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-panel/70 px-4 py-3"><span>Priority</span><span className="font-medium text-foreground">{selectedPr.priority_score ?? 0}</span></div>
-                                                <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-panel/70 px-4 py-3"><span>Health</span><span className="font-medium text-foreground">{selectedPr.health_score ?? 'n/a'}</span></div>
+                                                <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-panel/70 px-4 py-3"><span>Branch</span><span className="font-medium text-foreground">{selectedPr.branch}</span></div>
+                                                <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-panel/70 px-4 py-3"><span>Risk Score</span><span className="font-medium text-foreground">{selectedPr.risk_score ?? 0}</span></div>
+                                                <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-panel/70 px-4 py-3"><span>Impact Score</span><span className="font-medium text-foreground">{selectedPr.impact_score ?? 0}</span></div>
                                             </div>
                                         </div>
                                     </Card>
@@ -1425,8 +1459,8 @@ function App() {
         return (
             <div className="tab-page">
                 <Section eyebrow="Execution" title="Terminal Output" action={<Button size="sm" variant="ghost" className="h-8" onClick={() => setLogs([])}><SquareTerminal className="mr-2 h-3.5 w-3.5" />Clear Console</Button>}>
-                    <div className="scroll-slim flex min-h-[32rem] flex-col-reverse overflow-y-auto rounded-xl border border-white/5 bg-black p-5 font-mono text-[13px] leading-relaxed shadow-2xl">
-                        <div className="flex flex-col gap-1.5">
+                    <div ref={logContainerRef} className="scroll-slim flex min-h-[32rem] flex-col overflow-y-auto rounded-xl border border-white/5 bg-black p-5 font-mono text-[13px] leading-relaxed shadow-2xl">
+                        <div className="flex flex-col gap-1.5 pb-4">
                             {logs.length ? logs.map((entry) => (
                                 <div key={entry.id} className="flex gap-3">
                                     <span className={cn('shrink-0 select-none font-bold opacity-50', 
@@ -1514,6 +1548,21 @@ function App() {
                                 <SquareTerminal className="h-3.5 w-3.5" />
                                 <span className="hidden lg:inline">Stop</span>
                             </Button>
+                            <div className="mx-1 h-4 w-px bg-border" />
+                            <Button size="sm" variant="ghost" className="h-8 gap-1.5 px-2.5 text-xs font-bold text-sky-400 hover:bg-sky-500/10" onClick={async () => {
+                                appendLog('info', 'Scanning for new PRs...');
+                                const result = await api.scanPRs();
+                                if (result.success) {
+                                    appendLog('info', 'PR scan completed successfully');
+                                    await refreshSnapshot();
+                                    await refreshPRs();
+                                } else {
+                                    appendLog('error', `PR scan failed: ${result.error}`);
+                                }
+                            }}>
+                                <GitPullRequest className="h-3.5 w-3.5" />
+                                <span className="hidden lg:inline">Fetch PRs</span>
+                            </Button>
                         </div>
 
                         {/* Create Button with Dropdown */}
@@ -1536,7 +1585,7 @@ function App() {
                                             type="button"
                                             onClick={() => {
                                                 setShowCreateMenu(false);
-                                                prependLog('info', 'Create Task clicked');
+                                                appendLog('info', 'Create Task clicked');
                                             }}
                                             className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm font-medium text-foreground transition hover:bg-secondary"
                                         >
@@ -1547,7 +1596,7 @@ function App() {
                                             type="button"
                                             onClick={() => {
                                                 setShowCreateMenu(false);
-                                                prependLog('info', 'New Chat clicked');
+                                                appendLog('info', 'New Chat clicked');
                                             }}
                                             className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm font-medium text-foreground transition hover:bg-secondary"
                                         >

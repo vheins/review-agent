@@ -38,6 +38,10 @@ export const api = {
     },
 
     // PRs
+    scanPRs: async () => {
+        return apiCall('/prs/scan');
+    },
+
     listPRs: async (filters = {}) => {
         const params = new URLSearchParams();
         if (filters.status) params.append('status', filters.status);

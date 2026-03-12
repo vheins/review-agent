@@ -4,6 +4,7 @@ import * as path from 'path';
 import * as fs from 'fs-extra';
 import chalk from 'chalk';
 import stripAnsi from 'strip-ansi';
+import { ConfigService } from '@nestjs/config';
 import { AppConfigService } from '../../config/app-config.service.js';
 
 /**
@@ -43,7 +44,37 @@ export interface PullRequest {
 export class GitHubClientService {
   private readonly logger = new Logger(GitHubClientService.name);
 
-  constructor(private readonly config: AppConfigService) {}
+  constructor(
+    private readonly config: AppConfigService,
+    private readonly configService: ConfigService,
+  ) {}
+
+  /**
+   * Helper for GitHub API requests
+   */
+  private async fetchApi(endpoint: string, options: any = {}) {
+    const token = this.configService.get<string>('GITHUB_TOKEN');
+    if (!token) {
+      throw new Error('GITHUB_TOKEN is not configured');
+    }
+
+    const response = await fetch(`https://api.github.com${endpoint}`, {
+      ...options,
+      headers: {
+        'Authorization': `token ${token}`,
+        'Accept': 'application/vnd.github.v3+json',
+        'User-Agent': 'PR-Review-Agent',
+        ...options.headers,
+      },
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ message: response.statusText }));
+      throw new Error(`GitHub API Error: ${error.message || response.statusText}`);
+    }
+
+    return await response.json();
+  }
 
   /**
    * Execute a command with verbose logging
@@ -133,9 +164,41 @@ export class GitHubClientService {
   async fetchOpenPRs(): Promise<PullRequest[]> {
     try {
       this.logger.log('╔══ STEP: fetchOpenPRs');
-      const allPRs: PullRequest[] = [];
       const appConfig = this.config.getAppConfig();
+      const token = this.configService.get<string>('GITHUB_TOKEN');
 
+      // Try API first if token is available
+      if (token) {
+        try {
+          this.logger.log('► Attempting to fetch PRs via GitHub API...');
+          let queryParts = ['is:open', 'is:pr'];
+          
+          if (appConfig.prScope.includes('authored')) queryParts.push('author:@me');
+          if (appConfig.prScope.includes('assigned')) queryParts.push('assignee:@me');
+          if (appConfig.prScope.includes('review-requested')) queryParts.push('review-requested:@me');
+
+          const query = encodeURIComponent(queryParts.join(' '));
+          const result = await this.fetchApi(`/search/issues?q=${query}`);
+          
+          const prs: PullRequest[] = result.items.map(item => ({
+            number: item.number,
+            title: item.title,
+            repository: {
+              nameWithOwner: item.repository_url.split('repos/')[1]
+            },
+            url: item.html_url,
+            updatedAt: item.updated_at
+          }));
+
+          this.logger.log(`  Found ${prs.length} PRs via API`);
+          return this.processPRs(prs);
+        } catch (apiError) {
+          this.logger.warn(`GitHub API fetch failed, falling back to CLI: ${apiError.message}`);
+        }
+      }
+
+      // Fallback to CLI
+      const allPRs: PullRequest[] = [];
       const scopeActions = [
         { scope: 'authored',         flag: '--author=@me',           label: 'authored by @me' },
         { scope: 'assigned',         flag: '--assignee=@me',         label: 'assigned to @me' },
@@ -145,7 +208,7 @@ export class GitHubClientService {
       for (const { scope, flag, label } of scopeActions) {
         if (!appConfig.prScope.includes(scope)) continue;
 
-        this.logger.log(`► Fetching PRs ${label}...`);
+        this.logger.log(`► Fetching PRs ${label} via CLI...`);
         const { stdout } = await this.execaVerbose('gh', [
           'search', 'prs',
           '--state=open',
@@ -157,18 +220,42 @@ export class GitHubClientService {
         allPRs.push(...items);
       }
 
-      // Deduplicate by URL
-      const uniquePRs = Array.from(new Map(allPRs.map(pr => [pr.url, pr])).values());
-      
-      const filteredPRs = uniquePRs.filter(pr => {
-        const owner = pr.repository.nameWithOwner.split('/')[0];
-        return !appConfig.excludeRepoOwners.includes(owner);
-      });
+      return this.processPRs(allPRs);
+    } catch (error) {
+      this.logger.error(`Failed to fetch PRs: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
 
-      filteredPRs.sort((a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime());
+  /**
+   * Internal helper to deduplicate, filter and enrich PR data
+   */
+  private async processPRs(prs: PullRequest[]): Promise<PullRequest[]> {
+    const appConfig = this.config.getAppConfig();
+    
+    // Deduplicate by URL
+    const uniquePRs = Array.from(new Map(prs.map(pr => [pr.url, pr])).values());
+    
+    const filteredPRs = uniquePRs.filter(pr => {
+      const owner = pr.repository.nameWithOwner.split('/')[0];
+      return !appConfig.excludeRepoOwners.includes(owner);
+    });
 
-      // Fetch headRefName and baseRefName for each PR
-      for (const pr of filteredPRs) {
+    filteredPRs.sort((a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime());
+
+    // Fetch headRefName and baseRefName for each PR
+    for (const pr of filteredPRs) {
+      try {
+        const token = this.configService.get<string>('GITHUB_TOKEN');
+        if (token) {
+          const detail = await this.fetchApi(`/repos/${pr.repository.nameWithOwner}/pulls/${pr.number}`);
+          pr.headRefName = detail.head.ref;
+          pr.baseRefName = detail.base.ref;
+        } else {
+          throw new Error('No token');
+        }
+      } catch (e) {
+        // Fallback to CLI for details
         const { stdout: detailJson } = await this.execaVerbose('gh', [
           'pr', 'view', pr.number.toString(),
           '--repo', pr.repository.nameWithOwner,
@@ -178,12 +265,9 @@ export class GitHubClientService {
         pr.headRefName = detail.headRefName;
         pr.baseRefName = detail.baseRefName;
       }
-
-      return filteredPRs;
-    } catch (error) {
-      this.logger.error(`Failed to fetch PRs: ${error.message}`, error.stack);
-      throw error;
     }
+
+    return filteredPRs;
   }
 
   /**
@@ -232,6 +316,23 @@ export class GitHubClientService {
   async addReview(repoName: string, prNumber: number, body: string, event: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT' = 'COMMENT'): Promise<boolean> {
     try {
       this.logger.log(`Adding ${event} review to ${repoName}#${prNumber}`);
+      
+      const token = this.configService.get<string>('GITHUB_TOKEN');
+      if (token) {
+        try {
+          await this.fetchApi(`/repos/${repoName}/pulls/${prNumber}/reviews`, {
+            method: 'POST',
+            body: JSON.stringify({
+              body,
+              event
+            })
+          });
+          return true;
+        } catch (apiError) {
+          this.logger.warn(`API review failed, falling back to CLI: ${apiError.message}`);
+        }
+      }
+
       await this.execaVerbose('gh', [
         'pr', 'review', prNumber.toString(),
         '--repo', repoName,
@@ -258,6 +359,22 @@ export class GitHubClientService {
   async mergePR(repoName: string, prNumber: number, method: 'squash' | 'merge' | 'rebase' = 'squash'): Promise<boolean> {
     try {
       this.logger.log(`Merging PR ${repoName}#${prNumber} using ${method}`);
+      
+      const token = this.configService.get<string>('GITHUB_TOKEN');
+      if (token) {
+        try {
+          await this.fetchApi(`/repos/${repoName}/pulls/${prNumber}/merge`, {
+            method: 'PUT',
+            body: JSON.stringify({
+              merge_method: method
+            })
+          });
+          return true;
+        } catch (apiError) {
+          this.logger.warn(`API merge failed, falling back to CLI: ${apiError.message}`);
+        }
+      }
+
       await this.execaVerbose('gh', [
         'pr', 'merge', prNumber.toString(),
         '--repo', repoName,
@@ -283,6 +400,22 @@ export class GitHubClientService {
     if (reviewers.length === 0) return true;
     try {
       this.logger.log(`Assigning reviewers to ${repoName}#${prNumber}: ${reviewers.join(', ')}`);
+      
+      const token = this.configService.get<string>('GITHUB_TOKEN');
+      if (token) {
+        try {
+          await this.fetchApi(`/repos/${repoName}/issues/${prNumber}/assignees`, {
+            method: 'POST',
+            body: JSON.stringify({
+              assignees: reviewers
+            })
+          });
+          return true;
+        } catch (apiError) {
+          this.logger.warn(`API assignment failed, falling back to CLI: ${apiError.message}`);
+        }
+      }
+
       await this.execaVerbose('gh', [
         'pr', 'edit', prNumber.toString(),
         '--repo', repoName,

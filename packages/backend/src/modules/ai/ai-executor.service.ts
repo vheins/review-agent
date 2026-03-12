@@ -76,6 +76,49 @@ export class AiExecutorService {
   }
 
   /**
+   * Generate high-level insights for a Tech Lead
+   */
+  async generateLeadInsights(pr: PullRequest, diff: string): Promise<{ summary: string; risk: number; impact: number; category: string }> {
+    try {
+      const executor = this.executors.get('gemini')!; // Use Gemini for insights
+      const prompt = `As a Technical Lead, analyze this PR and provide:
+1. A 2-sentence executive summary.
+2. A risk score (0-100) based on complexity and potential breakage.
+3. An impact score (0-100) based on how much it changes the system.
+4. A category (feature, bugfix, refactor, security, chore).
+
+PR Title: ${pr.title}
+Diff:
+${diff.slice(0, 5000)}
+
+Return JSON: { "summary": "...", "risk": 0, "impact": 0, "category": "..." }`;
+
+      const response = await (executor as any).model.generateContent(prompt);
+      const text = response.response.text();
+      const jsonStr = text.match(/\{.*\}/s)?.[0];
+      
+      if (jsonStr) {
+        return JSON.parse(jsonStr);
+      }
+      
+      return {
+        summary: 'Failed to generate summary',
+        risk: 50,
+        impact: 50,
+        category: 'unknown'
+      };
+    } catch (error) {
+      this.logger.error(`Lead insights failed: ${error.message}`);
+      return {
+        summary: 'Error generating insights',
+        risk: 0,
+        impact: 0,
+        category: 'error'
+      };
+    }
+  }
+
+  /**
    * Select the best AI executor based on configuration
    * 
    * @param pr - Pull Request

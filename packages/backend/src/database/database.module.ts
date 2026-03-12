@@ -42,7 +42,8 @@ const __dirname = path.dirname(__filename);
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => {
         const isDevelopment = configService.get('NODE_ENV') !== 'production';
-        const dbPath = path.resolve(process.cwd(), 'data', 'pr-review.db');
+        const baseDir = process.cwd().includes('packages/backend') ? path.resolve(process.cwd(), '../../') : process.cwd();
+        const dbPath = path.resolve(baseDir, 'data', 'pr-review.db');
 
         return {
           type: 'sqlite',

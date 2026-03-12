@@ -13,9 +13,6 @@ import { Review } from './review.entity.js';
  * PullRequest Entity
  * 
  * Represents a GitHub Pull Request in the database.
- * This entity stores PR metadata and has a one-to-many relationship with Review entities.
- * 
- * Table: pull_requests
  */
 @Entity('pull_requests')
 export class PullRequest {
@@ -54,6 +51,19 @@ export class PullRequest {
 
   @Column('simple-json')
   labels: string[];
+
+  // Technical Lead Insights
+  @Column({ type: 'text', nullable: true })
+  lead_summary: string | null;
+
+  @Column({ type: 'integer', default: 0 })
+  risk_score: number;
+
+  @Column({ type: 'integer', default: 0 })
+  impact_score: number;
+
+  @Column({ type: 'varchar', nullable: true })
+  pr_category: string | null; // e.g., 'feature', 'bugfix', 'refactor', 'security'
 
   @OneToMany(() => Review, review => review.pullRequest)
   reviews: Relation<Review>[];

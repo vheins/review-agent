@@ -9,12 +9,14 @@ import { ReviewMetrics } from '../../database/entities/review-metrics.entity.js'
 import { RepositoryConfig } from '../../database/entities/repository-config.entity.js';
 import { GitHubModule } from '../github/github.module.js';
 import { ReviewModule } from '../review/review.module.js';
+import { AiModule } from '../ai/ai.module.js';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([PullRequestEntity, ReviewMetrics, RepositoryConfig]),
     GitHubModule,
     ReviewModule,
+    AiModule,
   ],
   controllers: [PullRequestController, DashboardController],
   providers: [PullRequestService, BatchProcessorService],

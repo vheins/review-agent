@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { PullRequest as PullRequestEntity } from '../../database/entities/pull-request.entity.js';
 import { GitHubClientService, PullRequest as GitHubPR } from '../github/github.service.js';
 import { ReviewEngineService } from '../review/review-engine.service.js';
+import { AiExecutorService } from '../ai/ai-executor.service.js';
 
 /**
  * PullRequestService - Service for managing Pull Request business logic
@@ -17,6 +18,7 @@ export class PullRequestService {
     private readonly prRepository: Repository<PullRequestEntity>,
     private readonly github: GitHubClientService,
     private readonly reviewEngine: ReviewEngineService,
+    private readonly ai: AiExecutorService,
   ) {}
 
   /**
@@ -46,10 +48,61 @@ export class PullRequestService {
   }
 
   /**
-   * Scan GitHub for new pull requests and update database
+   * Scan GitHub for new pull requests and update database with Lead Insights
    */
   async scanAndSync(): Promise<GitHubPR[]> {
-    return this.github.fetchOpenPRs();
+    this.logger.log('Starting scanAndSync for all configured PRs...');
+    const prs = await this.github.fetchOpenPRs();
+    
+    for (const pr of prs) {
+      try {
+        let prEntity = await this.prRepository.findOne({ 
+          where: { number: pr.number, repository: pr.repository.nameWithOwner } 
+        });
+
+        const isNew = !prEntity;
+        
+        if (isNew) {
+          this.logger.log(`New PR detected: ${pr.repository.nameWithOwner}#${pr.number}. Generating Lead Insights...`);
+          
+          // Prepare repo to get diff for insights
+          const repoDir = await this.github.prepareRepository(pr);
+          const { stdout: diff } = await this.github.execaVerbose('git', ['diff', `${pr.baseRefName}...${pr.headRefName}`], { cwd: repoDir });
+          
+          // Generate insights
+          const insights = await this.ai.generateLeadInsights(pr, diff);
+          
+          prEntity = this.prRepository.create({
+            number: pr.number,
+            repository: pr.repository.nameWithOwner,
+            title: pr.title,
+            url: pr.url,
+            status: 'open',
+            author: 'unknown', // Ideally fetch from API
+            branch: pr.headRefName || 'unknown',
+            baseBranch: pr.baseRefName || 'unknown',
+            isDraft: false,
+            labels: [],
+            lead_summary: insights.summary,
+            risk_score: insights.risk,
+            impact_score: insights.impact,
+            pr_category: insights.category,
+          });
+          
+          await this.prRepository.save(prEntity);
+          this.logger.log(`Saved PR with category: ${insights.category}, risk: ${insights.risk}`);
+        } else {
+          // Update existing PR metadata if needed
+          prEntity.title = pr.title;
+          prEntity.updatedAt = new Date();
+          await this.prRepository.save(prEntity);
+        }
+      } catch (e) {
+        this.logger.error(`Failed to sync PR #${pr.number}: ${e.message}`);
+      }
+    }
+    
+    return prs;
   }
 
   /**

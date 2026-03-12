@@ -18,7 +18,7 @@ export interface DatabaseConfig {
 
 export default registerAs('database', (): DatabaseConfig => ({
   type: 'sqlite',
-  database: path.resolve(process.cwd(), 'data', 'pr-review.db'),
+  database: path.resolve(process.cwd().includes('packages/backend') ? path.resolve(process.cwd(), '../../') : process.cwd(), 'data', 'pr-review.db'),
   synchronize: true, // Auto-sync enabled for all environments
   logging: process.env.NODE_ENV === 'development',
   autoLoadEntities: true,
