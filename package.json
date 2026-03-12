@@ -24,10 +24,11 @@
     "eslint": "^10.0.3",
     "eslint-config-prettier": "^10.0.1",
     "eslint-plugin-prettier": "^5.2.3",
+    "fast-check": "^4.6.0",
+    "husky": "^9.1.7",
     "prettier": "^3.4.2",
     "typescript": "^5.7.3",
     "vitest": "^4.0.18",
-    "wait-on": "^9.0.4",
-    "husky": "^9.1.7"
+    "wait-on": "^9.0.4"
   }
 }
