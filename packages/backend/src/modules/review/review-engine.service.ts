@@ -13,6 +13,7 @@ import { ReviewMetrics } from '../../database/entities/review-metrics.entity.js'
 import { SecurityScannerService } from '../security/security-scanner.service.js';
 import { DependencyScannerService } from '../security/dependency-scanner.service.js';
 import { ChecklistService } from './checklist.service.js';
+import { AutoFixService } from './services/auto-fix.service.js';
 import { AuditLoggerService } from '../../common/audit/audit-logger.service.js';
 import { GamificationService } from '../team/services/gamification.service.js';
 import { MetricsService } from '../metrics/metrics.service.js';
@@ -29,7 +30,8 @@ export class ReviewEngineService {
   constructor(
     private readonly github: GitHubClientService,
     private readonly ai: AiExecutorService,
-    private readonly aiFix: AiFixGeneratorService,
+    private readonly aiFixGen: AiFixGeneratorService,
+    private readonly autoFix: AutoFixService,
     private readonly gateway: ReviewGateway,
     private readonly config: AppConfigService,
     private readonly dataSource: DataSource,
@@ -60,7 +62,6 @@ export class ReviewEngineService {
       this.logger.log(`Starting review for PR #${pr.number}: ${pr.title}`);
       this.gateway.broadcastReviewStarted(pr.number, pr.repository.nameWithOwner);
 
-      const appConfig = this.config.getAppConfig();
       const reviewConfig = this.config.getReviewConfig();
       const repoConfig = await this.config.getRepositoryConfig(pr.repository.nameWithOwner);
 
@@ -102,10 +103,8 @@ export class ReviewEngineService {
       const healthScore = this.metricsService.calculateHealthScore(allSecurityFindings, tempComments);
       const qualityScore = this.metricsService.calculateQualityScore(tempComments);
 
-      // Decision based on threshold
       let decision: 'APPROVE' | 'REQUEST_CHANGES' = (healthScore < (100 - reviewConfig.severityThreshold)) ? 'REQUEST_CHANGES' : 'APPROVE';
 
-      // Immediate override if critical or error issues found
       if ((allSecurityFindings.length > 0 || aiComments.some(c => c.severity === 'error')) && decision === 'APPROVE') {
         decision = 'REQUEST_CHANGES';
       }
@@ -120,7 +119,7 @@ export class ReviewEngineService {
           title: pr.title,
           url: pr.url,
           status: 'open',
-          author: 'unknown',
+          author: pr.author?.login || 'unknown',
           branch: pr.headRefName || 'unknown',
           baseBranch: pr.baseRefName || 'unknown',
           isDraft: false,
@@ -179,9 +178,23 @@ export class ReviewEngineService {
       await this.checklistService.attachChecklistsToReview(savedReview.id, pr.repository.nameWithOwner);
 
       // 11. Apply Auto-Fixes if enabled
+      let fixesApplied = false;
       if (repoConfig.reviewMode === 'auto-fix') {
-        this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 85, 'Applying auto-fixes...');
-        await this.applyAutoFixes(repoDir, aiComments);
+        const fixableComments = aiComments.filter(c => this.autoFix.isFixable(c));
+        if (fixableComments.length > 0) {
+          this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 85, 'Applying and verifying auto-fixes...');
+          
+          await this.autoFix.applyFixes(repoDir, fixableComments);
+          await this.autoFix.runProjectFixers(repoDir);
+          
+          const verified = await this.autoFix.verifyFixes(repoDir);
+          if (verified) {
+            fixesApplied = await this.autoFix.commitAndPushFixes(repoDir, pr.headRefName);
+          } else {
+            this.logger.warn(`Auto-fixes failed verification for PR #${pr.number}, rolling back changes.`);
+            await this.github.execaVerbose('git', ['reset', '--hard', 'HEAD'], { cwd: repoDir });
+          }
+        }
       }
 
       // 12. Audit Log
@@ -190,12 +203,12 @@ export class ReviewEngineService {
         'ai-agent',
         'pull_request',
         `${pr.repository.nameWithOwner}#${pr.number}`,
-        { decision, healthScore, qualityScore, mode: repoConfig.reviewMode }
+        { decision, healthScore, qualityScore, mode: repoConfig.reviewMode, fixesApplied }
       );
 
       // 13. Post comments to GitHub
       this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 90, 'Posting to GitHub...');
-      const summaryMessage = this.buildSummaryMessage(aiComments, allSecurityFindings, decision, healthScore, repoConfig.reviewMode);
+      const summaryMessage = this.buildSummaryMessage(aiComments, allSecurityFindings, decision, healthScore, repoConfig.reviewMode, fixesApplied);
       await this.github.addReview(pr.repository.nameWithOwner, pr.number, summaryMessage, decision);
 
       // 14. Commit transaction
@@ -210,7 +223,7 @@ export class ReviewEngineService {
       }
 
       // 17. Auto-merge
-      if (decision === 'APPROVE' && repoConfig.autoMerge && repoConfig.reviewMode === 'comment') {
+      if (decision === 'APPROVE' && repoConfig.autoMerge && (repoConfig.reviewMode === 'comment' || fixesApplied)) {
         this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 95, 'Auto-merging PR...');
         await this.github.mergePR(pr.repository.nameWithOwner, pr.number);
       }
@@ -228,34 +241,7 @@ export class ReviewEngineService {
     }
   }
 
-  private async applyAutoFixes(repoDir: string, comments: any[]) {
-    for (const comment of comments) {
-      if (comment.suggested_fix && comment.is_auto_fixable) {
-        const filePath = path.join(repoDir, comment.file_path);
-        if (await fs.pathExists(filePath)) {
-          const content = await fs.readFile(filePath, 'utf8');
-          const lines = content.split('\n');
-          
-          if (comment.line_number <= lines.length) {
-            lines[comment.line_number - 1] = comment.suggested_fix;
-            await fs.writeFile(filePath, lines.join('\n'));
-            this.logger.log(`Applied auto-fix to ${comment.file_path}:${comment.line_number}`);
-          }
-        }
-      }
-    }
-    
-    // Commit and push fixes
-    try {
-      await this.github.execaVerbose('git', ['add', '.'], { cwd: repoDir });
-      await this.github.execaVerbose('git', ['commit', '-m', 'chore: apply AI suggested fixes'], { cwd: repoDir });
-      await this.github.execaVerbose('git', ['push', 'origin', 'HEAD'], { cwd: repoDir });
-    } catch (e) {
-      this.logger.error(`Failed to push auto-fixes: ${e.message}`);
-    }
-  }
-
-  private buildSummaryMessage(aiComments: any[], securityFindings: any[], decision: string, healthScore: number, mode: string): string {
+  private buildSummaryMessage(aiComments: any[], securityFindings: any[], decision: string, healthScore: number, mode: string, fixesApplied: boolean): string {
     let msg = `### AI Review Summary (${mode} mode)\n\n`;
     msg += `**Decision:** ${decision}\n`;
     msg += `**Health Score:** ${healthScore}/100\n\n`;
@@ -264,8 +250,10 @@ export class ReviewEngineService {
       msg += `⚠️ **Found ${securityFindings.length} security vulnerabilities!**\n`;
     }
     
-    if (mode === 'auto-fix') {
-      msg += `✅ **Auto-fixes have been applied and pushed to your branch.**\n\n`;
+    if (mode === 'auto-fix' && fixesApplied) {
+      msg += `✅ **Auto-fixes have been applied, verified, and pushed to your branch.**\n\n`;
+    } else if (mode === 'auto-fix' && !fixesApplied && aiComments.some(c => this.autoFix.isFixable(c))) {
+      msg += `❌ **Auto-fixes were attempted but failed verification tests. Manual intervention required.**\n\n`;
     }
     
     if (aiComments.length > 0) {

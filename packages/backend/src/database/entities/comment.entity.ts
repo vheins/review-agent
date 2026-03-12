@@ -45,6 +45,15 @@ export class Comment {
   @Column({ name: 'posted_at', type: 'datetime', nullable: true })
   postedAt: Date | null;
 
+  @Column({ name: 'github_thread_id', type: 'varchar', nullable: true })
+  githubThreadId: string | null;
+
+  @Column({ name: 'is_resolved', type: 'boolean', default: false })
+  isResolved: boolean;
+
+  @Column({ name: 'resolved_at', type: 'datetime', nullable: true })
+  resolvedAt: Date | null;
+
   @ManyToOne(() => Review, review => review.comments, { createForeignKeyConstraints: false })
   @JoinColumn({ name: 'review_id', referencedColumnName: 'id' })
   review?: Relation<Review>;

@@ -1,8 +1,9 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
 import { ReviewEngineService } from './review-engine.service.js';
 import { PullRequest } from '../github/github.service.js';
 import { MissionControlService } from '../orchestration/services/mission-control.service.js';
 import { ConfigService } from '@nestjs/config';
+import { NotificationService } from '../../common/notification/notification.service.js';
 
 export enum QueueStatus {
   PENDING = 'pending',
@@ -24,21 +25,13 @@ export interface QueueItem {
 
 /**
  * ReviewQueueService - Service for managing asynchronous PR review queue
- * 
- * Features:
- * - In-memory queue with concurrency control
- * - Support for "continuous" processing mode
- * - Task timeout and stuck task detection
- * - Persistence (via ReviewEngineService's DB interactions)
- * 
- * Requirements: 11.1, 11.2, 11.3
  */
 @Injectable()
 export class ReviewQueueService implements OnModuleInit {
   private readonly logger = new Logger(ReviewQueueService.name);
   private queue: QueueItem[] = [];
   private activeCount = 0;
-  private readonly maxConcurrency = 2; // Default limit
+  private readonly maxConcurrency = 2;
   private readonly maxRetries = 3;
   private isRunning = false;
   private missionControlEnabled = false;
@@ -47,6 +40,8 @@ export class ReviewQueueService implements OnModuleInit {
     private readonly reviewEngine: ReviewEngineService,
     private readonly missionControl: MissionControlService,
     private readonly configService: ConfigService,
+    @Optional()
+    private readonly notificationService: NotificationService,
   ) {}
 
   onModuleInit() {
@@ -72,8 +67,6 @@ export class ReviewQueueService implements OnModuleInit {
     });
 
     this.logger.log(`Added PR #${pr.number} to queue. Queue size: ${this.queue.length}`);
-    
-    // Trigger processing
     this.processNext();
   }
 
@@ -87,19 +80,17 @@ export class ReviewQueueService implements OnModuleInit {
     
     const loop = async () => {
       if (!this.isRunning) return;
-      
       this.detectStuckTasks();
       this.processNext();
       setTimeout(loop, intervalMs);
     };
-    
     loop();
   }
 
   /**
    * Detect tasks that have been processing for too long and reset them
    */
-  private detectStuckTasks(): void {
+  private async detectStuckTasks(): Promise<void> {
     const now = new Date();
     const timeoutMs = 300000; // 5 minutes
 
@@ -107,18 +98,41 @@ export class ReviewQueueService implements OnModuleInit {
       if (item.status === QueueStatus.PROCESSING && item.startedAt) {
         const duration = now.getTime() - item.startedAt.getTime();
         if (duration > timeoutMs) {
-          this.logger.warn(`Detected stuck task for PR #${item.pr.number}. Resetting status to PENDING.`);
-          item.status = QueueStatus.PENDING;
-          item.error = 'Task timed out (stuck detector)';
-          item.retryCount++;
-          this.activeCount = Math.max(0, this.activeCount - 1);
-          
-          if (this.missionControlEnabled && item.missionId) {
-            this.missionControl.pauseMission(item.missionId, 'Task timed out').catch(e => 
-              this.logger.error(`Failed to pause mission ${item.missionId}: ${e.message}`)
-            );
-          }
+          this.logger.warn(`Detected stuck task for PR #${item.pr.number}.`);
+          await this.recoverTask(item);
         }
+      }
+    }
+  }
+
+  private async recoverTask(item: QueueItem): Promise<void> {
+    if (item.retryCount < this.maxRetries) {
+      this.logger.warn(`Recovering stuck task for PR #${item.pr.number}, attempt ${item.retryCount + 1}`);
+      item.status = QueueStatus.PENDING;
+      item.error = 'Task timed out (stuck detector)';
+      item.retryCount++;
+      this.activeCount = Math.max(0, this.activeCount - 1);
+      
+      if (this.missionControlEnabled && item.missionId) {
+        await this.missionControl.pauseMission(item.missionId, 'Task timed out').catch(e => 
+          this.logger.error(`Failed to pause mission ${item.missionId}: ${e.message}`)
+        );
+      }
+    } else {
+      this.logger.error(`PR #${item.pr.number} reached max retries. Marking as failed.`);
+      item.status = QueueStatus.FAILED;
+      item.completedAt = new Date();
+      this.activeCount = Math.max(0, this.activeCount - 1);
+
+      if (this.notificationService) {
+        // In a real app, find admin users. Here we'll simulate sending to recipient 1.
+        await this.notificationService.sendNotification(
+          1,
+          'task_failure',
+          'Critical Task Failure',
+          `Review for PR #${item.pr.number} failed after ${this.maxRetries} retries.`,
+          'urgent'
+        );
       }
     }
   }
@@ -147,7 +161,6 @@ export class ReviewQueueService implements OnModuleInit {
     this.logger.log(`Processing PR #${nextItem.pr.number} (${this.activeCount}/${this.maxConcurrency} active)`);
 
     try {
-      // Start mission session if enabled and not already started
       if (this.missionControlEnabled) {
         if (!nextItem.missionId) {
           const session = await this.missionControl.startMission(nextItem.pr, 'review-only', 'review-only');
@@ -157,11 +170,10 @@ export class ReviewQueueService implements OnModuleInit {
         }
       }
 
-      // Execute review with a timeout
       const success = await Promise.race([
         this.reviewEngine.reviewPullRequest(nextItem.pr),
         new Promise<boolean>((_, reject) => 
-          setTimeout(() => reject(new Error('Review timeout')), 300000) // 5 min timeout
+          setTimeout(() => reject(new Error('Review timeout')), 300000)
         )
       ]);
 
@@ -188,38 +200,13 @@ export class ReviewQueueService implements OnModuleInit {
     } catch (error) {
       this.logger.error(`Error processing PR #${nextItem.pr.number}: ${error.message}`);
       nextItem.error = error.message;
-      
-      if (nextItem.retryCount < this.maxRetries) {
-        nextItem.retryCount++;
-        nextItem.status = QueueStatus.PENDING;
-        this.logger.log(`Retrying PR #${nextItem.pr.number} (${nextItem.retryCount}/${this.maxRetries})`);
-      } else {
-        nextItem.status = QueueStatus.FAILED;
-        nextItem.completedAt = new Date();
-        
-        if (this.missionControlEnabled && nextItem.missionId) {
-          const session = await (this.missionControl as any).sessionRepository.findOne({ 
-            where: { id: nextItem.missionId },
-            relations: ['steps']
-          });
-          
-          for (const step of session?.steps || []) {
-            if (step.status === 'pending') {
-              await this.missionControl.completeStep(step.id, 'failed', { error: error.message });
-            }
-          }
-        }
-      }
+      await this.recoverTask(nextItem);
     } finally {
       this.activeCount--;
-      // Process next item immediately if there's more in queue
       this.processNext();
     }
   }
 
-  /**
-   * Get current queue status
-   */
   getQueueStatus() {
     return {
       size: this.queue.length,
@@ -231,16 +218,10 @@ export class ReviewQueueService implements OnModuleInit {
     };
   }
 
-  /**
-   * Get all queue items
-   */
   getQueue(): QueueItem[] {
     return [...this.queue];
   }
 
-  /**
-   * Clear completed and failed items
-   */
   clearFinished(): void {
     this.queue = this.queue.filter(i => i.status === QueueStatus.PENDING || i.status === QueueStatus.PROCESSING);
   }

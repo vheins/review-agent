@@ -9,6 +9,9 @@ export * from './review-checklist.entity.js';
 export * from './repository-config.entity.js';
 export * from './security-finding.entity.js';
 export * from './developer-metrics.entity.js';
+export * from './export.entity.js';
+export * from './error-log.entity.js';
+export * from './notification.entity.js';
 
 // Orchestration Entities
 export * from './mission-session.entity.js';

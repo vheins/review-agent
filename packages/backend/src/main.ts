@@ -6,12 +6,11 @@ import { WsAdapter } from '@nestjs/platform-ws';
 import { AppModule } from './app.module.js';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor.js';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter.js';
+import { ErrorLoggerService } from './common/filters/error-logger.service.js';
 import 'reflect-metadata';
 
 /**
  * Bootstrap the NestJS application
- * 
- * This is the entry point for the NestJS backend server.
  */
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -27,7 +26,7 @@ async function bootstrap() {
 
   // Enable CORS for Electron renderer process
   app.enableCors({
-    origin: '*', // For local Electron app, '*' is usually acceptable or file://
+    origin: '*',
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
   });
@@ -42,8 +41,9 @@ async function bootstrap() {
   // Apply LoggingInterceptor globally
   app.useGlobalInterceptors(new LoggingInterceptor());
 
-  // Apply GlobalExceptionFilter globally
-  app.useGlobalFilters(new GlobalExceptionFilter());
+  // Apply GlobalExceptionFilter globally with DI
+  const errorLogger = app.get(ErrorLoggerService);
+  app.useGlobalFilters(new GlobalExceptionFilter(errorLogger));
 
   // Get port from environment or use default
   const port = process.env.API_PORT || 3000;

@@ -3,6 +3,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ReviewEngineService } from './review-engine.service.js';
 import { ReviewQueueService } from './review-queue.service.js';
 import { ChecklistService } from './checklist.service.js';
+import { AutoFixService } from './services/auto-fix.service.js';
+import { DiscussionService } from './services/discussion.service.js';
 import { GitHubModule } from '../github/github.module.js';
 import { AiModule } from '../ai/ai.module.js';
 import { ConfigModule } from '../../config/config.module.js';
@@ -16,8 +18,6 @@ import { ReviewController } from './review.controller.js';
 
 /**
  * ReviewModule - Module for core review orchestration
- * 
- * Requirements: 7.1
  */
 @Module({
   imports: [
@@ -31,7 +31,7 @@ import { ReviewController } from './review.controller.js';
     OrchestrationModule,
   ],
   controllers: [ReviewController],
-  providers: [ReviewEngineService, ReviewQueueService, ChecklistService],
-  exports: [ReviewEngineService, ReviewQueueService, ChecklistService],
+  providers: [ReviewEngineService, ReviewQueueService, ChecklistService, AutoFixService, DiscussionService],
+  exports: [ReviewEngineService, ReviewQueueService, ChecklistService, AutoFixService, DiscussionService],
 })
 export class ReviewModule {}

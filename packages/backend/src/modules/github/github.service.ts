@@ -177,12 +177,9 @@ export class GitHubClientService {
 
           if (filters.length === 0) return [];
 
-          const query = encodeURIComponent(`is:pr ${filters.join(' ')}`);
-          // Note: GitHub search defaults to AND. If we want OR, we need separate queries or use the OR operator.
-          // To keep it simple and reliable, we'll join them with OR if multiple filters exist.
           const orQuery = filters.length > 1 
             ? encodeURIComponent(`is:pr (${filters.join(' OR ')})`)
-            : query;
+            : encodeURIComponent(`is:pr ${filters.join(' ')}`);
 
           const result = await this.fetchApi(`/search/issues?q=${orQuery}&per_page=100&sort=updated&order=desc`);
           
@@ -326,10 +323,6 @@ export class GitHubClientService {
           this.logger.warn(`Failed to fetch details for PR ${pr.repository.nameWithOwner}#${pr.number}: ${err.message}`);
         }
       }
-
-      if (!pr.headRefName) {
-        this.logger.warn(`PR ${pr.repository.nameWithOwner}#${pr.number} has no headRefName after detail fetch`);
-      }
     }
 
     return filteredPRs;
@@ -431,6 +424,42 @@ export class GitHubClientService {
       this.logger.error(`Failed to merge PR: ${e.message}`, e.stack);
       return false;
     }
+  }
+
+  /**
+   * Fetch PR checks
+   */
+  async getPRChecks(repoName: string, prNumber: number): Promise<any[]> {
+    try {
+      const { stdout } = await this.execaVerbose('gh', [
+        'pr', 'checks', prNumber.toString(),
+        '--repo', repoName,
+        '--json', 'name,status,conclusion,url'
+      ]);
+      
+      return JSON.parse(stdout || '[]');
+    } catch (e) {
+      this.logger.error(`Failed to fetch PR checks: ${e.message}`);
+      return [];
+    }
+  }
+
+  /**
+   * Get summarized test results
+   */
+  async getTestResults(repoName: string, prNumber: number) {
+    const checks = await this.getPRChecks(repoName, prNumber);
+    
+    const results = {
+      total: checks.length,
+      passed: checks.filter(c => c.conclusion === 'success').length,
+      failed: checks.filter(c => c.conclusion === 'failure').length,
+      pending: checks.filter(c => c.status === 'in_progress' || c.status === 'queued').length,
+      allPassed: checks.length > 0 && checks.every(c => c.conclusion === 'success' || c.conclusion === 'neutral' || c.conclusion === 'skipped'),
+      details: checks
+    };
+
+    return results;
   }
 
   /**

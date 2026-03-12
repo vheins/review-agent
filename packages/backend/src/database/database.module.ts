@@ -22,6 +22,9 @@ import {
   OverrideInboxItem,
   RepositoryMemoryEntry,
   FocusWindow,
+  Export,
+  ErrorLog,
+  Notification,
 } from './entities/index.js';
 
 // ES module equivalent of __dirname
@@ -30,18 +33,6 @@ const __dirname = path.dirname(__filename);
 
 /**
  * DatabaseModule - TypeORM Configuration Module
- * 
- * This module configures TypeORM with SQLite driver for the application.
- * It uses async configuration to access environment variables through ConfigService.
- * 
- * Configuration:
- * - Database: SQLite (data/pr-review.db)
- * - Synchronize: Enabled in development mode for auto-schema sync
- * - Logging: Enabled for database queries in development
- * - Entities: Auto-loaded from database/entities directory
- * - Repositories: All entities registered via forFeature for dependency injection
- * 
- * Requirements: 2.1, 2.3, 2.4, 2.6
  */
 @Module({
   imports: [
@@ -75,14 +66,16 @@ const __dirname = path.dirname(__filename);
             OverrideInboxItem,
             RepositoryMemoryEntry,
             FocusWindow,
+            Export,
+            ErrorLog,
+            Notification,
           ],
-          synchronize: isDevelopment, // Auto-sync schema in development
-          logging: isDevelopment ? ['query', 'error', 'warn'] : ['error'], // Log queries in development
-          autoLoadEntities: false, // Use explicit entity list instead
+          synchronize: isDevelopment,
+          logging: isDevelopment ? ['query', 'error', 'warn'] : ['error'],
+          autoLoadEntities: false,
         };
       },
     }),
-    // Register all entities for repository injection
     TypeOrmModule.forFeature([
       PullRequest,
       Review,
@@ -102,8 +95,11 @@ const __dirname = path.dirname(__filename);
       OverrideInboxItem,
       RepositoryMemoryEntry,
       FocusWindow,
+      Export,
+      ErrorLog,
+      Notification,
     ]),
   ],
-  exports: [TypeOrmModule], // Export TypeOrmModule so other modules can inject repositories
+  exports: [TypeOrmModule],
 })
 export class DatabaseModule {}

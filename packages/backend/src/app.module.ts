@@ -16,25 +16,18 @@ import { SecurityModule } from './modules/security/security.module.js';
 import { WebhookModule } from './modules/webhook/webhook.module.js';
 import { TeamModule } from './modules/team/team.module.js';
 import { AuditLoggerModule } from './common/audit/audit-logger.module.js';
+import { ErrorHandlingModule } from './common/filters/error-handling.module.js';
+import { NotificationModule } from './common/notification/notification.module.js';
 
 /**
  * AppModule - Root NestJS Module
- * 
- * This is the root module that imports all feature modules and configures
- * global providers, middleware, and other application-wide settings.
- * 
- * Architecture:
- * - Feature modules will be imported here as they are created
- * - Global configuration (ConfigModule, DatabaseModule, LoggerModule)
- * - WebSocket gateway for real-time updates
- * - Guards, interceptors, and filters applied globally
  */
 @Module({
   imports: [
     // Core modules
-    ConfigModule, // Global configuration with .env support
-    DatabaseModule, // TypeORM with SQLite
-    LoggerModule, // Custom logger with daily rotation
+    ConfigModule,
+    DatabaseModule,
+    LoggerModule,
     
     // Rate limiting
     ThrottlerModule.forRoot([{
@@ -43,27 +36,21 @@ import { AuditLoggerModule } from './common/audit/audit-logger.module.js';
     }]),
     
     // Feature modules
-    GitHubModule, // GitHub CLI operations
-    AiModule, // AI-powered review operations
-    ReviewModule, // Core review orchestration
-    MetricsModule, // Metrics and quality scoring
-    ComplianceModule, // Compliance reporting
-    PullRequestModule, // Pull Request management
-    DataExporterModule, // Data exporting
-    HealthModule, // Health check
-    WebSocketModule, // Real-time updates
-    SecurityModule, // Security scanning
-    WebhookModule, // GitHub webhooks
-    TeamModule, // Team and developer services
-    AuditLoggerModule, // Audit logging
-    
-    // Future feature modules will be added here:
-    // PullRequestModule,
-    // ReviewModule,
-    // MetricsModule,
-    // TeamModule,
-    // SecurityModule,
-    // WebSocketModule,
+    GitHubModule,
+    AiModule,
+    ReviewModule,
+    MetricsModule,
+    ComplianceModule,
+    PullRequestModule,
+    DataExporterModule,
+    HealthModule,
+    WebSocketModule,
+    SecurityModule,
+    WebhookModule,
+    TeamModule,
+    AuditLoggerModule,
+    ErrorHandlingModule,
+    NotificationModule,
   ],
   controllers: [],
   providers: [],

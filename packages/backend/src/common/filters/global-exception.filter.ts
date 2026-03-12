@@ -6,15 +6,16 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
+import { ErrorLoggerService } from './error-logger.service.js';
 
 /**
  * GlobalExceptionFilter - Filter for catching all exceptions and returning structured responses
- * 
- * Requirements: 13.3, 13.4, 13.5
  */
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(GlobalExceptionFilter.name);
+
+  constructor(private readonly errorLogger: ErrorLoggerService) {}
 
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
@@ -39,10 +40,13 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       error: typeof message === 'object' ? (message as any).error : 'Internal Server Error',
     };
 
-    this.logger.error(
-      `${request.method} ${request.url} [${status}] - ${JSON.stringify(errorResponse.message)}`,
-      exception instanceof Error ? exception.stack : undefined,
-    );
+    // Use ErrorLoggerService for persistent logging
+    this.errorLogger.log(exception, {
+      requestPath: request.url,
+      requestMethod: request.method,
+      actorId: request.headers['x-api-key'] || null,
+      requestId: request.headers['x-request-id'] || null,
+    });
 
     response.status(status).json(errorResponse);
   }

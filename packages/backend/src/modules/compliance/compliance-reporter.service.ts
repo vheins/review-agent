@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, MoreThanOrEqual } from 'typeorm';
 import { Comment } from '../../database/entities/comment.entity.js';
 import { Review } from '../../database/entities/review.entity.js';
+import { SecurityFinding } from '../../database/entities/security-finding.entity.js';
 
 /**
  * ComplianceReporterService - Service for generating compliance and audit reports
@@ -23,6 +24,8 @@ export class ComplianceReporterService {
     private readonly commentRepository: Repository<Comment>,
     @InjectRepository(Review)
     private readonly reviewRepository: Repository<Review>,
+    @InjectRepository(SecurityFinding)
+    private readonly securityRepository: Repository<SecurityFinding>,
   ) {}
 
   /**
@@ -33,26 +36,30 @@ export class ComplianceReporterService {
   async generateComplianceSummary(daysLookback: number = 30) {
     const since = new Date(Date.now() - daysLookback * 24 * 60 * 60 * 1000);
 
-    // Fetch all security-related comments in the period
-    const securityComments = await this.commentRepository.find({
+    const totalFindings = await this.securityRepository.count({
       where: {
-        category: 'security',
-        review: {
-          startedAt: MoreThanOrEqual(since)
-        }
-      },
-      relations: ['review']
+        detectedAt: MoreThanOrEqual(since)
+      }
     });
 
-    const totalFindings = securityComments.length;
-    // For now, consider "resolved" if the PR was merged or closed (simplified)
-    // In a real app, we'd check if subsequent reviews for the same PR don't have the issue
-    const resolvedFindings = securityComments.filter(c => c.postedAt !== null).length; // Simplified proxy
+    const resolvedFindings = await this.securityRepository.count({
+      where: {
+        detectedAt: MoreThanOrEqual(since),
+        is_resolved: true
+      }
+    });
+
+    const findings = await this.securityRepository.find({
+      where: {
+        detectedAt: MoreThanOrEqual(since)
+      }
+    });
 
     const severityBreakdown = {
-      error: securityComments.filter(c => c.severity === 'error').length,
-      warning: securityComments.filter(c => c.severity === 'warning').length,
-      info: securityComments.filter(c => c.severity === 'info').length,
+      critical: findings.filter(f => f.severity === 'critical').length,
+      high: findings.filter(f => f.severity === 'high').length,
+      medium: findings.filter(f => f.severity === 'medium').length,
+      low: findings.filter(f => f.severity === 'low').length,
     };
 
     return {
@@ -78,13 +85,14 @@ export class ComplianceReporterService {
     report += `- **Resolved Findings**: ${summary.resolvedFindings}\n\n`;
     
     report += `### Severity Breakdown\n`;
-    report += `- Critical/High (Errors): ${summary.severityBreakdown.error}\n`;
-    report += `- Medium (Warnings): ${summary.severityBreakdown.warning}\n`;
-    report += `- Low (Info): ${summary.severityBreakdown.info}\n\n`;
+    report += `- Critical: ${summary.severityBreakdown.critical}\n`;
+    report += `- High: ${summary.severityBreakdown.high}\n`;
+    report += `- Medium: ${summary.severityBreakdown.medium}\n`;
+    report += `- Low: ${summary.severityBreakdown.low}\n\n`;
     
     report += `### Policy Enforcement\n`;
-    if (summary.severityBreakdown.error > 0) {
-      report += `⚠️ **Warning**: ${summary.severityBreakdown.error} high-severity security issues remained unposted or unresolved in this period.\n`;
+    if (summary.severityBreakdown.critical > 0 || summary.severityBreakdown.high > 0) {
+      report += `⚠️ **Warning**: Significant security issues detected in this period.\n`;
     } else {
       report += `✅ **Success**: No high-severity security issues found in this period.\n`;
     }
