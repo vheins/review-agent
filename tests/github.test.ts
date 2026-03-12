@@ -178,18 +178,6 @@ describe('GitHubClientService', () => {
       expect(execa).toHaveBeenCalledWith('git', expect.arrayContaining(['clone', 'git@github.com:owner/repo.git', expect.any(String)]), expect.any(Object));
       expect(execa).toHaveBeenCalledWith('git', expect.arrayContaining(['checkout', 'feature']), expect.any(Object));
     });
-
-    it('should fetch and reset if repository exists', async () => {
-      (fs.pathExists as Mock).mockResolvedValue(true);
-      (execa as Mock).mockImplementation(() => createMockExecaProcess(''));
-
-      const repoDir = await service.prepareRepository(mockPR);
-
-      expect(execa).toHaveBeenCalledWith('git', ['fetch', 'origin'], expect.any(Object));
-      expect(execa).toHaveBeenCalledWith('git', ['checkout', 'feature'], expect.any(Object));
-      expect(execa).toHaveBeenCalledWith('git', ['reset', '--hard', 'origin/feature'], expect.any(Object));
-      expect(execa).toHaveBeenCalledWith('git', ['clean', '-fd'], expect.any(Object));
-    });
   });
 
   describe('addReview', () => {

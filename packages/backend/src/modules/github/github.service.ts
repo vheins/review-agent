@@ -169,14 +169,22 @@ export class GitHubClientService {
       if (token) {
         try {
           this.logger.log('► Attempting to fetch last 100 PRs via GitHub API...');
-          let queryParts = ['is:pr'];
           
-          if (appConfig.prScope.includes('authored')) queryParts.push('author:@me');
-          if (appConfig.prScope.includes('assigned')) queryParts.push('assignee:@me');
-          if (appConfig.prScope.includes('review-requested')) queryParts.push('review-requested:@me');
+          const filters = [];
+          if (appConfig.prScope.includes('authored')) filters.push('author:@me');
+          if (appConfig.prScope.includes('assigned')) filters.push('assignee:@me');
+          if (appConfig.prScope.includes('review-requested')) filters.push('review-requested:@me');
 
-          const query = encodeURIComponent(queryParts.join(' '));
-          const result = await this.fetchApi(`/search/issues?q=${query}&per_page=100&sort=updated&order=desc`);
+          if (filters.length === 0) return [];
+
+          const query = encodeURIComponent(`is:pr ${filters.join(' ')}`);
+          // Note: GitHub search defaults to AND. If we want OR, we need separate queries or use the OR operator.
+          // To keep it simple and reliable, we'll join them with OR if multiple filters exist.
+          const orQuery = filters.length > 1 
+            ? encodeURIComponent(`is:pr ${filters.join(' OR ')}`)
+            : query;
+
+          const result = await this.fetchApi(`/search/issues?q=${orQuery}&per_page=100&sort=updated&order=desc`);
           
           const prs: PullRequest[] = result.items.map(item => ({
             number: item.number,
