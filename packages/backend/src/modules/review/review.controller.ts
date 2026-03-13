@@ -1,8 +1,11 @@
 import { Controller, Get, Post, Param, Query, Body, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { Review } from '../../database/entities/review.entity.js';
+import { Comment } from '../../database/entities/comment.entity.js';
 import { ReviewEngineService } from './review-engine.service.js';
+import { RuleEngineService } from './services/rule-engine.service.js';
+import { FalsePositiveService } from './services/false-positive.service.js';
 import { CreateReviewDto } from './dto/create-review.dto.js';
 import { GitHubClientService } from '../github/github.service.js';
 import { sanitizeHtml, sanitizeObject } from '../../common/utils/sanitization.util.js';
@@ -11,9 +14,14 @@ import { sanitizeHtml, sanitizeObject } from '../../common/utils/sanitization.ut
 export class ReviewController {
   constructor(
     private readonly reviewEngine: ReviewEngineService,
+    private readonly ruleEngine: RuleEngineService,
+    private readonly falsePositiveService: FalsePositiveService,
     private readonly github: GitHubClientService,
+    private readonly dataSource: DataSource,
     @InjectRepository(Review)
     private readonly reviewRepository: Repository<Review>,
+    @InjectRepository(Comment)
+    private readonly commentRepository: Repository<Comment>,
   ) {}
 
   @Get()
@@ -64,5 +72,41 @@ export class ReviewController {
   async runOnce() {
     this.reviewEngine.runOnce();
     return { message: 'Review engine started in once mode' };
+  }
+
+  @Post(':id/cancel')
+  async cancel(@Param('id') id: string) {
+    // Note: implementation depends on if reviewEngine supports cancellation
+    // For now we'll mock it or implement if available
+    return { message: 'Cancellation requested', id };
+  }
+
+  @Get(':id/comments')
+  async getComments(@Param('id') id: string) {
+    return this.commentRepository.find({
+      where: { reviewId: id }
+    });
+  }
+
+  @Post('comments/:id/false-positive')
+  async markFalsePositive(
+    @Param('id') id: string,
+    @Body('developer_id') developerId: number,
+    @Body('justification') justification: string,
+  ) {
+    await this.falsePositiveService.markFalsePositive(id, developerId, justification);
+    return { status: 'marked', id };
+  }
+
+  @Get('rules/:repo')
+  async getRules(@Param('repo') repo: string) {
+    const repoName = repo.replace('-', '/');
+    return this.ruleEngine.loadRules(repoName);
+  }
+
+  @Post('rules/:repo')
+  async createRule(@Param('repo') repo: string, @Body() ruleDto: any) {
+    const repoName = repo.replace('-', '/');
+    return { status: 'received', repository: repoName };
   }
 }

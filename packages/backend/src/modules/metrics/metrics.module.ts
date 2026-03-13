@@ -19,6 +19,7 @@ import { TestRun } from '../../database/entities/test-run.entity.js';
 import { MetricsController } from './metrics.controller.js';
 import { ReviewModule } from '../review/review.module.js';
 import { ConfigModule } from '../../config/config.module.js';
+import { DataExporterModule } from '../../common/exporter/data-exporter.module.js';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { ConfigModule } from '../../config/config.module.js';
     ]),
     forwardRef(() => ReviewModule),
     ConfigModule,
+    DataExporterModule,
   ],
   controllers: [MetricsController],
   providers: [

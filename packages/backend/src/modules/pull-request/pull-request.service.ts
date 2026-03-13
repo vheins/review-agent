@@ -5,6 +5,7 @@ import { PullRequest as PullRequestEntity } from '../../database/entities/pull-r
 import { GitHubClientService, PullRequest as GitHubPR } from '../github/github.service.js';
 import { ReviewEngineService } from '../review/review-engine.service.js';
 import { AiExecutorService } from '../ai/ai-executor.service.js';
+import { HealthScoreService } from '../metrics/services/health-score.service.js';
 
 /**
  * PullRequestService - Service for managing Pull Request business logic
@@ -19,6 +20,7 @@ export class PullRequestService {
     private readonly github: GitHubClientService,
     private readonly reviewEngine: ReviewEngineService,
     private readonly ai: AiExecutorService,
+    private readonly healthScoreService: HealthScoreService,
   ) {}
 
   /**
@@ -139,5 +141,14 @@ export class PullRequestService {
     }
 
     return this.reviewEngine.reviewPullRequest(pr);
+  }
+
+  async calculateHealth(repoName: string, number: number) {
+    return this.healthScoreService.calculatePRHealthScore(number, repoName);
+  }
+
+  async getHistory(repoName: string, number: number) {
+    const pr = await this.findOne(repoName, number);
+    return pr.reviews;
   }
 }

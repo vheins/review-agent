@@ -1,8 +1,15 @@
-import { Controller, Get, Post, Body, Param, Query, ParseIntPipe } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, ParseIntPipe, Res } from '@nestjs/common';
+import { Response } from 'express';
 import { MissionControlService } from './services/mission-control.service.js';
 import { QueuePolicyEngine } from './services/queue-policy-engine.service.js';
 import { HumanOverrideService } from './services/human-override.service.js';
 import { SessionLedgerService } from './services/session-ledger.service.js';
+import { StuckTaskDetectorService } from './services/stuck-task-detector.service.js';
+import { AuditLoggerService } from '../../common/audit/audit-logger.service.js';
+import { DataExporterService } from '../../common/exporter/data-exporter.service.js';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Export } from '../../database/entities/export.entity.js';
 
 @Controller('orchestration')
 export class OrchestrationController {
@@ -11,6 +18,11 @@ export class OrchestrationController {
     private readonly queueEngine: QueuePolicyEngine,
     private readonly humanOverride: HumanOverrideService,
     private readonly ledger: SessionLedgerService,
+    private readonly stuckTaskDetector: StuckTaskDetectorService,
+    private readonly auditLogger: AuditLoggerService,
+    private readonly dataExporter: DataExporterService,
+    @InjectRepository(Export)
+    private readonly exportRepo: Repository<Export>,
   ) {}
 
   @Get('queue')
@@ -74,5 +86,30 @@ export class OrchestrationController {
   ) {
     await this.humanOverride.resolveOverride(id, userId, action, notes);
     return { status: 'success' };
+  }
+
+  @Get('tasks/stuck')
+  async getStuckTasks() {
+    return this.stuckTaskDetector.detectStuckTasks();
+  }
+
+  @Post('tasks/:id/recover')
+  async recoverTask(@Param('id') id: string) {
+    const session = await (this.missionControl as any).sessionRepository.findOne({ where: { id } });
+    if (!session) return { error: 'Session not found' };
+    await (this.stuckTaskDetector as any).recoverTask(session);
+    return { status: 'recovery_initiated' };
+  }
+
+  @Get('audit')
+  async getAuditLogs(@Query() query: any) {
+    return this.auditLogger.getAuditLogs(query);
+  }
+
+  @Get('export/:id')
+  async downloadExport(@Param('id') id: string, @Res() res: Response) {
+    const exportRecord = await this.exportRepo.findOne({ where: { id } });
+    if (!exportRecord) return res.status(404).json({ error: 'Export not found' });
+    return res.download(exportRecord.filePath);
   }
 }

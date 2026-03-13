@@ -35,4 +35,22 @@ export class PullRequestController {
     const success = await this.prService.triggerReview(repoName, number);
     return { success };
   }
+
+  @Get(':repo/:number/health')
+  async getHealth(
+    @Param('repo') repo: string,
+    @Param('number', ParseIntPipe) number: number,
+  ) {
+    const repoName = sanitizeHtml(repo).replace('-', '/');
+    return this.prService.calculateHealth(repoName, number);
+  }
+
+  @Get(':repo/:number/history')
+  async getHistory(
+    @Param('repo') repo: string,
+    @Param('number', ParseIntPipe) number: number,
+  ) {
+    const repoName = sanitizeHtml(repo).replace('-', '/');
+    return this.prService.getHistory(repoName, number);
+  }
 }

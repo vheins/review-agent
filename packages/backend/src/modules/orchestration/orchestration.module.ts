@@ -14,6 +14,7 @@ import { Comment } from '../../database/entities/comment.entity.js';
 import { AuditTrail } from '../../database/entities/audit-trail.entity.js';
 import { OrchestrationSet } from '../../database/entities/orchestration-set.entity.js';
 import { OrchestrationSetMember } from '../../database/entities/orchestration-set-member.entity.js';
+import { Export } from '../../database/entities/export.entity.js';
 
 import { MissionControlService } from './services/mission-control.service.js';
 import { QueuePolicyEngine } from './services/queue-policy-engine.service.js';
@@ -29,6 +30,7 @@ import { OrchestrationSetService } from './services/orchestration-set.service.js
 import { OrchestrationController } from './orchestration.controller.js';
 import { OrchestrationGateway } from './orchestration.gateway.js';
 import { NotificationModule } from '../../common/notification/notification.module.js';
+import { DataExporterModule } from '../../common/exporter/data-exporter.module.js';
 
 @Module({
   imports: [
@@ -47,8 +49,10 @@ import { NotificationModule } from '../../common/notification/notification.modul
       AuditTrail,
       OrchestrationSet,
       OrchestrationSetMember,
+      Export,
     ]),
     NotificationModule,
+    DataExporterModule,
   ],
   controllers: [OrchestrationController],
   providers: [

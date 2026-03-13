@@ -15,6 +15,7 @@ import { GitHubModule } from '../github/github.module.js';
 import { ReviewModule } from '../review/review.module.js';
 import { AiModule } from '../ai/ai.module.js';
 import { ConfigModule } from '../../config/config.module.js';
+import { MetricsModule } from '../metrics/metrics.module.js';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { ConfigModule } from '../../config/config.module.js';
     ReviewModule,
     AiModule,
     ConfigModule,
+    MetricsModule,
   ],
   controllers: [PullRequestController, DashboardController],
   providers: [PullRequestService, BatchProcessorService, AutoMergeService, CIIntegrationService],
