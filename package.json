@@ -30,5 +30,10 @@
     "typescript": "^5.7.3",
     "vitest": "^4.0.18",
     "wait-on": "^9.0.4"
+  },
+  "resolutions": {
+    "tar": "7.5.11",
+    "file-type": "21.3.1",
+    "@tootallnate/once": "3.0.1"
   }
 }
