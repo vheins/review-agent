@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { GitHubClientService } from '../../github/github.service.js';
-import * as fs from 'fs-extra';
+import fs from 'fs-extra';
 import * as path from 'path';
 
 @Injectable()

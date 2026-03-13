@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThan } from 'typeorm';
-import * as fs from 'fs-extra';
+import fs from 'fs-extra';
 import * as path from 'path';
 import { Parser } from 'json2csv';
 import { v4 as uuidv4 } from 'uuid';

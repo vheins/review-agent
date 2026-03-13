@@ -26,11 +26,23 @@ export class PullRequestService {
   /**
    * List all pull requests from database
    */
-  async findAll(): Promise<PullRequestEntity[]> {
-    return this.prRepository.find({
-      order: { updatedAt: 'DESC' },
+  async findAll(page: number = 1, limit: number = 10) {
+    const [prs, total] = await this.prRepository.findAndCount({
+      order: { createdAt: 'DESC' },
       relations: ['reviews'],
+      skip: (page - 1) * limit,
+      take: limit,
     });
+
+    return {
+      data: prs,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+      }
+    };
   }
 
   /**

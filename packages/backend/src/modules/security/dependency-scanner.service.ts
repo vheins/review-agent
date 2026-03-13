@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { SecurityFinding } from '../../database/entities/security-finding.entity.js';
 import { execa } from 'execa';
-import * as fs from 'fs-extra';
+import fs from 'fs-extra';
 import * as path from 'path';
 
 @Injectable()

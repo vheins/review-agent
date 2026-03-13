@@ -28,6 +28,7 @@ import {
     Users,
     MessageSquarePlus,
     ListTodo,
+    ListFilter,
     Zap,
     ExternalLink,
     LayoutList,
@@ -95,7 +96,7 @@ function statusDotClass(running) {
     return running ? 'bg-emerald-400 shadow-[0_0_0_6px_rgba(52,211,153,0.16)]' : 'bg-slate-400';
 }
 
-function MetricCard({ label, value, description }) {
+function MetricCard({ label, value, description, icon: Icon = LayoutGrid }) {
     return (
         <Card className="overflow-hidden p-5">
             <CardHeader className="gap-4">
@@ -105,7 +106,7 @@ function MetricCard({ label, value, description }) {
                         <CardTitle className="text-4xl font-black">{value}</CardTitle>
                     </div>
                     <div className="rounded-lg border border-border bg-panel p-2 text-muted-foreground">
-                        <LayoutGrid className="h-4 w-4" />
+                        <Icon className="h-4 w-4" />
                     </div>
                 </div>
                 <CardDescription>{description}</CardDescription>
@@ -158,12 +159,18 @@ export default function App() {
     const [themeMode, setThemeMode] = useState(getStoredThemeMode());
     const [showCreateMenu, setShowCreateMenu] = useState(false);
     const createMenuRef = useRef(null);
+    const [showFilterModal, setShowFilterModal] = useState(false);
+    const filterMenuRef = useRef(null);
     const [runtimeConfig, setRuntimeConfig] = useState(null);
     const [snapshot, setSnapshot] = useState(null);
     const [prs, setPrs] = useState([]);
+    const [prMeta, setPrMeta] = useState({ total: 0, page: 1, limit: 10, totalPages: 1 });
     const [selectedPrId, setSelectedPrId] = useState(null);
+    const [viewMode, setViewMode] = useState<'table' | 'kanban'>('table');
     const [isListView, setIsListView] = useState(false);
     const [prDetail, setPrDetail] = useState(null);
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 10;
     const [teamSecurity, setTeamSecurity] = useState(null);
     const [configData, setConfigData] = useState(null);
     const [running, setRunning] = useState(false);
@@ -182,7 +189,7 @@ export default function App() {
     const [configValidation, setConfigValidation] = useState('Select a repository to load its current configuration.');
     const [ruleFeedback, setRuleFeedback] = useState('Rule validation output will appear here.');
     const [prFilters, setPrFilters] = useState({
-        status: 'open',
+        status: '',
         repositoryId: '',
         authorId: '',
         search: ''
@@ -244,6 +251,20 @@ export default function App() {
         }
     }, [showCreateMenu]);
 
+    // Close filter menu when clicking outside
+    useEffect(() => {
+        function handleClickOutside(event) {
+            if (filterMenuRef.current && !filterMenuRef.current.contains(event.target) && !event.target.closest('button[data-filter-toggle]')) {
+                setShowFilterModal(false);
+            }
+        }
+        
+        if (showFilterModal) {
+            document.addEventListener('mousedown', handleClickOutside);
+            return () => document.removeEventListener('mousedown', handleClickOutside);
+        }
+    }, [showFilterModal]);
+
     const appendLog = useEffectEvent((type, message) => {
         // Convert message to string if it's not already
         const messageStr = typeof message === 'string' ? message : JSON.stringify(message);
@@ -275,20 +296,29 @@ export default function App() {
         return result.snapshot;
     });
 
-    const refreshPRs = useEffectEvent(async () => {
+    const refreshPRs = useEffectEvent(async (extraFilters = {}) => {
+        const filtersToUse = { ...prFilters, ...extraFilters };
         const result = await api.listPRs({
-            status: '',
-            repositoryId: '',
-            authorId: '',
-            search: ''
+            status: filtersToUse.status || '',
+            repositoryId: filtersToUse.repositoryId || '',
+            authorId: filtersToUse.authorId || '',
+            search: filtersToUse.search || '',
+            page: filtersToUse.page || currentPage,
+            limit: itemsPerPage
         });
         if (!result.success) {
             appendLog('error', result.error);
             return;
         }
 
-        setPrs(result.prs || []);
-        setSelectedPrId((current) => current ?? result.prs?.[0]?.id ?? null);
+        if (result.meta) {
+            setPrs(result.data || []);
+            setPrMeta(result.meta);
+            setSelectedPrId((current) => current ?? result.data?.[0]?.id ?? null);
+        } else {
+            setPrs(result.prs || []);
+            setSelectedPrId((current) => current ?? result.prs?.[0]?.id ?? null);
+        }
     });
 
     const refreshTeamSecurity = useEffectEvent(async () => {
@@ -374,8 +404,8 @@ export default function App() {
     }, [rangeDays]);
 
     useEffect(() => {
-        refreshPRs();
-    }, []);
+        refreshPRs({ page: currentPage });
+    }, [currentPage, prFilters.status, prFilters.repositoryId, prFilters.authorId, deferredSearch]);
 
     useEffect(() => {
         if (!selectedPrId) return;
@@ -508,7 +538,7 @@ export default function App() {
         return Array.from(new Set(prs.map((pr) => pr.author).filter(Boolean))).sort();
     }, [prs]);
     const filteredPrs = useMemo(() => {
-        return prs.filter((pr) => {
+        const result = prs.filter((pr) => {
             if (prFilters.status && pr.status !== prFilters.status) return false;
             if (prFilters.repositoryId && String(repositories.find((repo) => repo.full_name === pr.repository)?.id ?? '') !== prFilters.repositoryId) return false;
             if (prFilters.authorId && pr.author !== prFilters.authorId) return false;
@@ -518,7 +548,18 @@ export default function App() {
             }
             return true;
         });
+        return result.sort((a, b) => {
+            const dateA = new Date(a.updated_at || a.created_at || 0).getTime();
+            const dateB = new Date(b.updated_at || b.created_at || 0).getTime();
+            return dateB - dateA;
+        });
     }, [prs, prFilters.status, prFilters.repositoryId, prFilters.authorId, deferredSearch, repositories]);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [prFilters.status, prFilters.repositoryId, prFilters.authorId, deferredSearch]);
+
+    const totalPages = prMeta.totalPages || 1;
 
     const overviewCards = snapshot ? [
         { label: 'Open PRs', value: snapshot.overview.openPRs ?? 0, description: `${snapshot.overview.blockingPRs ?? 0} blocking right now` },
@@ -527,9 +568,10 @@ export default function App() {
         { label: 'Health Score', value: Math.round(snapshot.overview.avgHealthScore ?? 0), description: 'Average PR health across tracked repos' }
     ] : [];
     const queueSummaryCards = [
-        { label: 'In Queue', value: filteredPrs.length, hint: `${prs.filter((pr) => pr.status === 'open').length} open` },
-        { label: 'Blocking', value: filteredPrs.filter((pr) => Number(pr.priority_score ?? 0) >= 85 || Number(pr.health_score ?? 100) <= 80).length, hint: 'Needs operator attention' },
-        { label: 'Needs Fix', value: filteredPrs.filter((pr) => pr.latest_outcome === 'changes_requested').length, hint: 'Actionable remediation' }
+        { label: 'In Queue', value: filteredPrs.filter((pr) => pr.status === 'open').length, description: `${prs.filter((pr) => pr.status === 'open').length} open`, icon: GitPullRequest },
+        { label: 'Blocking', value: filteredPrs.filter((pr) => Number(pr.priority_score ?? 0) >= 85 || Number(pr.health_score ?? 100) <= 80).length, description: 'Needs operator attention', icon: FileWarning },
+        { label: 'Needs Fix', value: filteredPrs.filter((pr) => pr.latest_outcome === 'changes_requested').length, description: 'Actionable remediation', icon: Settings2 },
+        { label: 'Needs Review', value: filteredPrs.filter(p => p.status === 'open' && !p.latest_outcome).length, description: 'Waiting for first pass', icon: Clock3 }
     ];
     const metricsSummaryCards = snapshot ? [
         { label: 'Throughput', value: snapshot.metricsOverview.total_reviews ?? 0, description: `Reviews completed in the last ${rangeDays} days` },
@@ -844,286 +886,236 @@ export default function App() {
     function renderPRs() {
         return (
             <div className="tab-page">
-                <Section eyebrow="Filters" title="Current Queue" description="Search and narrow open work across repositories and authors.">
-                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                        <div className="grid gap-2">
-                            <span className="text-sm font-medium text-muted-foreground">Status</span>
-                            <Select value={prFilters.status} onChange={(event) => setPrFilters((current) => ({ ...current, status: event.target.value }))}>
-                                <option value="">All</option>
-                                <option value="open">Open</option>
-                                <option value="merged">Merged</option>
-                                <option value="closed">Closed</option>
-                                <option value="rejected">Rejected</option>
-                            </Select>
+                <div className="mb-6 flex items-center justify-between">
+                    <div className="grid gap-1">
+                        <h2 className="text-2xl font-bold tracking-tight">Pull Requests</h2>
+                        <p className="text-muted-foreground">Manage and review pull requests across all repositories.</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="relative">
+                            <Button
+                                data-filter-toggle="true"
+                                variant={showFilterModal || prFilters.status || prFilters.repositoryId || prFilters.authorId || prFilters.search ? 'secondary' : 'outline'}
+                                size="sm"
+                                className="h-8 px-3"
+                                onClick={() => setShowFilterModal(!showFilterModal)}
+                            >
+                                <ListFilter className="mr-2 h-4 w-4" />
+                                Filter
+                                {(prFilters.status || prFilters.repositoryId || prFilters.authorId || prFilters.search) && (
+                                    <Badge variant="secondary" className="ml-2 h-4 px-1 py-0 text-[10px] rounded-sm">Active</Badge>
+                                )}
+                            </Button>
+                            {showFilterModal && (
+                                <div
+                                    ref={filterMenuRef}
+                                    className="absolute right-0 top-full z-[60] mt-2 w-[340px] md:w-[600px] rounded-xl border border-border bg-card shadow-xl p-4"
+                                >
+                                    <div className="mb-4 flex items-center justify-between pb-2 border-b">
+                                        <h3 className="font-semibold">Filter Queue</h3>
+                                        <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => setPrFilters({ status: '', repositoryId: '', authorId: '', search: '' })}>
+                                            Reset
+                                        </Button>
+                                    </div>
+                                    <div className="grid gap-4 md:grid-cols-2">
+                                        <div className="grid gap-2">
+                                            <span className="text-sm font-medium text-muted-foreground">Status</span>
+                                            <Select value={prFilters.status} onChange={(event) => setPrFilters((current) => ({ ...current, status: event.target.value }))}>
+                                                <option value="">All</option>
+                                                <option value="open">Open</option>
+                                                <option value="merged">Merged</option>
+                                                <option value="closed">Closed</option>
+                                                <option value="rejected">Rejected</option>
+                                            </Select>
+                                        </div>
+                                        <div className="grid gap-2">
+                                            <span className="text-sm font-medium text-muted-foreground">Repository</span>
+                                            <Select value={prFilters.repositoryId} onChange={(event) => setPrFilters((current) => ({ ...current, repositoryId: event.target.value }))}>
+                                                <option value="">All Repositories</option>
+                                                {repositories.map((repo) => <option key={repo.id} value={repo.id}>{repo.full_name}</option>)}
+                                            </Select>
+                                        </div>
+                                        <div className="grid gap-2">
+                                            <span className="text-sm font-medium text-muted-foreground">Author</span>
+                                            <Select value={prFilters.authorId} onChange={(event) => setPrFilters((current) => ({ ...current, authorId: event.target.value }))}>
+                                                <option value="">All Authors</option>
+                                                {authorOptions.map((author) => <option key={author} value={author}>{author}</option>)}
+                                            </Select>
+                                        </div>
+                                        <div className="grid gap-2">
+                                            <span className="text-sm font-medium text-muted-foreground">Search</span>
+                                            <div className="relative">
+                                                <Command className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                                <Input 
+                                                    className="pl-9 h-9"
+                                                    value={prFilters.search} 
+                                                    onChange={(event) => setPrFilters((current) => ({ ...current, search: event.target.value }))} 
+                                                    placeholder="Search PRs..." 
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
-                        <div className="grid gap-2">
-                            <span className="text-sm font-medium text-muted-foreground">Repository</span>
-                            <Select value={prFilters.repositoryId} onChange={(event) => setPrFilters((current) => ({ ...current, repositoryId: event.target.value }))}>
-                                <option value="">All Repositories</option>
-                                {repositories.map((repo) => <option key={repo.id} value={repo.id}>{repo.full_name}</option>)}
-                            </Select>
-                        </div>
-                        <div className="grid gap-2">
-                            <span className="text-sm font-medium text-muted-foreground">Author</span>
-                            <Select value={prFilters.authorId} onChange={(event) => setPrFilters((current) => ({ ...current, authorId: event.target.value }))}>
-                                <option value="">All Authors</option>
-                                {authorOptions.map((author) => <option key={author} value={author}>{author}</option>)}
-                            </Select>
-                        </div>
-                        <div className="grid gap-2">
-                            <span className="text-sm font-medium text-muted-foreground">Search</span>
-                            <Input value={prFilters.search} onChange={(event) => setPrFilters((current) => ({ ...current, search: event.target.value }))} placeholder="Search PR title, repository, or author" />
+                        <div className="flex flex-col w-[1px] h-4 bg-border mx-1" />
+                        <div className="flex items-center gap-1 rounded-lg border bg-muted p-1">
+                            <Button
+                                variant={viewMode === 'table' ? 'secondary' : 'ghost'}
+                                size="sm"
+                                className="h-8 px-3"
+                                onClick={() => setViewMode('table')}
+                            >
+                                <LayoutList className="mr-2 h-4 w-4" />
+                                Table
+                            </Button>
+                            <Button
+                                variant={viewMode === 'kanban' ? 'secondary' : 'ghost'}
+                                size="sm"
+                                className="h-8 px-3"
+                                onClick={() => setViewMode('kanban')}
+                            >
+                                <Columns className="mr-2 h-4 w-4" />
+                                Kanban
+                            </Button>
                         </div>
                     </div>
-                </Section>
-                <div className="grid gap-4 md:grid-cols-3">
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-4 mb-6">
                     {queueSummaryCards.map((card) => (
-                        <Card key={card.label} className="p-4">
-                            <div className="grid gap-2">
-                                <div className="eyebrow">{card.label}</div>
-                                <div className="text-2xl font-black">{card.value}</div>
-                                <div className="text-sm text-muted-foreground">{card.hint}</div>
-                            </div>
-                        </Card>
+                        <MetricCard key={card.label} {...card} />
                     ))}
                 </div>
-                <div className="grid gap-5 2xl:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]">
-                    <Section eyebrow="Pull Requests" title="Current Queue" description="Queue ordered for triage. Select an item to inspect operator-ready context on the right.">
-                        <div className="grid gap-4">
-                            <Card className="border-dashed p-4">
-                                <div className="grid gap-3 md:grid-cols-3">
-                                    <div className="rounded-xl border border-border bg-panel/70 p-3">
-                                        <div className="eyebrow">Focus</div>
-                                        <div className="mt-2 text-sm font-medium">Clear blocking items first</div>
-                                    </div>
-                                    <div className="rounded-xl border border-border bg-panel/70 p-3">
-                                        <div className="eyebrow">Next Move</div>
-                                        <div className="mt-2 text-sm font-medium">Run auto-fix on failed health gates</div>
-                                    </div>
-                                    <div className="rounded-xl border border-border bg-panel/70 p-3">
-                                        <div className="eyebrow">Escalation</div>
-                                        <div className="mt-2 text-sm font-medium">Send complex security findings to human review</div>
-                                    </div>
-                                </div>
-                            </Card>
-                            <div className="grid gap-3">
-                            {filteredPrs.length ? filteredPrs.map((pr) => (
-                                <div
-                                    key={`${pr.repository}-${pr.number}`}
-                                    className={cn('panel-surface flex w-full flex-col overflow-hidden text-left transition hover:-translate-y-0.5', selectedPrId === pr.id && 'ring-2 ring-sky-400/30')}
-                                >
-                                    <div className="flex flex-1 flex-col p-4" onClick={() => setSelectedPrId(pr.id)}>
-                                        <div className="flex flex-wrap items-center justify-between gap-3">
-                                            <strong className="text-base font-semibold">{`#${pr.number} ${pr.title}`}</strong>
-                                            <div className="flex items-center gap-2">
-                                                <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    if (window.electronAPI) {
-                                                        window.electronAPI.openExternal(pr.url);
-                                                    } else {
-                                                        window.open(pr.url, '_blank');
-                                                    }
-                                                }}>
-                                                    <ExternalLink className="h-3.5 w-3.5" />
-                                                </Button>
-                                                <span className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">Triage</span>
-                                            </div>
-                                        </div>
-                                        <div className="mt-2 flex flex-wrap gap-2">
-                                            <Badge>{pr.status}</Badge>
-                                            {pr.pr_category && <Badge variant="secondary" className="bg-sky-500/10 text-sky-500 border-sky-500/20">{pr.pr_category}</Badge>}
-                                            <Badge variant={toneForStatus(pr.latest_outcome ?? 'pending')}>{pr.latest_outcome ?? 'pending'}</Badge>
-                                        </div>
-                                        {pr.lead_summary && (
-                                            <div className="mt-3 text-sm text-muted-foreground line-clamp-2 bg-panel/50 p-2 rounded-lg border border-border/50 italic">
-                                                "{pr.lead_summary}"
-                                            </div>
-                                        )}
-                                        <div className="mt-3 flex flex-wrap gap-3 text-sm text-muted-foreground">
-                                            <span>{pr.repository}</span>
-                                            <span>{pr.author}</span>
-                                            <span className={cn(pr.risk_score > 70 ? 'text-rose-500 font-bold' : '')}>Risk {pr.risk_score ?? 0}</span>
-                                            <span>Impact {pr.impact_score ?? 0}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            )) : <EmptyState message="No pull requests found." />}
-                            </div>
+
+
+
+                {viewMode === 'table' ? (
+                    <div className="rounded-xl border bg-card text-card-foreground shadow">
+                        <div className="scroll-slim overflow-auto">
+                            <table className="w-full text-left text-sm">
+                                <thead className="border-b bg-muted/50 text-muted-foreground">
+                                    <tr>
+                                        <th className="px-4 py-3 font-medium">TITLE</th>
+                                        <th className="px-4 py-3 font-medium">STATUS</th>
+                                        <th className="px-4 py-3 font-medium">AUTHOR</th>
+                                        <th className="px-4 py-3 font-medium">LATEST OUTCOME</th>
+                                        <th className="px-4 py-3 font-medium">LAST UPDATED</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y">
+                                    {filteredPrs.length ? filteredPrs.map((pr) => (
+                                        <tr key={pr.id} className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => {
+                                            setSelectedPrId(pr.id);
+                                        }}>
+                                            <td className="px-4 py-4">
+                                                <div className="flex flex-col gap-1">
+                                                    <span className="font-semibold text-foreground line-clamp-1">{pr.title}</span>
+                                                    <span className="text-xs text-muted-foreground">#{pr.number} opened in {pr.branch}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-4">
+                                                <Badge variant="outline" className="uppercase text-[10px] font-bold tracking-wider">
+                                                    {pr.status}
+                                                </Badge>
+                                            </td>
+                                            <td className="px-4 py-4">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="h-6 w-6 rounded-full bg-sky-500/10 flex items-center justify-center text-[10px] font-bold text-sky-600">
+                                                        {pr.author?.charAt(0).toUpperCase()}
+                                                    </div>
+                                                    <span className="font-medium">{pr.author}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-4">
+                                                <Badge variant={toneForStatus(pr.latest_outcome ?? 'pending')} className="capitalize">
+                                                    {pr.latest_outcome ?? 'pending'}
+                                                </Badge>
+                                            </td>
+                                            <td className="px-4 py-4 text-muted-foreground">
+                                                {formatRelativeTime(pr.updated_at || pr.created_at)}
+                                            </td>
+                                        </tr>
+                                    )) : (
+                                        <tr>
+                                            <td colSpan={5} className="h-24 text-center">
+                                                <EmptyState message="No pull requests found." />
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
                         </div>
-                    </Section>
-                    <Section eyebrow="PR Detail" title={selectedPr ? `#${selectedPr.number} ${selectedPr.title}` : 'Select a PR'} description={selectedPr ? `${selectedPr.repository} · ${selectedPr.author}` : 'Choose a pull request from the queue.'}>
-                        {selectedPr ? (
-                            <div className="grid gap-4">
-                                <div className="grid gap-3 md:grid-cols-4">
-                                    <Card className="p-4">
-                                        <div className="eyebrow">Risk Level</div>
-                                        <div className={cn('mt-2 text-lg font-black', selectedPr.risk_score > 70 ? 'text-rose-500' : selectedPr.risk_score > 40 ? 'text-amber-500' : 'text-emerald-500')}>
-                                            {selectedPr.risk_score ?? 0}%
-                                        </div>
-                                    </Card>
-                                    <Card className="p-4">
-                                        <div className="eyebrow">Impact</div>
-                                        <div className="mt-2 text-lg font-black text-sky-500">{selectedPr.impact_score ?? 0}%</div>
-                                    </Card>
-                                    <Card className="p-4">
-                                        <div className="eyebrow">Category</div>
-                                        <div className="mt-2 text-lg font-semibold capitalize">{selectedPr.pr_category ?? 'unassigned'}</div>
-                                    </Card>
-                                    <Card className="p-4">
-                                        <div className="eyebrow">Health</div>
-                                        <div className="mt-2 text-lg font-semibold">{selectedPr.health_score ?? 'n/a'}</div>
-                                    </Card>
+                        {totalPages > 1 && (
+                            <div className="flex items-center justify-between border-t p-4">
+                                <div className="text-sm text-muted-foreground">
+                                    Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, prMeta.total || filteredPrs.length)} of {prMeta.total || filteredPrs.length} PRs
                                 </div>
-                                <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_18rem]">
-                                    <Card className="p-4">
-                                        <div className="grid gap-4">
-                                            <div className="flex flex-wrap items-center justify-between gap-3">
-                                                <div className="min-w-0">
-                                                    <strong className="block truncate text-lg font-semibold">{selectedPr.repository}</strong>
-                                                    <div className="mt-1 flex flex-wrap gap-2">
-                                                        <Badge>{selectedPr.status}</Badge>
-                                                        <Badge variant="secondary">{selectedPr.pr_category}</Badge>
-                                                        <Badge variant={toneForStatus(selectedPr.latest_outcome ?? selectedPr.status)}>{selectedPr.latest_outcome ?? 'pending'}</Badge>
-                                                    </div>
-                                                </div>
-                                                <div className="flex flex-wrap gap-3">
-                                                    <Button size="sm" variant="outline" onClick={() => {
-                                                        if (window.electronAPI) {
-                                                            window.electronAPI.openExternal(selectedPr.url);
-                                                        } else {
-                                                            window.open(selectedPr.url, '_blank');
-                                                        }
-                                                    }}>
-                                                        <ExternalLink className="mr-2 h-3.5 w-3.5" />
-                                                        GitHub
-                                                    </Button>
-                                                    <Button size="sm" variant="secondary" onClick={async () => {
-                                                        const result = await window.electronAPI?.executeNow();
-                                                        if (result) {
-                                                            appendLog(result.success ? 'info' : 'error', result.message);
-                                                        } else {
-                                                            appendLog('warn', 'Execute command only available in Electron');
-                                                        }
-                                                    }}>
-                                                        Run AI Review
-                                                    </Button>
-                                                </div>
-                                            </div>
-                                            {selectedPr.lead_summary && (
-                                                <div className="rounded-xl border border-border/50 bg-panel/50 p-4">
-                                                    <p className="eyebrow mb-2">Technical Lead Summary</p>
-                                                    <p className="text-sm leading-relaxed text-foreground/90 italic">
-                                                        "{selectedPr.lead_summary}"
-                                                    </p>
-                                                </div>
-                                            )}
-                                            <div className="grid gap-3 text-sm text-muted-foreground md:grid-cols-2">
-                                                <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-panel/70 px-4 py-3"><span>Author</span><span className="font-medium text-foreground">{selectedPr.author}</span></div>
-                                                <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-panel/70 px-4 py-3"><span>Branch</span><span className="font-medium text-foreground">{selectedPr.branch}</span></div>
-                                                <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-panel/70 px-4 py-3"><span>Risk Score</span><span className="font-medium text-foreground">{selectedPr.risk_score ?? 0}</span></div>
-                                                <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-panel/70 px-4 py-3"><span>Impact Score</span><span className="font-medium text-foreground">{selectedPr.impact_score ?? 0}</span></div>
-                                            </div>
-                                        </div>
-                                    </Card>
-                                    <Card className="p-4">
-                                        <div className="grid gap-3">
-                                            <div className="flex items-center gap-2">
-                                                <SquareTerminal className="h-4 w-4 text-muted-foreground" />
-                                                <div className="text-sm font-medium">Operator Notes</div>
-                                            </div>
-                                            <p className="text-sm leading-6 text-muted-foreground">Use this lane to decide whether the PR should be inspected deeper, auto-remediated, or escalated to a human reviewer.</p>
-                                            <div className="rounded-xl border border-border bg-panel/70 p-3 text-sm text-muted-foreground">
-                                                Next best action: {selectedPr.latest_outcome === 'changes_requested' ? 'Run auto-fix and re-review.' : 'Open GitHub context and validate merge readiness.'}
-                                            </div>
-                                        </div>
-                                    </Card>
+                                <div className="flex items-center gap-2">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                        disabled={currentPage === 1}
+                                    >
+                                        Previous
+                                    </Button>
+                                    <span className="text-sm text-muted-foreground px-2">
+                                        Page {currentPage} of {totalPages}
+                                    </span>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                        disabled={currentPage === totalPages}
+                                    >
+                                        Next
+                                    </Button>
                                 </div>
-                                <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_18rem]">
-                                    <div className="grid gap-3">
-                                        <h4 className="text-lg font-semibold">Execution Timeline</h4>
-                                        {reviewTimeline.length ? reviewTimeline.map((item) => (
-                                            <Card key={item.id} className="p-4">
-                                                <div className="flex flex-wrap items-center justify-between gap-3">
-                                                    <div className="flex items-center gap-3">
-                                                        <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-panel text-muted-foreground">
-                                                            <Activity className="h-4 w-4" />
-                                                        </span>
-                                                        <div>
-                                                            <div className="font-medium">{item.title}</div>
-                                                            <div className="text-sm text-muted-foreground">{item.detail}</div>
-                                                        </div>
-                                                    </div>
-                                                    <Badge variant={toneForStatus(item.tone)}>{item.tone}</Badge>
-                                                </div>
-                                            </Card>
-                                        )) : <EmptyState message="No execution timeline recorded." />}
-                                    </div>
-                                    <Card className="p-4">
-                                        <div className="grid gap-4">
-                                            <div>
-                                                <div className="eyebrow">Signal Summary</div>
-                                                <h4 className="mt-2 text-lg font-semibold">Operator Readout</h4>
-                                            </div>
-                                            <div className="grid gap-3">
-                                                <div className="rounded-xl border border-border bg-panel/70 p-3">
-                                                    <div className="text-sm font-medium">Comments</div>
-                                                    <div className="mt-1 text-2xl font-black">{prDetail?.comments?.length ?? 0}</div>
-                                                </div>
-                                                <div className="rounded-xl border border-border bg-panel/70 p-3">
-                                                    <div className="text-sm font-medium">Auto-fix Attempts</div>
-                                                    <div className="mt-1 text-2xl font-black">{prDetail?.autoFixAttempts?.length ?? 0}</div>
-                                                </div>
-                                                <div className="rounded-xl border border-border bg-panel/70 p-3">
-                                                    <div className="text-sm font-medium">Test Runs</div>
-                                                    <div className="mt-1 text-2xl font-black">{prDetail?.testRuns?.length ?? 0}</div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </Card>
-                                </div>
-                                {[
-                                    ['Review History', prDetail?.reviews ?? [], (item) => item.id ?? `${item.executor_type}-${item.started_at}`, (item) => (
-                                        <>
-                                            <div className="flex flex-wrap items-center gap-3">
-                                                <strong>{item.executor_type}</strong>
-                                                <Badge variant={toneForStatus(item.outcome ?? item.status)}>{item.outcome ?? item.status}</Badge>
-                                            </div>
-                                            <div className="text-sm text-muted-foreground">Duration {formatDuration(item.duration_seconds)} · {formatRelativeTime(item.completed_at ?? item.started_at)}</div>
-                                        </>
-                                    )],
-                                    ['Review Comments', prDetail?.comments ?? [], (item, index) => item.id ?? `${item.issue_type}-${index}`, (item) => (
-                                        <>
-                                            <div className="flex flex-wrap items-center gap-3">
-                                                <strong>{item.issue_type}</strong>
-                                                <Badge variant={toneForStatus(item.severity)}>{item.severity}</Badge>
-                                            </div>
-                                            <div className="text-sm leading-6 text-muted-foreground">{item.message}</div>
-                                            <div className="text-sm text-muted-foreground">{item.file_path}{item.line_number ? `:${item.line_number}` : ''} · {item.executor_type}</div>
-                                        </>
-                                    )],
-                                    ['Auto-fix Attempts', prDetail?.autoFixAttempts ?? [], (item) => item.id ?? `${item.attempt_number}-${item.started_at}`, (item) => (
-                                        <>
-                                            <div className="flex flex-wrap items-center gap-3">
-                                                <strong>Attempt {item.attempt_number}</strong>
-                                                <Badge variant={toneForStatus(item.status)}>{item.status}</Badge>
-                                            </div>
-                                            <div className="text-sm text-muted-foreground">{(item.issues_targeted ?? []).length} issues · {formatRelativeTime(item.started_at)}</div>
-                                        </>
-                                    )]
-                                ].map(([title, items, keyResolver, renderItem]) => (
-                                    <div key={title} className="grid gap-3">
-                                        <h4 className="text-lg font-semibold">{title}</h4>
-                                        {items.length ? items.map((item, index) => (
-                                            <Card key={keyResolver(item, index)} className="p-4">
-                                                <div className="grid gap-3">{renderItem(item)}</div>
-                                            </Card>
-                                        )) : <EmptyState message={`No ${title.toLowerCase()} recorded.`} />}
-                                    </div>
-                                ))}
                             </div>
-                        ) : <EmptyState message="Select a PR to inspect details." />}
-                    </Section>
-                </div>
+                        )}
+                    </div>
+                ) : (
+                    <div className="grid gap-6 md:grid-cols-4">
+                        {['open', 'merged', 'closed', 'rejected'].map(status => (
+                            <div key={status} className="flex flex-col gap-4">
+                                <div className="flex items-center justify-between px-1">
+                                    <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">{status}</h3>
+                                    <Badge variant="secondary" className="rounded-full">{filteredPrs.filter(p => p.status === status).length}</Badge>
+                                </div>
+                                <div className="flex flex-col gap-3">
+                                    {filteredPrs.filter(p => p.status === status).map(pr => (
+                                        <Card key={pr.id} className="p-4 hover:ring-2 ring-primary/20 transition-all cursor-pointer" onClick={() => setSelectedPrId(pr.id)}>
+                                            <div className="flex flex-col gap-3">
+                                                <div className="text-sm font-semibold leading-tight">{pr.title}</div>
+                                                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                                    <span>#{pr.number}</span>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <div className="h-4 w-4 rounded-full bg-muted flex items-center justify-center text-[8px] font-bold">
+                                                            {pr.author?.charAt(0).toUpperCase()}
+                                                        </div>
+                                                        <span>{pr.author}</span>
+                                                    </div>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <Badge variant={toneForStatus(pr.latest_outcome ?? 'pending')} className="text-[10px] h-5 px-1.5">
+                                                        {pr.latest_outcome ?? 'pending'}
+                                                    </Badge>
+                                                    {pr.risk_score > 70 && <Badge variant="danger" className="text-[10px] h-5 px-1.5">High Risk</Badge>}
+                                                </div>
+                                            </div>
+                                        </Card>
+                                    ))}
+                                    {filteredPrs.filter(p => p.status === status).length === 0 && (
+                                        <div className="rounded-lg border border-dashed p-8 text-center text-xs text-muted-foreground">
+                                            Empty
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
             </div>
         );
     }

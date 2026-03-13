@@ -52,6 +52,8 @@ export const api = {
         if (filters.repositoryId) params.append('repositoryId', filters.repositoryId);
         if (filters.authorId) params.append('authorId', filters.authorId);
         if (filters.search) params.append('search', filters.search);
+        if (filters.page) params.append('page', filters.page);
+        if (filters.limit) params.append('limit', filters.limit);
 
         return apiCall(`/prs?${params.toString()}`);
     },

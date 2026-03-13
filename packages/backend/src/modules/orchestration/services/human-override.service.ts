@@ -1,8 +1,8 @@
-import { Injectable, Logger, Optional } from '@nestjs/common';
+import { Injectable, Logger, Optional, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { OverrideInboxItem } from '../../../database/entities/override-inbox-item.entity.js';
-import { MissionControlService } from './mission-control.service.js';
+import type { MissionControlService } from './mission-control.service.js';
 import { OrchestrationGateway } from '../orchestration.gateway.js';
 import { AuditService } from './audit.service.js';
 import { v4 as uuidv4 } from 'uuid';
@@ -15,6 +15,7 @@ export class HumanOverrideService {
     @InjectRepository(OverrideInboxItem)
     private readonly inboxRepository: Repository<OverrideInboxItem>,
     @Optional()
+    @Inject(forwardRef(() => (import('./mission-control.service.js')).then(m => m.MissionControlService)))
     private readonly missionControl: MissionControlService,
     @Optional()
     private readonly gateway: OrchestrationGateway,

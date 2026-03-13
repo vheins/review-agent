@@ -1,4 +1,4 @@
-import { Entity, PrimaryColumn, Column, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, PrimaryColumn, Column, ManyToOne, JoinColumn, type Relation } from 'typeorm';
 import { OrchestrationSet } from './orchestration-set.entity.js';
 import { PullRequest } from './pull-request.entity.js';
 
@@ -15,9 +15,9 @@ export class OrchestrationSetMember {
 
   @ManyToOne(() => OrchestrationSet, set => set.members)
   @JoinColumn({ name: 'set_id' })
-  set: OrchestrationSet;
+  set: Relation<OrchestrationSet>;
 
   @ManyToOne(() => PullRequest)
   @JoinColumn({ name: 'pr_id' })
-  pullRequest: PullRequest;
+  pullRequest: Relation<PullRequest>;
 }

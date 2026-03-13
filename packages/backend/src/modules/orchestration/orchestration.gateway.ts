@@ -1,18 +1,14 @@
 import {
   WebSocketGateway,
   WebSocketServer,
-  SubscribeMessage,
   OnGatewayConnection,
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
-import { Server, Socket } from 'socket.io';
+import type { Server } from 'ws';
 import { Logger } from '@nestjs/common';
 
 @WebSocketGateway({
-  cors: {
-    origin: '*',
-  },
-  namespace: 'orchestration',
+  path: '/orchestration',
 })
 export class OrchestrationGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private readonly logger = new Logger(OrchestrationGateway.name);
@@ -20,39 +16,50 @@ export class OrchestrationGateway implements OnGatewayConnection, OnGatewayDisco
   @WebSocketServer()
   server: Server;
 
-  handleConnection(client: Socket) {
-    this.logger.log(`Client connected to orchestration: ${client.id}`);
+  handleConnection(client: any) {
+    this.logger.log(`Client connected to orchestration`);
   }
 
-  handleDisconnect(client: Socket) {
-    this.logger.log(`Client disconnected from orchestration: ${client.id}`);
+  handleDisconnect(client: any) {
+    this.logger.log(`Client disconnected from orchestration`);
+  }
+
+  private broadcast(event: string, payload: any) {
+    if (!this.server || !this.server.clients) return;
+    
+    const message = JSON.stringify({ event, data: payload });
+    this.server.clients.forEach(client => {
+      if (client.readyState === 1) { // 1 = OPEN
+        client.send(message);
+      }
+    });
   }
 
   /**
    * Broadcast mission session update
    */
   broadcastMissionUpdate(session: any) {
-    this.server.emit('mission_update', session);
+    this.broadcast('mission_update', session);
   }
 
   /**
    * Broadcast mission ledger entry
    */
   broadcastLedgerEntry(entry: any) {
-    this.server.emit('ledger_entry', entry);
+    this.broadcast('ledger_entry', entry);
   }
 
   /**
    * Broadcast queue update
    */
   broadcastQueueUpdate(queue: any) {
-    this.server.emit('queue_update', queue);
+    this.broadcast('queue_update', queue);
   }
 
   /**
    * Broadcast inbox update
    */
   broadcastInboxUpdate(item: any) {
-    this.server.emit('inbox_update', item);
+    this.broadcast('inbox_update', item);
   }
 }

@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { DataExporterService } from '../exporter/data-exporter.service.js';
 import { AppConfigService } from '../../config/app-config.service.js';
-import * as fs from 'fs-extra';
+import fs from 'fs-extra';
 import * as path from 'path';
 
 @Injectable()

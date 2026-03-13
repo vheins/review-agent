@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as path from 'path';
-import * as fs from 'fs-extra';
+import fs from 'fs-extra';
 import { ConfigService } from '@nestjs/config';
 import { AppConfigService } from '../../config/app-config.service.js';
 import { GithubApiService } from './services/github-api.service.js';
@@ -78,11 +78,13 @@ export class GitHubClientService {
         if (appConfig.prScope.includes('assigned')) filters.push('assignee:@me');
         if (appConfig.prScope.includes('review-requested')) filters.push('review-requested:@me');
 
+        let prs: PullRequest[] = [];
+        
         if (filters.length > 0) {
-          const query = `is:pr (${filters.join(' OR ')})`;
+          const query = `is:pr is:open (${filters.join(' OR ')})`;
           const result = await this.api.searchPRs(query);
           
-          const prs: PullRequest[] = result.items.map(item => ({
+          prs = result.items.map(item => ({
             number: item.number,
             title: item.title,
             repository: {
@@ -95,9 +97,25 @@ export class GitHubClientService {
               login: item.user?.login || 'unknown'
             }
           }));
-
-          return this.processPRs(prs);
+        } else {
+          // If no specific scope, fetch all open PRs mention user
+          const result = await this.api.searchPRs('is:pr is:open mentions:@me');
+          prs = result.items.map(item => ({
+            number: item.number,
+            title: item.title,
+            repository: {
+              nameWithOwner: item.repository_url.split('repos/')[1]
+            },
+            url: item.html_url,
+            updatedAt: item.updated_at,
+            state: item.state,
+            author: {
+              login: item.user?.login || 'unknown'
+            }
+          }));
         }
+
+        return this.processPRs(prs);
       } catch (apiError) {
         this.logger.warn(`GitHub API fetch failed, falling back to CLI: ${apiError.message}`);
       }
@@ -117,6 +135,12 @@ export class GitHubClientService {
       allPRs.push(...items);
     }
 
+    // If no specific scope in CLI, try mentions
+    if (allPRs.length === 0) {
+        const items = await this.cli.searchPRs('--mentions=@me');
+        allPRs.push(...items);
+    }
+
     return this.processPRs(allPRs);
   }
 
@@ -129,20 +153,24 @@ export class GitHubClientService {
     if (token) {
       try {
         this.logger.log('► Fetching issues via GitHub API...');
-        const result = await this.api.searchIssues('is:issue+is:open+mentions:@me');
-        return result.items.map(item => ({
-          number: item.number,
-          title: item.title,
-          repository: {
-            nameWithOwner: item.repository_url.split('repos/')[1]
-          },
-          url: item.html_url,
-          updatedAt: item.updated_at,
-          state: item.state,
-          author: {
-            login: item.user?.login || 'unknown'
-          }
-        }));
+        const result = await this.api.searchIssues('is:issue is:open mentions:@me');
+        return result.items.map(item => {
+          const repoUrl = item.repository_url;
+          const repoPath = repoUrl.split('/repos/')[1];
+          return {
+            number: item.number,
+            title: item.title,
+            repository: {
+              nameWithOwner: repoPath
+            },
+            url: item.html_url,
+            updatedAt: item.updated_at,
+            state: item.state,
+            author: {
+              login: item.user?.login || 'unknown'
+            }
+          };
+        });
       } catch (apiError) {
         this.logger.warn(`GitHub API issue fetch failed, falling back to CLI: ${apiError.message}`);
       }
@@ -159,6 +187,7 @@ export class GitHubClientService {
     const uniquePRs = Array.from(new Map(prs.map(pr => [pr.url, pr])).values());
     
     const filteredPRs = uniquePRs.filter(pr => {
+      if (!pr.repository?.nameWithOwner) return false;
       const owner = pr.repository.nameWithOwner.split('/')[0];
       return !appConfig.excludeRepoOwners.includes(owner);
     });
@@ -167,6 +196,7 @@ export class GitHubClientService {
 
     for (const pr of filteredPRs) {
       if (pr.state !== 'OPEN' && pr.state !== 'open') continue;
+      if (pr.headRefName && pr.baseRefName) continue; // Already have details
       
       try {
         const token = this.configService.get<string>('GITHUB_TOKEN');
@@ -175,7 +205,7 @@ export class GitHubClientService {
           pr.headRefName = detail.head.ref;
           pr.baseRefName = detail.base.ref;
         } else {
-          throw new Error('No token');
+          throw new Error('No GITHUB_TOKEN configured for detail enrichment');
         }
       } catch (e) {
         try {
@@ -183,7 +213,7 @@ export class GitHubClientService {
           pr.headRefName = detail.headRefName;
           pr.baseRefName = detail.baseRefName;
         } catch (err) {
-          this.logger.warn(`Failed to fetch details for PR ${pr.repository.nameWithOwner}#${pr.number}`);
+          this.logger.warn(`Failed to fetch details for PR ${pr.repository.nameWithOwner}#${pr.number}: ${err.message}`);
         }
       }
     }

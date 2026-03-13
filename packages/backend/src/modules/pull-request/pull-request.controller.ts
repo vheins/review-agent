@@ -7,9 +7,14 @@ export class PullRequestController {
   constructor(private readonly prService: PullRequestService) {}
 
   @Get()
-  async list() {
-    const prs = await this.prService.findAll();
-    return { prs };
+  async list(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const pageNum = page ? parseInt(page, 10) : 1;
+    const limitNum = limit ? parseInt(limit, 10) : 10;
+    
+    return this.prService.findAll(pageNum, limitNum);
   }
 
   @Get('scan')

@@ -1,4 +1,4 @@
-import { Entity, Column, PrimaryColumn, CreateDateColumn, OneToMany } from 'typeorm';
+import { Entity, Column, PrimaryColumn, CreateDateColumn, OneToMany, type Relation } from 'typeorm';
 import { OrchestrationSetMember } from './orchestration-set-member.entity.js';
 
 @Entity('orchestration_sets')
@@ -22,5 +22,5 @@ export class OrchestrationSet {
   completedAt: Date;
 
   @OneToMany(() => OrchestrationSetMember, member => member.set)
-  members: OrchestrationSetMember[];
+  members: Relation<OrchestrationSetMember>[];
 }

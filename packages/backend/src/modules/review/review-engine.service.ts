@@ -17,7 +17,7 @@ import { AutoFixService } from './services/auto-fix.service.js';
 import { AuditLoggerService } from '../../common/audit/audit-logger.service.js';
 import { GamificationService } from '../team/services/gamification.service.js';
 import { MetricsService } from '../metrics/metrics.service.js';
-import * as fs from 'fs-extra';
+import fs from 'fs-extra';
 import * as path from 'path';
 
 /**
