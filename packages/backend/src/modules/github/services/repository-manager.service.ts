@@ -19,7 +19,8 @@ export class RepositoryManagerService {
   ) {}
 
   async syncRepositories(): Promise<Repository[]> {
-    this.logger.log('Syncing repositories from open PRs...');
+    this.logger.log('[Manager] Syncing repositories from open PRs');
+    const start = Date.now();
     const prs = await this.github.fetchOpenPRs();
     
     const syncedRepos: Repository[] = [];
@@ -54,15 +55,17 @@ export class RepositoryManagerService {
       seen.add(fullName);
     }
 
-    this.logger.log(`Synced ${syncedRepos.length} repositories`);
+    this.logger.log(`[Manager] Synced ${syncedRepos.length} repositories in ${Date.now() - start}ms`);
     return syncedRepos;
   }
 
   async getRepository(id: number): Promise<Repository | null> {
+    this.logger.debug(`[Manager] Getting repository by ID: ${id}`);
     return this.repoRepository.findOne({ where: { id } });
   }
 
   async getAllRepositories(): Promise<Repository[]> {
+    this.logger.debug('[Manager] Getting all repositories');
     return this.repoRepository.find({ order: { fullName: 'ASC' } });
   }
 
@@ -70,6 +73,9 @@ export class RepositoryManagerService {
    * Prepare repository locally for review (clone/fetch and checkout)
    */
   async prepareRepository(repoName: string, headRef: string, baseRef: string): Promise<string> {
+    this.logger.log(`[Manager] Preparing local repository: ${repoName} (branch: ${headRef})`);
+    const start = Date.now();
+    
     const appConfig = this.config.getAppConfig();
     const workspaceDir = appConfig.workspaceDir;
     const repoDir = path.join(workspaceDir, repoName.replace('/', '-'));
@@ -77,23 +83,24 @@ export class RepositoryManagerService {
     await fs.ensureDir(workspaceDir);
 
     if (await fs.pathExists(repoDir)) {
-      this.logger.log(`Updating existing repository: ${repoDir}`);
+      this.logger.debug(`[Manager] Updating existing repository at ${repoDir}`);
       await this.github.execaVerbose('git', ['fetch', 'origin'], { cwd: repoDir });
     } else {
-      this.logger.log(`Cloning repository into: ${repoDir}`);
+      this.logger.log(`[Manager] Cloning repository ${repoName} into ${repoDir}`);
       await this.github.execaVerbose('gh', ['repo', 'clone', repoName, repoDir, '--', '--depth', '1']);
     }
 
-    this.logger.log(`Checking out PR branch: ${headRef}`);
+    this.logger.debug(`[Manager] Checking out branch: ${headRef}`);
     try {
       await this.github.execaVerbose('git', ['checkout', headRef], { cwd: repoDir });
       await this.github.execaVerbose('git', ['pull', 'origin', headRef], { cwd: repoDir, allowFail: true });
     } catch (e) {
-      // Fallback for cases where branch might not be local yet
+      this.logger.warn(`[Manager] Checkout failed, trying fetch fallback: ${e.message}`);
       await this.github.execaVerbose('git', ['fetch', 'origin', `${headRef}:${headRef}`], { cwd: repoDir });
       await this.github.execaVerbose('git', ['checkout', headRef], { cwd: repoDir });
     }
 
+    this.logger.log(`[Manager] Repository ready in ${Date.now() - start}ms`);
     return repoDir;
   }
 }

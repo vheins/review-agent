@@ -129,7 +129,8 @@ export class PullRequestService {
    * Scan GitHub for new pull requests and update database with Lead Insights
    */
   async scanAndSync(): Promise<GitHubPR[]> {
-    this.logger.log('Starting scanAndSync for all configured PRs...');
+    this.logger.log('Starting high-speed bulk scanAndSync...');
+    const start = Date.now();
     const prs = await this.github.fetchOpenPRs();
     
     for (const pr of prs) {
@@ -143,20 +144,24 @@ export class PullRequestService {
         }
         
         if (!prEntity) {
-          // Fallback to number and repository if ID lookup failed or wasn't possible
           prEntity = await this.prRepository.findOne({
             where: { number: pr.number, repository: pr.repository.nameWithOwner }
           });
         }
 
         const isNew = !prEntity;
-        
+        const hasChanged = !isNew && new Date(pr.updatedAt).getTime() > prEntity.updatedAt.getTime();
+
+        if (!isNew && !hasChanged) {
+          // Skip entirely if no update detected from bulk metadata
+          continue;
+        }
+
         if (isNew) {
-          this.logger.log(`New PR detected: ${pr.repository.nameWithOwner}#${pr.number}. Saving to database...`);
           prEntity = new PullRequestEntity();
         }
 
-        // Map all fields from GitHub PR to Entity
+        // Map ONLY fields available in bulk CLI search result
         prEntity.id = pr.id;
         prEntity.github_id = pr.github_id;
         prEntity.number = pr.number;
@@ -172,39 +177,21 @@ export class PullRequestService {
         prEntity.active_lock_reason = pr.active_lock_reason || null;
         prEntity.isDraft = pr.draft;
         prEntity.url = pr.url;
-        prEntity.diff_url = pr.diff_url || null;
-        prEntity.patch_url = pr.patch_url || null;
         
-        prEntity.branch = pr.headRefName || 'unknown';
-        prEntity.head_sha = pr.headSha || '';
-        prEntity.baseBranch = pr.baseRefName || 'unknown';
-        prEntity.base_sha = pr.baseSha || '';
-        prEntity.merge_commit_sha = pr.merge_commit_sha || null;
-        
-        prEntity.merged = pr.merged || false;
-        prEntity.mergeable = pr.mergeable ?? null;
-        prEntity.mergeable_state = pr.mergeable_state || null;
-        prEntity.merged_by = pr.mergedBy || null;
+        // Fields NOT available in bulk search results get defaults
+        // These will be enriched on-demand during single-PR fetch
+        prEntity.branch = pr.headRefName || prEntity.branch || 'unknown';
+        prEntity.baseBranch = pr.baseRefName || prEntity.baseBranch || 'unknown';
+        prEntity.head_sha = pr.headSha || prEntity.head_sha || '';
+        prEntity.base_sha = pr.baseSha || prEntity.base_sha || '';
         
         prEntity.createdAt = new Date(pr.createdAt);
         prEntity.updatedAt = new Date(pr.updatedAt);
-        prEntity.closed_at = pr.closedAt ? new Date(pr.closedAt) : null;
-        prEntity.merged_at = pr.mergedAt ? new Date(pr.mergedAt) : null;
+        prEntity.closed_at = pr.closedAt ? new Date(pr.closedAt) : (prEntity.closed_at || null);
+        prEntity.merged_at = pr.mergedAt ? new Date(pr.mergedAt) : (prEntity.merged_at || null);
         
         prEntity.labels = pr.labels;
-        prEntity.requested_reviewers = pr.requested_reviewers || [];
-        prEntity.milestone = pr.milestone || null;
-        prEntity.auto_merge = pr.auto_merge || null;
         
-        if (pr.stats) {
-          prEntity.commits_count = pr.stats.commits;
-          prEntity.additions = pr.stats.additions;
-          prEntity.deletions = pr.stats.deletions;
-          prEntity.changed_files = pr.stats.changed_files;
-          prEntity.comments_count = pr.stats.comments;
-          prEntity.review_comments_count = pr.stats.review_comments;
-        }
-
         if (isNew) {
           prEntity.lead_summary = '';
           prEntity.risk_score = 0;
@@ -214,14 +201,12 @@ export class PullRequestService {
         }
         
         await this.prRepository.save(prEntity);
-        if (isNew) {
-          this.logger.log(`Saved new PR: ${pr.repository.nameWithOwner}#${pr.number}`);
-        }
       } catch (e) {
-        this.logger.error(`Failed to sync PR #${pr.number}: ${e.message}`);
+        this.logger.error(`Failed to bulk sync PR #${pr.number}: ${e.message}`);
       }
     }
     
+    this.logger.log(`► Bulk scanAndSync completed in ${Date.now() - start}ms`);
     return prs;
   }
 

@@ -101,46 +101,53 @@ export class GitHubClientService {
   async fetchOpenPRs(): Promise<PullRequest[]> {
     const appConfig = this.config.getAppConfig();
     const token = this.configService.get<string>('GITHUB_TOKEN');
+    const username = this.configService.get<string>('GITHUB_USERNAME') || 'vheins';
+    const start = Date.now();
 
-    this.logger.log('► Syncing PRs using GitHub CLI (Fast search)...');
+    this.logger.log(`► Starting targeted bulk PR sync for ${username}...`);
     
     const allPRs: PullRequest[] = [];
     const scopeActions = [
-      { scope: 'authored',         flag: '--author=@me',           label: 'authored by @me' },
-      { scope: 'assigned',         flag: '--assignee=@me',         label: 'assigned to @me' },
-      { scope: 'review-requested', flag: '--review-requested=@me', label: 'review-requested @me' },
+      { scope: 'authored',         flag: `--author=${username}`,           label: `authored by ${username}` },
+      { scope: 'assigned',         flag: `--assignee=${username}`,         label: `assigned to ${username}` },
+      { scope: 'review-requested', flag: `--review-requested=${username}`, label: `review-requested ${username}` },
     ];
 
     try {
+      this.logger.debug('[CLI] Performing targeted search via gh search prs');
       for (const { scope, flag } of scopeActions) {
         if (!appConfig.prScope.includes(scope)) continue;
-        const items = await this.cli.searchPRs(flag);
+        
+        // Add archived:false to reduce noise from public projects
+        const items = await this.cli.searchPRs(`${flag} archived:false`);
         
         // Normalize CLI results
         const normalizedItems = items.map(item => ({
-          id: item.id, // CLI 'id' is already the node ID string
+          id: item.id,
           github_id: null,
           number: item.number,
           node_id: item.id,
           title: item.title,
           body: item.body || '',
           state: item.state,
-          locked: false,
+          locked: item.isLocked || false,
           draft: item.isDraft || false,
           repository: { nameWithOwner: item.repository?.nameWithOwner || item.repository },
           url: item.url,
           updatedAt: item.updatedAt,
           createdAt: item.createdAt || item.updatedAt,
+          closedAt: item.closedAt || null,
           author: { login: item.author?.login || item.author },
-          labels: [] 
+          labels: (item.labels || []).map(l => typeof l === 'string' ? l : l.name)
         }));
         
         allPRs.push(...(normalizedItems as any[] as PullRequest[]));
       }
 
-      // If no specific scope results, try broad involves
+      // If absolutely nothing found in specific scopes, only then try a targeted "involves"
       if (allPRs.length === 0) {
-          const items = await this.cli.searchPRs('--involves=@me');
+          this.logger.debug('[CLI] No specific scope matches, trying involves filter');
+          const items = await this.cli.searchPRs(`involves:${username} archived:false`);
           const normalizedItems = items.map(item => ({
             id: item.id,
             github_id: null,
@@ -149,44 +156,44 @@ export class GitHubClientService {
             title: item.title,
             body: item.body || '',
             state: item.state,
-            locked: false,
+            locked: item.isLocked || false,
             draft: item.isDraft || false,
             repository: { nameWithOwner: item.repository?.nameWithOwner || item.repository },
             url: item.url,
             updatedAt: item.updatedAt,
             createdAt: item.createdAt || item.updatedAt,
+            closedAt: item.closedAt || null,
             author: { login: item.author?.login || item.author },
-            labels: []
+            labels: (item.labels || []).map(l => typeof l === 'string' ? l : l.name)
           }));
           allPRs.push(...(normalizedItems as any[] as PullRequest[]));
       }
 
       if (allPRs.length > 0) {
+        this.logger.log(`► Targeted sync found ${allPRs.length} relevant PRs in ${Date.now() - start}ms`);
         return this.processPRs(allPRs);
       }
     } catch (cliError) {
-      this.logger.warn(`GitHub CLI search failed: ${cliError.message}`);
+      this.logger.warn(`[CLI] Targeted search failed: ${cliError.message}`);
     }
 
     if (token) {
       try {
-        this.logger.log('► Falling back to GitHub API for PR discovery...');
+        this.logger.log('► Falling back to REST API discovery (targeted)...');
         const filters = [];
-        if (appConfig.prScope.includes('authored')) filters.push('author:@me');
-        if (appConfig.prScope.includes('assigned')) filters.push('assignee:@me');
-        if (appConfig.prScope.includes('review-requested')) filters.push('review-requested:@me');
+        if (appConfig.prScope.includes('authored')) filters.push(`author:${username}`);
+        if (appConfig.prScope.includes('assigned')) filters.push(`assignee:${username}`);
+        if (appConfig.prScope.includes('review-requested')) filters.push(`review-requested:${username}`);
         
-        // If no specific filters, use a broad involves filter
-        const filterStr = filters.length > 0 ? `(${filters.join(' OR ')})` : 'involves:@me';
-        const query = `is:pr ${filterStr}`; // Get latest PRs
+        const filterStr = filters.length > 0 ? `(${filters.join(' OR ')})` : `involves:${username}`;
+        const query = `is:pr archived:false ${filterStr}`; 
         
         let prs: PullRequest[] = [];
         try {
           const result = await this.api.searchPRs(query);
-          
           prs = result.items.map(item => ({
-            id: item.node_id, // Map node_id to our string primary key
-            github_id: item.id, // Store numeric ID separately
+            id: item.node_id,
+            github_id: item.id,
             number: item.number,
             node_id: item.node_id,
             title: item.title,
@@ -194,22 +201,15 @@ export class GitHubClientService {
             state: item.state,
             locked: item.locked,
             draft: item.draft || false,
-            repository: {
-              nameWithOwner: item.repository_url.split('repos/')[1]
-            },
+            repository: { nameWithOwner: item.repository_url.split('repos/')[1] },
             url: item.html_url,
             updatedAt: item.updated_at,
             createdAt: item.created_at,
-            author: {
-              login: item.user?.login || 'unknown',
-              id: item.user?.id
-            },
+            author: { login: item.user?.login || 'unknown', id: item.user?.id },
             labels: (item.labels || []).map(l => typeof l === 'string' ? l : l.name)
           }));
         } catch (e) {
-          // If the complex query fails, try a simple one
-          this.logger.warn(`Complex PR search failed, trying simple involves query: ${e.message}`);
-          const simpleResult = await this.api.searchPRs('is:pr involves:@me');
+          const simpleResult = await this.api.searchPRs(`is:pr archived:false involves:${username}`);
           prs = simpleResult.items.map(item => ({
             id: item.node_id,
             github_id: item.id,
@@ -220,27 +220,22 @@ export class GitHubClientService {
             state: item.state,
             locked: item.locked,
             draft: item.draft || false,
-            repository: {
-              nameWithOwner: item.repository_url.split('repos/')[1]
-            },
+            repository: { nameWithOwner: item.repository_url.split('repos/')[1] },
             url: item.html_url,
             updatedAt: item.updated_at,
             createdAt: item.created_at,
-            author: {
-              login: item.user?.login || 'unknown',
-              id: item.user?.id
-            },
+            author: { login: item.user?.login || 'unknown', id: item.user?.id },
             labels: (item.labels || []).map(l => typeof l === 'string' ? l : l.name)
           }));
         }
-
+        this.logger.log(`► API discovery found ${prs.length} PRs in ${Date.now() - start}ms`);
         return this.processPRs(prs);
       } catch (apiError) {
-        this.logger.error(`GitHub API fetch failed: ${apiError.message}`);
-        this.logger.warn('Falling back to CLI for PR fetching...');
+        this.logger.error(`[API] Targeted discovery failed: ${apiError.message}`);
       }
     }
 
+    this.logger.warn(`► No relevant PRs found for ${username} after ${Date.now() - start}ms`);
     return [];
   }
 
@@ -248,11 +243,11 @@ export class GitHubClientService {
    * Fetch open issues
    */
   async fetchOpenIssues(): Promise<Issue[]> {
+    this.logger.log('► Syncing issues...');
     const token = this.configService.get<string>('GITHUB_TOKEN');
 
     if (token) {
       try {
-        this.logger.log('► Fetching issues via GitHub API...');
         const result = await this.api.searchIssues('is:issue is:open mentions:@me');
         return result.items.map(item => {
           const repoUrl = item.repository_url;
@@ -286,12 +281,14 @@ export class GitHubClientService {
   }
 
   /**
-   * Internal helper to deduplicate, filter and enrich PR data
+   * Internal helper to deduplicate and filter PR data
    */
   private async processPRs(prs: PullRequest[]): Promise<PullRequest[]> {
     const appConfig = this.config.getAppConfig();
     const uniquePRs = Array.from(new Map(prs.map(pr => [pr.url, pr])).values());
     
+    this.logger.log(`► Processing ${uniquePRs.length} unique PRs...`);
+
     const filteredPRs = uniquePRs.filter(pr => {
       if (!pr.repository?.nameWithOwner) return false;
       const owner = pr.repository.nameWithOwner.split('/')[0];
@@ -300,79 +297,87 @@ export class GitHubClientService {
 
     filteredPRs.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 
-    for (const pr of filteredPRs) {
-      if (pr.state !== 'OPEN' && pr.state !== 'open' && pr.state !== 'MERGED' && pr.state !== 'merged') continue;
-      
-      try {
-        const token = this.configService.get<string>('GITHUB_TOKEN');
-        if (token) {
-          const detail = await this.api.getPRDetail(pr.repository.nameWithOwner, pr.number);
-          
-          // Basic fields - Standardize mapping: id is node_id (string), github_id is id (numeric)
-          pr.id = detail.node_id;
-          pr.github_id = detail.id;
-          pr.node_id = detail.node_id;
-          pr.body = detail.body;
-          pr.locked = detail.locked;
-          pr.active_lock_reason = detail.active_lock_reason;
-          pr.draft = detail.draft;
-          pr.closedAt = detail.closed_at;
-          pr.mergedAt = detail.merged_at;
-          
-          // Refs
-          pr.headRefName = detail.head.ref;
-          pr.headSha = detail.head.sha;
-          pr.baseRefName = detail.base.ref;
-          pr.baseSha = detail.base.sha;
-          pr.merge_commit_sha = detail.merge_commit_sha;
-          
-          // Merge status
-          pr.merged = detail.merged;
-          pr.mergeable = detail.mergeable;
-          pr.mergeable_state = detail.mergeable_state;
-          pr.mergedBy = detail.merged_by?.login;
-          
-          // Metadata
-          pr.labels = (detail.labels || []).map(l => typeof l === 'string' ? l : l.name);
-          pr.requested_reviewers = (detail.requested_reviewers || []).map(r => r.login);
-          pr.milestone = detail.milestone?.title;
-          pr.auto_merge = detail.auto_merge;
-          
-          // Stats
-          pr.stats = {
-            commits: detail.commits,
-            additions: detail.additions,
-            deletions: detail.deletions,
-            changed_files: detail.changed_files,
-            comments: detail.comments,
-            review_comments: detail.review_comments
-          };
-        } else {
-          throw new Error('No GITHUB_TOKEN configured for detail enrichment');
+    return filteredPRs;
+  }
+
+  /**
+   * Get full details for a single Pull Request
+   */
+  async getPRDetail(repoName: string, prNumber: number): Promise<PullRequest> {
+    const token = this.configService.get<string>('GITHUB_TOKEN');
+    this.logger.debug(`[Sync] Getting deep PR details for ${repoName}#${prNumber}`);
+    
+    if (token) {
+      const detail = await this.api.getPRDetail(repoName, prNumber);
+      return {
+        id: detail.node_id,
+        github_id: detail.id,
+        number: detail.number,
+        node_id: detail.node_id,
+        title: detail.title,
+        body: detail.body,
+        state: detail.state,
+        locked: detail.locked,
+        active_lock_reason: detail.active_lock_reason,
+        draft: detail.draft,
+        repository: { nameWithOwner: repoName },
+        url: detail.html_url,
+        diff_url: detail.diff_url,
+        patch_url: detail.patch_url,
+        updatedAt: detail.updated_at,
+        createdAt: detail.created_at,
+        closedAt: detail.closed_at,
+        mergedAt: detail.merged_at,
+        headRefName: detail.head.ref,
+        headSha: detail.head.sha,
+        baseRefName: detail.base.ref,
+        baseSha: detail.base.sha,
+        merge_commit_sha: detail.merge_commit_sha,
+        merged: detail.merged,
+        mergeable: detail.mergeable,
+        mergeable_state: detail.mergeable_state,
+        mergedBy: detail.merged_by?.login,
+        labels: (detail.labels || []).map(l => typeof l === 'string' ? l : l.name),
+        requested_reviewers: (detail.requested_reviewers || []).map(r => r.login),
+        milestone: detail.milestone?.title,
+        auto_merge: detail.auto_merge,
+        author: { login: detail.user.login, id: detail.user.id },
+        stats: {
+          commits: detail.commits,
+          additions: detail.additions,
+          deletions: detail.deletions,
+          changed_files: detail.changed_files,
+          comments: detail.comments,
+          review_comments: detail.review_comments
         }
-      } catch (e) {
-        try {
-          const detail = await this.cli.getPRDetail(pr.repository.nameWithOwner, pr.number);
-          pr.id = detail.id; // CLI id is already the node ID string
-          pr.github_id = null;
-          pr.headRefName = detail.headRefName;
-          pr.baseRefName = detail.baseRefName;
-          pr.node_id = detail.id;
-          pr.draft = detail.isDraft || false;
-          pr.state = detail.state;
-        } catch (err) {
-          this.logger.warn(`Failed to fetch details for PR ${pr.repository.nameWithOwner}#${pr.number}: ${err.message}`);
-        }
-      }
+      };
     }
 
-    return filteredPRs;
+    const cliDetail = await this.cli.getPRDetail(repoName, prNumber);
+    return {
+      id: cliDetail.id, // CLI id is node_id string
+      github_id: null,
+      number: cliDetail.number,
+      node_id: cliDetail.id,
+      title: cliDetail.title,
+      body: cliDetail.body,
+      state: cliDetail.state,
+      locked: false,
+      draft: cliDetail.isDraft,
+      repository: { nameWithOwner: repoName },
+      url: cliDetail.url,
+      updatedAt: cliDetail.updatedAt,
+      createdAt: cliDetail.createdAt,
+      author: { login: cliDetail.author?.login || cliDetail.author },
+      labels: cliDetail.labels || []
+    } as PullRequest;
   }
 
   /**
    * List pull requests
    */
   async listPRs(repoName: string, params: any = {}): Promise<PullRequest[]> {
+    this.logger.log(`[Sync] Listing PRs for repository: ${repoName}`);
     const token = this.configService.get<string>('GITHUB_TOKEN');
     if (token) {
       try {
@@ -405,6 +410,7 @@ export class GitHubClientService {
    * Create a pull request
    */
   async createPR(repoName: string, data: { title: string; head: string; base: string; body?: string; draft?: boolean }): Promise<PullRequest> {
+    this.logger.log(`[Sync] Creating PR in ${repoName}`);
     const token = this.configService.get<string>('GITHUB_TOKEN');
     if (token) {
       const result = await this.api.createPR(repoName, data);
@@ -433,6 +439,7 @@ export class GitHubClientService {
    * Update a pull request
    */
   async updatePR(repoName: string, prNumber: number, data: any): Promise<PullRequest> {
+    this.logger.log(`[Sync] Updating PR ${repoName}#${prNumber}`);
     const token = this.configService.get<string>('GITHUB_TOKEN');
     if (token) {
       const result = await this.api.updatePR(repoName, prNumber, data);
@@ -461,17 +468,19 @@ export class GitHubClientService {
    * List PR commits
    */
   async listPRCommits(repoName: string, prNumber: number): Promise<any[]> {
+    this.logger.debug(`[Sync] Listing commits for PR ${repoName}#${prNumber}`);
     const token = this.configService.get<string>('GITHUB_TOKEN');
     if (token) {
       return this.api.listPRCommits(repoName, prNumber);
     }
-    return []; // CLI fallback for commits is complex
+    return []; 
   }
 
   /**
    * List PR files
    */
   async listPRFiles(repoName: string, prNumber: number): Promise<any[]> {
+    this.logger.debug(`[Sync] Listing files for PR ${repoName}#${prNumber}`);
     const token = this.configService.get<string>('GITHUB_TOKEN');
     if (token) {
       return this.api.listPRFiles(repoName, prNumber);
@@ -495,6 +504,7 @@ export class GitHubClientService {
    * Update PR branch
    */
   async updatePRBranch(repoName: string, prNumber: number, expectedHeadSha?: string): Promise<boolean> {
+    this.logger.log(`[Sync] Updating branch for PR ${repoName}#${prNumber}`);
     const token = this.configService.get<string>('GITHUB_TOKEN');
     if (token) {
       try {
@@ -514,6 +524,7 @@ export class GitHubClientService {
   }
 
   async listReviews(repoName: string, prNumber: number): Promise<any[]> {
+    this.logger.debug(`[Sync] Listing reviews for PR ${repoName}#${prNumber}`);
     const token = this.configService.get<string>('GITHUB_TOKEN');
     if (token) {
       try {
@@ -528,12 +539,12 @@ export class GitHubClientService {
   async getReview(repoName: string, prNumber: number, reviewId: number): Promise<any> {
     const token = this.configService.get<string>('GITHUB_TOKEN');
     if (token) return this.api.getReview(repoName, prNumber, reviewId);
-    // CLI single review get is not directly supported, fallback to list and find
     const reviews = await this.cli.listReviews(repoName, prNumber);
     return reviews.find(r => r.id === reviewId);
   }
 
   async updateReview(repoName: string, prNumber: number, reviewId: number, body: string): Promise<boolean> {
+    this.logger.log(`[Sync] Updating review ${reviewId} for PR ${repoName}#${prNumber}`);
     const token = this.configService.get<string>('GITHUB_TOKEN');
     if (token) {
       await this.api.updateReview(repoName, prNumber, reviewId, body);
@@ -543,6 +554,7 @@ export class GitHubClientService {
   }
 
   async deleteReview(repoName: string, prNumber: number, reviewId: number): Promise<boolean> {
+    this.logger.log(`[Sync] Deleting review ${reviewId} for PR ${repoName}#${prNumber}`);
     const token = this.configService.get<string>('GITHUB_TOKEN');
     if (token) {
       await this.api.deleteReview(repoName, prNumber, reviewId);
@@ -552,6 +564,7 @@ export class GitHubClientService {
   }
 
   async submitReview(repoName: string, prNumber: number, reviewId: number, event: string, body?: string): Promise<boolean> {
+    this.logger.log(`[Sync] Submitting review ${reviewId} for PR ${repoName}#${prNumber} as ${event}`);
     const token = this.configService.get<string>('GITHUB_TOKEN');
     if (token) {
       await this.api.submitReview(repoName, prNumber, reviewId, event, body);
@@ -561,6 +574,7 @@ export class GitHubClientService {
   }
 
   async dismissReview(repoName: string, prNumber: number, reviewId: number, message: string): Promise<boolean> {
+    this.logger.log(`[Sync] Dismissing review ${reviewId} for PR ${repoName}#${prNumber}`);
     const token = this.configService.get<string>('GITHUB_TOKEN');
     if (token) {
       try {
@@ -575,6 +589,7 @@ export class GitHubClientService {
   }
 
   async listReviewComments(repoName: string, prNumber: number): Promise<any[]> {
+    this.logger.debug(`[Sync] Listing review comments for PR ${repoName}#${prNumber}`);
     const token = this.configService.get<string>('GITHUB_TOKEN');
     if (token) {
       try {
@@ -587,6 +602,7 @@ export class GitHubClientService {
   }
 
   async createReviewComment(repoName: string, prNumber: number, data: any): Promise<any> {
+    this.logger.log(`[Sync] Creating review comment on PR ${repoName}#${prNumber}`);
     const token = this.configService.get<string>('GITHUB_TOKEN');
     if (token) return this.api.createReviewComment(repoName, prNumber, data);
     return null;
@@ -596,6 +612,7 @@ export class GitHubClientService {
    * Add a review comment to a Pull Request
    */
   async addReview(repoName: string, prNumber: number, body: string, event: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT' = 'COMMENT'): Promise<boolean> {
+    this.logger.log(`[Sync] Adding review to PR ${repoName}#${prNumber} (${event})`);
     const token = this.configService.get<string>('GITHUB_TOKEN');
     if (token) {
       try {
@@ -619,6 +636,7 @@ export class GitHubClientService {
    * Merge a Pull Request
    */
   async mergePR(repoName: string, prNumber: number, method: 'squash' | 'merge' | 'rebase' = 'squash'): Promise<boolean> {
+    this.logger.log(`[Sync] Merging PR ${repoName}#${prNumber} using ${method}`);
     const token = this.configService.get<string>('GITHUB_TOKEN');
     if (token) {
       try {
@@ -643,6 +661,7 @@ export class GitHubClientService {
    */
   async assignReviewers(repoName: string, prNumber: number, reviewers: string[] = []): Promise<boolean> {
     if (reviewers.length === 0) return true;
+    this.logger.log(`[Sync] Assigning reviewers to PR ${repoName}#${prNumber}: ${reviewers.join(', ')}`);
     const token = this.configService.get<string>('GITHUB_TOKEN');
     
     if (token) {
@@ -664,6 +683,7 @@ export class GitHubClientService {
   }
 
   async getPRChecks(repoName: string, prNumber: number): Promise<any[]> {
+    this.logger.debug(`[Sync] Fetching checks for PR ${repoName}#${prNumber}`);
     try {
       // GitHub API for checks is a bit complex (Check Runs API), 
       // CLI 'pr checks' is very convenient. API implementation can be added if needed.
@@ -675,6 +695,7 @@ export class GitHubClientService {
   }
 
   async getTestResults(repoName: string, prNumber: number): Promise<any> {
+    this.logger.debug(`[Sync] Fetching test results for PR ${repoName}#${prNumber}`);
     const checks = await this.getPRChecks(repoName, prNumber);
     return {
       total: checks.length,
@@ -686,6 +707,7 @@ export class GitHubClientService {
   }
 
   async getChangedFiles(repoDir: string, pr: PullRequest): Promise<{ path: string; content: string }[]> {
+    this.logger.debug(`[Sync] Getting changed files for PR ${pr.repository.nameWithOwner}#${pr.number}`);
     try {
       const { stdout } = await this.cli.execaVerbose('git', ['diff', '--name-only', `${pr.baseRefName}...${pr.headRefName}`], { cwd: repoDir });
       const filePaths = stdout.split('\n').filter(line => line.trim() !== '');
