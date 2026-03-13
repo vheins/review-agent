@@ -85,7 +85,7 @@ export class GithubCliService {
       'search', 'prs',
       flag,
       '--limit', '100',
-      '--json', 'number,title,repository,url,updatedAt,state,author',
+      '--json', 'id,number,title,repository,url,updatedAt,state,author,isDraft',
     ]);
     return JSON.parse(stdout || '[]');
   }
@@ -105,9 +105,20 @@ export class GithubCliService {
     const { stdout } = await this.execaVerbose('gh', [
       'pr', 'view', prNumber.toString(),
       '--repo', repoName,
-      '--json', 'headRefName,baseRefName',
+      '--json', 'id,number,title,body,state,url,author,labels,headRefName,headRefOid,baseRefName,isDraft,mergeable,mergeStateStatus,mergedAt,closedAt,createdAt',
     ]);
-    return JSON.parse(stdout || '{}');
+    const detail = JSON.parse(stdout || '{}');
+    
+    // Normalize to match API structure if needed by consumer
+    return {
+      ...detail,
+      head: { ref: detail.headRefName, sha: detail.headRefOid },
+      base: { ref: detail.baseRefName },
+      user: detail.author,
+      html_url: detail.url,
+      draft: detail.isDraft,
+      labels: (detail.labels || []).map(l => l.name)
+    };
   }
 
   async addReview(repoName: string, prNumber: number, body: string, event: string): Promise<void> {
@@ -125,6 +136,38 @@ export class GithubCliService {
       '--repo', repoName,
       `--${method}`,
       '--delete-branch'
+    ]);
+  }
+
+  async listReviews(repoName: string, prNumber: number): Promise<any[]> {
+    const { stdout } = await this.execaVerbose('gh', [
+      'api',
+      `/repos/${repoName}/pulls/${prNumber}/reviews`
+    ]);
+    return JSON.parse(stdout || '[]');
+  }
+
+  async dismissReview(repoName: string, prNumber: number, reviewId: number, message: string): Promise<void> {
+    await this.execaVerbose('gh', [
+      'api',
+      '-X', 'PUT',
+      `/repos/${repoName}/pulls/${prNumber}/reviews/${reviewId}/dismissals`,
+      '-f', `message=${message}`
+    ]);
+  }
+
+  async listReviewComments(repoName: string, prNumber: number): Promise<any[]> {
+    const { stdout } = await this.execaVerbose('gh', [
+      'api',
+      `/repos/${repoName}/pulls/${prNumber}/comments`
+    ]);
+    return JSON.parse(stdout || '[]');
+  }
+
+  async updateBranch(repoName: string, prNumber: number): Promise<void> {
+    await this.execaVerbose('gh', [
+      'pr', 'update-branch', prNumber.toString(),
+      '--repo', repoName
     ]);
   }
 

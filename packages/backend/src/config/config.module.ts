@@ -31,7 +31,11 @@ import { RepositoryConfig } from '../database/entities/repository-config.entity.
   imports: [
     NestConfigModule.forRoot({
       isGlobal: true, // Make ConfigService available globally
-      envFilePath: path.resolve(process.cwd(), '.env'),
+      envFilePath: [
+        path.resolve(process.cwd(), '.env'),
+        path.resolve(process.cwd(), '../../.env'),
+        path.resolve(process.cwd(), '../../../.env'),
+      ],
       ignoreEnvFile: process.env.NODE_ENV === 'production', // Don't load .env in production
       cache: true, // Cache environment variables for performance
       validationSchema, // Validate environment variables at startup

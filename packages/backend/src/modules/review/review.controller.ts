@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, Query, Body, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Post, Param, Query, Body, NotFoundException, ParseIntPipe } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { Review } from '../../database/entities/review.entity.js';
@@ -96,6 +96,46 @@ export class ReviewController {
   ) {
     await this.falsePositiveService.markFalsePositive(id, developerId, justification);
     return { status: 'marked', id };
+  }
+
+  @Get('github/:repo/:number')
+  async listGithubReviews(
+    @Param('repo') repo: string,
+    @Param('number', ParseIntPipe) number: number,
+  ) {
+    const repoName = repo.replace('-', '/');
+    return this.github.listReviews(repoName, number);
+  }
+
+  @Post('github/:repo/:number/:reviewId/submit')
+  async submitGithubReview(
+    @Param('repo') repo: string,
+    @Param('number', ParseIntPipe) number: number,
+    @Param('reviewId', ParseIntPipe) reviewId: number,
+    @Body() data: { event: string; body?: string }
+  ) {
+    const repoName = repo.replace('-', '/');
+    return this.github.submitReview(repoName, number, reviewId, data.event, data.body);
+  }
+
+  @Post('github/:repo/:number/:reviewId/dismiss')
+  async dismissGithubReview(
+    @Param('repo') repo: string,
+    @Param('number', ParseIntPipe) number: number,
+    @Param('reviewId', ParseIntPipe) reviewId: number,
+    @Body('message') message: string
+  ) {
+    const repoName = repo.replace('-', '/');
+    return this.github.dismissReview(repoName, number, reviewId, message);
+  }
+
+  @Get('github/:repo/:number/comments')
+  async listGithubReviewComments(
+    @Param('repo') repo: string,
+    @Param('number', ParseIntPipe) number: number,
+  ) {
+    const repoName = repo.replace('-', '/');
+    return this.github.listReviewComments(repoName, number);
   }
 
   @Get('rules/:repo')

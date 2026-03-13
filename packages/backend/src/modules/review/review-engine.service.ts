@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { GitHubClientService, PullRequest } from '../github/github.service.js';
+import { RepositoryManagerService } from '../github/services/repository-manager.service.js';
 import { AiExecutorService } from '../ai/ai-executor.service.js';
 import { AiFixGeneratorService } from '../ai/ai-fix-generator.service.js';
 import { ReviewGateway } from '../websocket/review.gateway.js';
@@ -29,6 +30,7 @@ export class ReviewEngineService {
 
   constructor(
     private readonly github: GitHubClientService,
+    private readonly repoManager: RepositoryManagerService,
     private readonly ai: AiExecutorService,
     private readonly aiFixGen: AiFixGeneratorService,
     private readonly autoFix: AutoFixService,
@@ -67,7 +69,11 @@ export class ReviewEngineService {
 
       // 1. Prepare repository
       this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 10, 'Preparing repository...');
-      const repoDir = await this.github.prepareRepository(pr);
+      const repoDir = await this.repoManager.prepareRepository(
+        pr.repository.nameWithOwner,
+        pr.headRefName || 'unknown',
+        pr.baseRefName || 'unknown'
+      );
       
       // 2. Get changed files and diff
       this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 20, 'Analyzing changed files...');

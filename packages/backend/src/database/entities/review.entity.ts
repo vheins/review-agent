@@ -29,6 +29,9 @@ export class Review {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @Column({ name: 'pr_id', type: 'varchar' })
+  prId: string;
+
   @Column({ name: 'pr_number', type: 'integer' })
   prNumber: number;
 
@@ -61,7 +64,7 @@ export class Review {
 
   // Relations - without JoinColumn to avoid FK constraints
   @ManyToOne(() => PullRequest, pr => pr.reviews, { createForeignKeyConstraints: false })
-  @JoinColumn({ name: 'pr_number', referencedColumnName: 'number' })
+  @JoinColumn({ name: 'pr_id', referencedColumnName: 'id' })
   pullRequest?: Relation<PullRequest>;
 
   @OneToMany(() => Comment, comment => comment.review)

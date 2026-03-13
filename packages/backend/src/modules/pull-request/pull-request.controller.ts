@@ -22,6 +22,13 @@ export class PullRequestController {
     return this.prService.scanAndSync();
   }
 
+  @Post()
+  async create(@Body() data: any) {
+    const { repository, ...prData } = data;
+    const repoName = sanitizeHtml(repository).replace('-', '/');
+    return this.prService.createPR(repoName, prData);
+  }
+
   @Get(':repo/:number')
   async findOne(
     @Param('repo') repo: string,
@@ -29,6 +36,49 @@ export class PullRequestController {
   ) {
     const repoName = sanitizeHtml(repo).replace('-', '/');
     return this.prService.findOne(repoName, number);
+  }
+
+  @Get('id/:id')
+  async findById(@Param('id') id: string) {
+    return this.prService.findOne(id);
+  }
+
+  @Post(':repo/:number')
+  async update(
+    @Param('repo') repo: string,
+    @Param('number', ParseIntPipe) number: number,
+    @Body() data: any
+  ) {
+    const repoName = sanitizeHtml(repo).replace('-', '/');
+    return this.prService.updatePR(repoName, number, data);
+  }
+
+  @Get(':repo/:number/commits')
+  async getCommits(
+    @Param('repo') repo: string,
+    @Param('number', ParseIntPipe) number: number,
+  ) {
+    const repoName = sanitizeHtml(repo).replace('-', '/');
+    return this.prService.listCommits(repoName, number);
+  }
+
+  @Get(':repo/:number/files')
+  async getFiles(
+    @Param('repo') repo: string,
+    @Param('number', ParseIntPipe) number: number,
+  ) {
+    const repoName = sanitizeHtml(repo).replace('-', '/');
+    return this.prService.listFiles(repoName, number);
+  }
+
+  @Post(':repo/:number/update-branch')
+  async updateBranch(
+    @Param('repo') repo: string,
+    @Param('number', ParseIntPipe) number: number,
+    @Body('expected_head_sha') expectedHeadSha?: string
+  ) {
+    const repoName = sanitizeHtml(repo).replace('-', '/');
+    return this.prService.updateBranch(repoName, number, expectedHeadSha);
   }
 
   @Post(':repo/:number/review')
