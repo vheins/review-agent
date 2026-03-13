@@ -129,9 +129,12 @@ export class PullRequestService {
    * Scan GitHub for new pull requests and update database with Lead Insights
    */
   async scanAndSync(): Promise<GitHubPR[]> {
-    this.logger.log('Starting high-speed bulk scanAndSync...');
-    const start = Date.now();
+    this.logger.log('Fetching PRs from GitHub...');
     const prs = await this.github.fetchOpenPRs();
+    this.logger.log(`Starting high-speed bulk scanAndSync for ${prs.length} discovered PRs...`);
+    const start = Date.now();
+    let savedCount = 0;
+    let skippedCount = 0;
     
     for (const pr of prs) {
       try {
@@ -151,14 +154,20 @@ export class PullRequestService {
 
         const isNew = !prEntity;
         const hasChanged = !isNew && new Date(pr.updatedAt).getTime() > prEntity.updatedAt.getTime();
+        
+        // Retroactive Enrichment: Force update if existing record is missing critical fields
+        const needsSchemaCatchup = !isNew && (!prEntity.body && pr.body);
 
-        if (!isNew && !hasChanged) {
-          // Skip entirely if no update detected from bulk metadata
+        if (!isNew && !hasChanged && !needsSchemaCatchup) {
+          skippedCount++;
           continue;
         }
 
         if (isNew) {
+          this.logger.debug(`[Sync] New PR detected: ${pr.repository.nameWithOwner}#${pr.number}`);
           prEntity = new PullRequestEntity();
+        } else {
+          this.logger.debug(`[Sync] ${needsSchemaCatchup ? 'Enriching' : 'Updating'} PR: ${pr.repository.nameWithOwner}#${pr.number}`);
         }
 
         // Map ONLY fields available in bulk CLI search result
@@ -201,12 +210,13 @@ export class PullRequestService {
         }
         
         await this.prRepository.save(prEntity);
+        savedCount++;
       } catch (e) {
         this.logger.error(`Failed to bulk sync PR #${pr.number}: ${e.message}`);
       }
     }
     
-    this.logger.log(`► Bulk scanAndSync completed in ${Date.now() - start}ms`);
+    this.logger.log(`► scanAndSync completed in ${Date.now() - start}ms. Saved: ${savedCount}, Skipped: ${skippedCount}`);
     return prs;
   }
 

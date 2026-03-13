@@ -6,7 +6,7 @@ import { Badge } from './ui/badge.jsx';
 import { Input } from './ui/input.jsx';
 import { Select } from './ui/select.jsx';
 import { MetricCard, EmptyState } from './common.tsx';
-import { formatRelativeTime, toneForStatus } from '../lib/formatters.js';
+import { formatRelativeTime, toneForStatus, variantForPRStatus } from '../lib/formatters.js';
 
 export function PRsTab({
     filteredPrs,
@@ -160,12 +160,12 @@ export function PRsTab({
                                     }}>
                                         <td className="px-4 py-4">
                                             <div className="flex flex-col gap-1">
-                                                <span className="font-semibold text-foreground line-clamp-1">[{pr.repository}] {pr.title}</span>
-                                                <span className="text-xs text-muted-foreground">#{pr.number} opened in {pr.branch}</span>
+                                                <span className="font-semibold text-foreground line-clamp-1">{pr.title}</span>
+                                                <span className="text-xs text-muted-foreground">#{pr.number} opened in {pr.repository}</span>
                                             </div>
                                         </td>
                                         <td className="px-4 py-4">
-                                            <Badge variant="outline" className="uppercase text-[10px] font-bold tracking-wider">
+                                            <Badge variant={variantForPRStatus(pr.status)} className="uppercase text-[10px] font-bold tracking-wider">
                                                 {pr.status}
                                             </Badge>
                                         </td>

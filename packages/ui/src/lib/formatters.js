@@ -21,7 +21,18 @@ export function toneForStatus(value) {
     if (['approved', 'success', 'passed', 'available', 'connected'].includes(String(value).toLowerCase())) return 'success';
     if (['critical', 'error', 'failed', 'blocking', 'disconnected'].includes(String(value).toLowerCase())) return 'danger';
     if (['warn', 'warning', 'queued', 'unavailable', 'changes_requested'].includes(String(value).toLowerCase())) return 'warn';
+    if (['info', 'pending', 'in_progress', 'running'].includes(String(value).toLowerCase())) return 'info';
     return 'default';
+}
+
+export function variantForPRStatus(status) {
+    switch (String(status).toLowerCase()) {
+        case 'open': return 'success';
+        case 'merged': return 'purple';
+        case 'closed': return 'default';
+        case 'rejected': return 'danger';
+        default: return 'default';
+    }
 }
 
 export function statusDotClass(running) {

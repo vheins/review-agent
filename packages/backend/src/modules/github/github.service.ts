@@ -108,23 +108,25 @@ export class GitHubClientService {
     
     const allPRs: PullRequest[] = [];
     const scopeActions = [
-      { scope: 'authored',         flag: `--author=${username}`,           label: `authored by ${username}` },
-      { scope: 'assigned',         flag: `--assignee=${username}`,         label: `assigned to ${username}` },
-      { scope: 'review-requested', flag: `--review-requested=${username}`, label: `review-requested ${username}` },
+      { scope: 'authored',         query: `author:${username}`,           label: `authored by ${username}` },
+      { scope: 'assigned',         query: `assignee:${username}`,         label: `assigned to ${username}` },
+      { scope: 'review-requested', query: `review-requested:${username}`, label: `review-requested ${username}` },
+      { scope: 'mentions',         query: `mentions:${username}`,         label: `mentions ${username}` },
     ];
 
     try {
-      this.logger.debug('[CLI] Performing targeted search via gh search prs');
-      for (const { scope, flag } of scopeActions) {
-        if (!appConfig.prScope.includes(scope)) continue;
+      this.logger.debug('[CLI] Performing targeted search for all states via gh search prs');
+      for (const { scope, query } of scopeActions) {
+        // If scope is not in config and it's not the default mentions fallback, skip
+        if (!appConfig.prScope.includes(scope) && scope !== 'mentions') continue;
         
-        // Add archived:false to reduce noise from public projects
-        const items = await this.cli.searchPRs(`${flag} archived:false`);
+        // Search all states, no archived filter to include historical data
+        const items = await this.cli.searchPRs(`${query}`);
         
         // Normalize CLI results
         const normalizedItems = items.map(item => ({
-          id: item.id,
-          github_id: null,
+          id: item.id, // CLI 'id' is already the node ID string
+          github_id: null, // Numeric ID not available in basic search
           number: item.number,
           node_id: item.id,
           title: item.title,
@@ -144,10 +146,10 @@ export class GitHubClientService {
         allPRs.push(...(normalizedItems as any[] as PullRequest[]));
       }
 
-      // If absolutely nothing found in specific scopes, only then try a targeted "involves"
+      // If absolutely nothing found in specific scopes, try targeted mentions/involves
       if (allPRs.length === 0) {
-          this.logger.debug('[CLI] No specific scope matches, trying involves filter');
-          const items = await this.cli.searchPRs(`involves:${username} archived:false`);
+          this.logger.debug('[CLI] No specific scope matches, trying involves filter (all states)');
+          const items = await this.cli.searchPRs(`mentions:${username} archived:false`);
           const normalizedItems = items.map(item => ({
             id: item.id,
             github_id: null,
@@ -288,13 +290,23 @@ export class GitHubClientService {
     const uniquePRs = Array.from(new Map(prs.map(pr => [pr.url, pr])).values());
     
     this.logger.log(`► Processing ${uniquePRs.length} unique PRs...`);
+    this.logger.debug(`[Sync] Filter criteria - Excluded owners: ${JSON.stringify(appConfig.excludeRepoOwners || [])}`);
 
     const filteredPRs = uniquePRs.filter(pr => {
-      if (!pr.repository?.nameWithOwner) return false;
+      if (!pr.repository?.nameWithOwner) {
+        this.logger.debug(`[Sync] Skipping PR #${pr.number}: missing repository nameWithOwner`);
+        return false;
+      }
       const owner = pr.repository.nameWithOwner.split('/')[0];
-      return !appConfig.excludeRepoOwners.includes(owner);
+      const isExcluded = (appConfig.excludeRepoOwners || []).includes(owner);
+      if (isExcluded) {
+        this.logger.debug(`[Sync] Filtering out PR #${pr.number}: owner "${owner}" is excluded`);
+        return false;
+      }
+      return true;
     });
 
+    this.logger.log(`► Found ${filteredPRs.length} relevant PRs after filtering by owner.`);
     filteredPRs.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 
     return filteredPRs;

@@ -15,38 +15,30 @@ export class GithubCliService {
     this.logger.log(`▶ ${label}`);
     const start = Date.now();
 
+    // Use execa's built-in buffering for data integrity
     const proc = execa(cmd, args, {
       ...opts,
-      stdout: 'pipe',
-      stderr: 'pipe',
+      all: true, // Combine stdout and stderr
       reject: false,
     });
 
-    const stdoutLines: string[] = [];
-    const stderrLines: string[] = [];
-
-    if (proc.stdout) {
+    // For verbose logging without corrupting the return value, 
+    // we pipe to a logger but return the raw buffer result.
+    if (proc.stdout && !opts.silent) {
+      let lineCount = 0;
       proc.stdout.on('data', (chunk) => {
+        if (lineCount > 100) return; // Limit console noise for huge outputs
         const lines = chunk.toString().split('\n');
         for (const line of lines) {
-          const cleaned = stripAnsi(line);
-          if (cleaned.trim()) {
+          const cleaned = stripAnsi(line).trim();
+          if (cleaned) {
             process.stdout.write(chalk.gray('  │ ') + cleaned + '\n');
-            stdoutLines.push(cleaned);
+            lineCount++;
           }
         }
-      });
-    }
-
-    if (proc.stderr) {
-      proc.stderr.on('data', (chunk) => {
-        const lines = chunk.toString().split('\n');
-        for (const line of lines) {
-          const cleaned = stripAnsi(line);
-          if (cleaned.trim()) {
-            process.stdout.write(chalk.yellow('  │ ') + cleaned + '\n');
-            stderrLines.push(cleaned);
-          }
+        if (lineCount === 100) {
+          process.stdout.write(chalk.gray('  │ ') + '... (output truncated in console for brevity)\n');
+          lineCount++;
         }
       });
     }
@@ -54,26 +46,19 @@ export class GithubCliService {
     const result = await proc;
     const duration = Date.now() - start;
 
-    let stdout = stdoutLines.join('\n');
-    if (!stdout && result.stdout) {
-      stdout = stripAnsi(result.stdout);
-    }
-
-    let stderr = stderrLines.join('\n');
-    if (!stderr && result.stderr) {
-      stderr = stripAnsi(result.stderr);
-    }
+    const stdout = stripAnsi(result.stdout || '');
+    const stderr = stripAnsi(result.stderr || '');
 
     if (result.exitCode !== 0) {
       if (!opts.allowFail) {
+        this.logger.error(`[CLI] ✖ ${cmd} failed in ${duration}ms with code ${result.exitCode}`);
         const err = new Error(stderr || `${cmd} failed with exit code ${result.exitCode}`) as any;
         err.exitCode = result.exitCode;
-        this.logger.error(`✖ ${cmd} failed in ${duration}ms with code ${result.exitCode}`);
         throw err;
       }
-      this.logger.warn(`✖ ${cmd} exited with code ${result.exitCode} (allowed) after ${duration}ms`);
+      this.logger.warn(`[CLI] ✖ ${cmd} exited with code ${result.exitCode} (allowed) after ${duration}ms`);
     } else {
-      this.logger.log(`✔ ${cmd} completed in ${duration}ms (exit 0)`);
+      this.logger.log(`[CLI] ✔ ${cmd} completed in ${duration}ms (exit 0)`);
     }
 
     return {
@@ -83,15 +68,24 @@ export class GithubCliService {
     };
   }
 
-  async searchPRs(flag: string): Promise<any[]> {
-    this.logger.log(`[CLI] Searching PRs with flag: ${flag}`);
+  async searchPRs(query: string): Promise<any[]> {
+    this.logger.log(`[CLI] Searching PRs: ${query}`);
+    // Split query by space to handle multiple qualifiers correctly in execa
+    const queryParts = query.split(' ').filter(part => part.trim() !== '');
+    
     const { stdout } = await this.execaVerbose('gh', [
       'search', 'prs',
-      flag,
-      '--limit', '100',
-      '--json', 'id,number,title,body,state,url,author,labels,createdAt,updatedAt,closedAt,isDraft,isLocked',
+      ...queryParts,
+      '--limit', '500',
+      '--json', 'id,number,title,body,state,url,author,labels,createdAt,updatedAt,closedAt,isDraft,isLocked,repository',
     ]);
-    return JSON.parse(stdout || '[]');
+    
+    try {
+      return JSON.parse(stdout || '[]');
+    } catch (e) {
+      this.logger.error(`[CLI] Failed to parse JSON response from search: ${e.message}`);
+      return [];
+    }
   }
 
   async searchIssues(): Promise<any[]> {
@@ -103,7 +97,12 @@ export class GithubCliService {
       '--limit', '100',
       '--json', 'number,title,repository,url,updatedAt,state,author',
     ]);
-    return JSON.parse(stdout || '[]');
+    try {
+      return JSON.parse(stdout || '[]');
+    } catch (e) {
+      this.logger.error(`[CLI] Failed to parse JSON response from issues search: ${e.message}`);
+      return [];
+    }
   }
 
   async getPRDetail(repoName: string, prNumber: number): Promise<any> {
@@ -113,7 +112,14 @@ export class GithubCliService {
       '--repo', repoName,
       '--json', 'id,number,title,body,state,url,author,labels,headRefName,headRefOid,baseRefName,isDraft,mergeable,mergeStateStatus,mergedAt,closedAt,createdAt',
     ]);
-    const detail = JSON.parse(stdout || '{}');
+    
+    let detail;
+    try {
+      detail = JSON.parse(stdout || '{}');
+    } catch (e) {
+      this.logger.error(`[CLI] Failed to parse JSON response from pr view: ${e.message}`);
+      throw e;
+    }
     
     // Normalize to match API structure if needed by consumer
     return {
@@ -153,7 +159,11 @@ export class GithubCliService {
       'api',
       `/repos/${repoName}/pulls/${prNumber}/reviews`
     ]);
-    return JSON.parse(stdout || '[]');
+    try {
+      return JSON.parse(stdout || '[]');
+    } catch (e) {
+      return [];
+    }
   }
 
   async dismissReview(repoName: string, prNumber: number, reviewId: number, message: string): Promise<void> {
@@ -172,7 +182,11 @@ export class GithubCliService {
       'api',
       `/repos/${repoName}/pulls/${prNumber}/comments`
     ]);
-    return JSON.parse(stdout || '[]');
+    try {
+      return JSON.parse(stdout || '[]');
+    } catch (e) {
+      return [];
+    }
   }
 
   async updateBranch(repoName: string, prNumber: number): Promise<void> {
@@ -190,7 +204,11 @@ export class GithubCliService {
       '--repo', repoName,
       '--json', 'name,status,conclusion,url'
     ]);
-    return JSON.parse(stdout || '[]');
+    try {
+      return JSON.parse(stdout || '[]');
+    } catch (e) {
+      return [];
+    }
   }
 
   async assignReviewers(repoName: string, prNumber: number, reviewers: string[]): Promise<void> {
@@ -205,6 +223,10 @@ export class GithubCliService {
   async getRateLimit(): Promise<any> {
     this.logger.debug('[CLI] Checking rate limits via API fallback');
     const { stdout } = await this.execaVerbose('gh', ['api', 'rate_limit']);
-    return JSON.parse(stdout || '{}');
+    try {
+      return JSON.parse(stdout || '{}');
+    } catch (e) {
+      return {};
+    }
   }
 }
