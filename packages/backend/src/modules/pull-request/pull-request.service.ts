@@ -24,15 +24,24 @@ export class PullRequestService {
   ) {}
 
   /**
-   * List all pull requests from database
+   * List all pull requests from database with optional filtering
    */
-  async findAll(page: number = 1, limit: number = 10) {
-    const [prs, total] = await this.prRepository.findAndCount({
-      order: { createdAt: 'DESC' },
-      relations: ['reviews'],
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+  async findAll(options: { page?: number, limit?: number, status?: string, repository?: string, author?: string, search?: string }) {
+    const { page = 1, limit = 10, status, repository, author, search } = options;
+    const queryBuilder = this.prRepository.createQueryBuilder('pr')
+      .leftJoinAndSelect('pr.reviews', 'reviews')
+      .orderBy('pr.updatedAt', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit);
+
+    if (status) queryBuilder.andWhere('pr.status = :status', { status });
+    if (repository) queryBuilder.andWhere('pr.repository = :repository', { repository });
+    if (author) queryBuilder.andWhere('pr.author = :author', { author });
+    if (search) {
+      queryBuilder.andWhere('(pr.title LIKE :search OR pr.repository LIKE :search OR pr.author LIKE :search OR pr.body LIKE :search)', { search: `%${search}%` });
+    }
+
+    const [prs, total] = await queryBuilder.getManyAndCount();
 
     return {
       data: prs,
@@ -42,6 +51,30 @@ export class PullRequestService {
         limit,
         totalPages: Math.max(1, Math.ceil(total / limit)),
       }
+    };
+  }
+
+  /**
+   * Get unique authors and repositories for filtering dropdowns
+   */
+  async getFilterOptions() {
+    const authorsResult = await this.prRepository.createQueryBuilder('pr')
+      .select('pr.author', 'author')
+      .distinct(true)
+      .where('pr.author IS NOT NULL')
+      .orderBy('pr.author', 'ASC')
+      .getRawMany();
+
+    const reposResult = await this.prRepository.createQueryBuilder('pr')
+      .select('pr.repository', 'repository')
+      .distinct(true)
+      .where('pr.repository IS NOT NULL')
+      .orderBy('pr.repository', 'ASC')
+      .getRawMany();
+
+    return {
+      authors: authorsResult.map(res => res.author),
+      repositories: reposResult.map(res => res.repository)
     };
   }
 

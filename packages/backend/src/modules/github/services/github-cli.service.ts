@@ -76,7 +76,7 @@ export class GithubCliService {
     const { stdout } = await this.execaVerbose('gh', [
       'search', 'prs',
       ...queryParts,
-      '--limit', '500',
+      '--limit', '100',
       '--json', 'id,number,title,body,state,url,author,labels,createdAt,updatedAt,closedAt,isDraft,isLocked,repository',
     ]);
     

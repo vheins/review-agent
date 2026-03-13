@@ -53,7 +53,7 @@ export function PRsTab({
                             onClick={() => setShowFilterModal(!showFilterModal)}
                         >
                             <ListFilter className="mr-2 h-4 w-4" />
-                            Filter
+                            Filter PR
                             {(prFilters.status || prFilters.repositoryId || prFilters.authorId || prFilters.search) && (
                                 <Badge variant="secondary" className="ml-2 h-4 px-1 py-0 text-[10px] rounded-sm">Active</Badge>
                             )}
@@ -64,7 +64,7 @@ export function PRsTab({
                                 className="absolute right-0 top-full z-[60] mt-2 w-[340px] md:w-[600px] rounded-xl border border-border bg-card shadow-xl p-4"
                             >
                                 <div className="mb-4 flex items-center justify-between pb-2 border-b">
-                                    <h3 className="font-semibold">Filter Queue</h3>
+                                    <h3 className="font-semibold">Filter PR</h3>
                                     <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => setPrFilters({ status: '', repositoryId: '', authorId: '', search: '' })}>
                                         Reset
                                     </Button>
@@ -84,7 +84,7 @@ export function PRsTab({
                                         <span className="text-sm font-medium text-muted-foreground">Repository</span>
                                         <Select value={prFilters.repositoryId} onChange={(event) => setPrFilters((current) => ({ ...current, repositoryId: event.target.value }))}>
                                             <option value="">All Repositories</option>
-                                            {repositories.map((repo) => <option key={repo.id} value={repo.id}>{repo.full_name}</option>)}
+                                            {repositories.map((repo) => <option key={repo} value={repo}>{repo}</option>)}
                                         </Select>
                                     </div>
                                     <div className="grid gap-2">

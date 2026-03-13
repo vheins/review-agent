@@ -65,6 +65,7 @@ export default function App() {
     const [snapshot, setSnapshot] = useState(null);
     const [prs, setPrs] = useState([]);
     const [prMeta, setPrMeta] = useState({ total: 0, page: 1, limit: 10, totalPages: 1 });
+    const [filterOptions, setFilterOptions] = useState({ authors: [], repositories: [] });
     const [selectedPrId, setSelectedPrId] = useState(null);
     const [viewMode, setViewMode] = useState<'table' | 'kanban'>('table');
     const [prDetail, setPrDetail] = useState(null);
@@ -274,6 +275,11 @@ export default function App() {
                 setRepositoryId(String(latestSnapshot.repositories[0].id));
                 await refreshRepositoryConfig(latestSnapshot.repositories[0].id);
             }
+            
+            const filtersResult = await api.getPRFilters();
+            if (filtersResult && filtersResult.success) {
+                setFilterOptions({ authors: filtersResult.authors || [], repositories: filtersResult.repositories || [] });
+            }
         })();
 
         window.electronAPI?.onLogOutput?.((data) => appendLog(data.type, data.message));
@@ -398,14 +404,13 @@ export default function App() {
     }, [runtimeConfig]);
 
     const repositories = snapshot?.repositories ?? [];
-    const authorOptions = useMemo(() => {
-        return Array.from(new Set(prs.map((pr) => pr.author).filter(Boolean))).sort();
-    }, [prs]);
+    const authorOptions = filterOptions.authors;
+    const repositoryOptions = filterOptions.repositories;
     
     const filteredPrs = useMemo(() => {
         const result = prs.filter((pr) => {
             if (prFilters.status && pr.status !== prFilters.status) return false;
-            if (prFilters.repositoryId && String(repositories.find((repo) => repo.full_name === pr.repository)?.id ?? '') !== prFilters.repositoryId) return false;
+            if (prFilters.repositoryId && pr.repository !== prFilters.repositoryId) return false;
             if (prFilters.authorId && pr.author !== prFilters.authorId) return false;
             if (deferredSearch) {
                 const haystack = `${pr.title} ${pr.repository} ${pr.author}`.toLowerCase();
@@ -741,7 +746,7 @@ export default function App() {
                                 showFilterModal={showFilterModal}
                                 setShowFilterModal={setShowFilterModal}
                                 filterMenuRef={filterMenuRef}
-                                repositories={repositories}
+                                repositories={repositoryOptions}
                                 authorOptions={authorOptions}
                                 viewMode={viewMode}
                                 setViewMode={setViewMode}

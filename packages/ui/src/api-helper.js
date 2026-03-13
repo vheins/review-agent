@@ -49,13 +49,17 @@ export const api = {
     listPRs: async (filters = {}) => {
         const params = new URLSearchParams();
         if (filters.status) params.append('status', filters.status);
-        if (filters.repositoryId) params.append('repositoryId', filters.repositoryId);
-        if (filters.authorId) params.append('authorId', filters.authorId);
+        if (filters.repositoryId) params.append('repository', filters.repositoryId);
+        if (filters.authorId) params.append('author', filters.authorId);
         if (filters.search) params.append('search', filters.search);
         if (filters.page) params.append('page', filters.page);
         if (filters.limit) params.append('limit', filters.limit);
 
         return apiCall(`/prs?${params.toString()}`);
+    },
+
+    getPRFilters: async () => {
+        return apiCall('/prs/filters');
     },
 
     getPRDetail: async (repo, number) => {
