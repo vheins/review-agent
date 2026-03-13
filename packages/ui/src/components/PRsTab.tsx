@@ -143,58 +143,112 @@ export function PRsTab({
             {viewMode === 'table' ? (
                 <div className="rounded-xl border bg-card text-card-foreground shadow">
                     <div className="scroll-slim overflow-auto">
-                        <table className="w-full text-left text-sm">
-                            <thead className="border-b bg-muted/50 text-muted-foreground">
-                                <tr>
-                                    <th className="px-4 py-3 font-medium">TITLE</th>
-                                    <th className="px-4 py-3 font-medium">STATUS</th>
-                                    <th className="px-4 py-3 font-medium">AUTHOR</th>
-                                    <th className="px-4 py-3 font-medium">LATEST OUTCOME</th>
-                                    <th className="px-4 py-3 font-medium">LAST UPDATED</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y">
-                                {filteredPrs.length ? filteredPrs.map((pr) => (
-                                    <tr key={pr.id} className="hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => {
-                                        setSelectedPrId(pr.id);
-                                    }}>
-                                        <td className="px-4 py-4">
-                                            <div className="flex flex-col gap-1">
-                                                <span className="font-semibold text-foreground line-clamp-1">{pr.title}</span>
-                                                <span className="text-xs text-muted-foreground">#{pr.number} opened in {pr.repository}</span>
+                        <ul className="divide-y">
+                            {filteredPrs.length ? filteredPrs.map((pr) => {
+                                const reviewers: string[] = pr.requested_reviewers ?? [];
+                                const commentCount = (pr.comments_count ?? 0) + (pr.review_comments_count ?? 0);
+                                const outcome = pr.latest_outcome;
+
+                                // Choose icon color based on status
+                                const iconColor =
+                                    pr.status === 'open' ? 'text-emerald-500' :
+                                    pr.status === 'merged' ? 'text-purple-500' :
+                                    'text-rose-400';
+
+                                // Subtitle: action verb
+                                const actionVerb =
+                                    pr.status === 'merged' ? 'merged' :
+                                    pr.status === 'closed' ? 'closed' :
+                                    'opened';
+
+                                const actionTime = formatRelativeTime(
+                                    pr.status === 'merged' ? (pr.mergedAt || pr.merged_at || pr.updatedAt || pr.updated_at || pr.createdAt || pr.created_at) :
+                                    pr.status === 'closed' ? (pr.closedAt || pr.closed_at || pr.updatedAt || pr.updated_at || pr.createdAt || pr.created_at) :
+                                    (pr.updatedAt || pr.updated_at || pr.createdAt || pr.created_at)
+                                );
+
+                                return (
+                                    <li
+                                        key={pr.id}
+                                        className="flex items-start gap-3 px-4 py-3 hover:bg-muted/50 transition-colors cursor-pointer"
+                                        onClick={() => setSelectedPrId(pr.id)}
+                                    >
+                                        {/* Status icon */}
+                                        <div className={`mt-0.5 shrink-0 ${iconColor}`}>
+                                            {pr.status === 'merged' ? (
+                                                <svg viewBox="0 0 16 16" className="h-4 w-4 fill-current" aria-label="merged"><path d="M5.45 5.154A4.25 4.25 0 0 0 9.25 7.5h1.378a2.251 2.251 0 1 1 0 1.5H9.25A5.734 5.734 0 0 1 5 7.123v3.505a2.25 2.25 0 1 1-1.5 0V5.372a2.25 2.25 0 1 1 1.95-.218ZM4.25 13.5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm8.5-4.5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5ZM5 3.25a.75.75 0 1 0 0 .005V3.25Z"/></svg>
+                                            ) : pr.status === 'closed' ? (
+                                                <svg viewBox="0 0 16 16" className="h-4 w-4 fill-current" aria-label="closed"><path d="M3.25 1A2.25 2.25 0 0 1 4 5.372v5.256a2.251 2.251 0 1 1-1.5 0V5.372A2.251 2.251 0 0 1 3.25 1Zm9.5 5.5a.75.75 0 0 1 .75.75v3.378a2.251 2.251 0 1 1-1.5 0V7.25a.75.75 0 0 1 .75-.75Zm-2.03-5.273a.75.75 0 0 1 1.06 0l.97.97.97-.97a.749.749 0 0 1 1.06 1.06l-.97.97.97.97a.749.749 0 0 1-1.06 1.06l-.97-.97-.97.97a.749.749 0 0 1-1.06-1.06l.97-.97-.97-.97a.75.75 0 0 1 0-1.06ZM3.25 2.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm0 9.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm9.5 0a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Z"/></svg>
+                                            ) : (
+                                                <svg viewBox="0 0 16 16" className="h-4 w-4 fill-current" aria-label="open"><path d="M1.5 3.25a2.25 2.25 0 1 1 3 2.122v5.256a2.251 2.251 0 1 1-1.5 0V5.372A2.251 2.251 0 0 1 1.5 3.25Zm5.677-.177L9.573.677A.25.25 0 0 1 10 .854V2.5h1A2.5 2.5 0 0 1 13.5 5v5.628a2.251 2.251 0 1 1-1.5 0V5a1 1 0 0 0-1-1h-1v1.646a.25.25 0 0 1-.427.177L7.177 3.427a.25.25 0 0 1 0-.354ZM3.75 2.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm0 9.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm8.25.75a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0Z"/></svg>
+                                            )}
+                                        </div>
+
+                                        {/* Main content */}
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                                                <span className="text-xs font-medium text-muted-foreground shrink-0">{pr.repository}</span>
+                                                <span className="font-semibold text-sm text-foreground leading-snug">{pr.title}</span>
+                                                {pr.isDraft && (
+                                                    <Badge variant="outline" className="text-[10px] h-4 px-1 py-0 ml-1">Draft</Badge>
+                                                )}
+                                                {outcome === 'approved' && (
+                                                    <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 fill-emerald-500 shrink-0 ml-0.5" aria-label="approved"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"/></svg>
+                                                )}
                                             </div>
-                                        </td>
-                                        <td className="px-4 py-4">
-                                            <Badge variant={variantForPRStatus(pr.status)} className="uppercase text-[10px] font-bold tracking-wider">
-                                                {pr.status}
-                                            </Badge>
-                                        </td>
-                                        <td className="px-4 py-4">
-                                            <div className="flex items-center gap-2">
-                                                <div className="h-6 w-6 rounded-full bg-sky-500/10 flex items-center justify-center text-[10px] font-bold text-sky-600">
-                                                    {pr.author?.charAt(0).toUpperCase()}
+                                            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+                                                <span>#{pr.number}</span>
+                                                <span>by <span className="font-medium text-foreground/80">{pr.author}</span> was {actionVerb} {actionTime}</span>
+                                                {outcome && outcome !== 'pending' && (
+                                                    <>
+                                                        <span aria-hidden>•</span>
+                                                        <span className={
+                                                            outcome === 'approved' ? 'text-emerald-600 font-medium' :
+                                                            outcome === 'changes_requested' ? 'text-amber-600 font-medium' :
+                                                            ''
+                                                        }>
+                                                            {outcome === 'changes_requested' ? 'Changes requested' :
+                                                             outcome === 'approved' ? 'Approved' :
+                                                             outcome}
+                                                        </span>
+                                                    </>
+                                                )}
+                                                {pr.labels?.length > 0 && pr.labels.slice(0, 3).map((label: string) => (
+                                                    <span key={label} className="inline-flex items-center rounded-full border px-1.5 py-0 text-[10px] font-medium">{label}</span>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* Right side: reviewers + comments */}
+                                        <div className="flex shrink-0 items-center gap-3 pl-2">
+                                            {reviewers.length > 0 && (
+                                                <div className="flex -space-x-1.5">
+                                                    {reviewers.slice(0, 3).map((r: string) => (
+                                                        <div
+                                                            key={r}
+                                                            className="h-5 w-5 rounded-full bg-gradient-to-br from-sky-400 to-indigo-500 ring-2 ring-card flex items-center justify-center text-[8px] font-bold text-white"
+                                                            title={r}
+                                                        >
+                                                            {r.charAt(0).toUpperCase()}
+                                                        </div>
+                                                    ))}
                                                 </div>
-                                                <span className="font-medium">{pr.author}</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-4">
-                                            <Badge variant={toneForStatus(pr.latest_outcome ?? 'pending')} className="capitalize">
-                                                {pr.latest_outcome ?? 'pending'}
-                                            </Badge>
-                                        </td>
-                                        <td className="px-4 py-4 text-muted-foreground">
-                                            {formatRelativeTime(pr.updated_at || pr.created_at)}
-                                        </td>
-                                    </tr>
-                                )) : (
-                                    <tr>
-                                        <td colSpan={5} className="h-24 text-center">
-                                            <EmptyState message="No pull requests found." />
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
+                                            )}
+                                            {commentCount > 0 && (
+                                                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                                    <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 fill-current"><path d="M1 2.75C1 1.784 1.784 1 2.75 1h10.5c.966 0 1.75.784 1.75 1.75v7.5A1.75 1.75 0 0 1 13.25 12H9.06l-2.573 2.573A1.458 1.458 0 0 1 4 13.543V12H2.75A1.75 1.75 0 0 1 1 10.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h2a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h4.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"/></svg>
+                                                    <span>{commentCount}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </li>
+                                );
+                            }) : (
+                                <li className="h-24 flex items-center justify-center">
+                                    <EmptyState message="No pull requests found." />
+                                </li>
+                            )}
+                        </ul>
                     </div>
                     {totalPages > 1 && (
                         <div className="flex items-center justify-between border-t p-4">
