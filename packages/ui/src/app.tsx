@@ -297,8 +297,24 @@ export default function App() {
         refreshSnapshot(rangeDays);
     }, [rangeDays]);
 
+    // When filters change, reset to page 1 and fetch; when only page changes, just fetch.
+    const prevFiltersRef = React.useRef({ status: prFilters.status, repositoryId: prFilters.repositoryId, authorId: prFilters.authorId, search: deferredSearch });
     useEffect(() => {
-        refreshPRs({ page: currentPage });
+        const prevFilters = prevFiltersRef.current;
+        const filtersChanged =
+            prevFilters.status !== prFilters.status ||
+            prevFilters.repositoryId !== prFilters.repositoryId ||
+            prevFilters.authorId !== prFilters.authorId ||
+            prevFilters.search !== deferredSearch;
+
+        prevFiltersRef.current = { status: prFilters.status, repositoryId: prFilters.repositoryId, authorId: prFilters.authorId, search: deferredSearch };
+
+        if (filtersChanged) {
+            setCurrentPage(1);
+            refreshPRs({ page: 1 });
+        } else {
+            refreshPRs({ page: currentPage });
+        }
     }, [currentPage, prFilters.status, prFilters.repositoryId, prFilters.authorId, deferredSearch]);
 
     useEffect(() => {
@@ -407,23 +423,8 @@ export default function App() {
     const authorOptions = filterOptions.authors;
     const repositoryOptions = filterOptions.repositories;
     
-    const filteredPrs = useMemo(() => {
-        const result = prs.filter((pr) => {
-            if (prFilters.status && pr.status !== prFilters.status) return false;
-            if (prFilters.repositoryId && pr.repository !== prFilters.repositoryId) return false;
-            if (prFilters.authorId && pr.author !== prFilters.authorId) return false;
-            if (deferredSearch) {
-                const haystack = `${pr.title} ${pr.repository} ${pr.author}`.toLowerCase();
-                if (!haystack.includes(deferredSearch.toLowerCase())) return false;
-            }
-            return true;
-        });
-        return result.sort((a, b) => {
-            const dateA = new Date(a.updated_at || a.created_at || 0).getTime();
-            const dateB = new Date(b.updated_at || b.created_at || 0).getTime();
-            return dateB - dateA;
-        });
-    }, [prs, prFilters.status, prFilters.repositoryId, prFilters.authorId, deferredSearch, repositories]);
+    // Backend handles all filtering server-side — filteredPrs is just the already-filtered page from the API
+    const filteredPrs = useMemo(() => prs, [prs]);
 
     async function toggleAvailability(developer) {
         const result = await api.setDeveloperAvailability({

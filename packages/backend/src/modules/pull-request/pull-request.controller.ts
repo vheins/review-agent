@@ -10,11 +10,15 @@ export class PullRequestController {
   async list(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('status') status?: string,
+    @Query('repository') repository?: string,
+    @Query('author') author?: string,
+    @Query('search') search?: string,
   ) {
     const pageNum = page ? parseInt(page, 10) : 1;
     const limitNum = limit ? parseInt(limit, 10) : 10;
-    
-    return this.prService.findAll(pageNum, limitNum);
+
+    return this.prService.findAll({ page: pageNum, limit: limitNum, status, repository, author, search });
   }
 
   @Get('scan')
