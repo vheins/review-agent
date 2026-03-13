@@ -1,8 +1,10 @@
 import { Module } from '@nestjs/common';
 import { HealthController } from './health.controller.js';
 import { HealthService } from './health.service.js';
+import { GitHubModule } from '../../modules/github/github.module.js';
 
 @Module({
+  imports: [GitHubModule],
   controllers: [HealthController],
   providers: [HealthService],
   exports: [HealthService],

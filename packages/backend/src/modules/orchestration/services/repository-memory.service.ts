@@ -16,21 +16,21 @@ export class RepositoryMemoryService {
    * Record a new memory observation
    */
   async recordObservation(
-    repository: string,
-    type: string,
+    repositoryId: number,
+    memoryType: string,
     content: string,
     importance: number = 1.0,
     metadata?: any
   ): Promise<void> {
-    this.logger.debug(`Recording memory for repo ${repository}: ${type}`);
+    this.logger.debug(`Recording memory for repo ID ${repositoryId}: ${memoryType}`);
     
     const entry = this.memoryRepository.create({
-      repository,
-      type,
+      repositoryId,
+      memoryType,
       content,
       importance,
       metadata,
-      createdAt: new Date(),
+      lastObservedAt: new Date(),
       expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // Default 30 days
     });
 
@@ -40,13 +40,13 @@ export class RepositoryMemoryService {
   /**
    * Recall relevant memory for a repository
    */
-  async recallMemory(repository: string, type?: string): Promise<RepositoryMemoryEntry[]> {
-    const where: any = { repository };
-    if (type) where.type = type;
+  async recallMemory(repositoryId: number, memoryType?: string): Promise<RepositoryMemoryEntry[]> {
+    const where: any = { repositoryId };
+    if (memoryType) where.memoryType = memoryType;
     
     return this.memoryRepository.find({
       where,
-      order: { importance: 'DESC', createdAt: 'DESC' },
+      order: { importance: 'DESC', lastObservedAt: 'DESC' },
     });
   }
 

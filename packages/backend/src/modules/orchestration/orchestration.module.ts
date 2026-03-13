@@ -12,6 +12,8 @@ import { RepositoryConfig } from '../../database/entities/repository-config.enti
 import { Review } from '../../database/entities/review.entity.js';
 import { Comment } from '../../database/entities/comment.entity.js';
 import { AuditTrail } from '../../database/entities/audit-trail.entity.js';
+import { OrchestrationSet } from '../../database/entities/orchestration-set.entity.js';
+import { OrchestrationSetMember } from '../../database/entities/orchestration-set-member.entity.js';
 
 import { MissionControlService } from './services/mission-control.service.js';
 import { QueuePolicyEngine } from './services/queue-policy-engine.service.js';
@@ -22,8 +24,11 @@ import { ConfidenceScorerService } from './services/confidence-scorer.service.js
 import { FocusWindowSchedulerService } from './services/focus-window-scheduler.service.js';
 import { AuditService } from './services/audit.service.js';
 import { EscalationService } from './services/escalation.service.js';
+import { StuckTaskDetectorService } from './services/stuck-task-detector.service.js';
+import { OrchestrationSetService } from './services/orchestration-set.service.js';
 import { OrchestrationController } from './orchestration.controller.js';
 import { OrchestrationGateway } from './orchestration.gateway.js';
+import { NotificationModule } from '../../common/notification/notification.module.js';
 
 @Module({
   imports: [
@@ -40,7 +45,10 @@ import { OrchestrationGateway } from './orchestration.gateway.js';
       Review,
       Comment,
       AuditTrail,
+      OrchestrationSet,
+      OrchestrationSetMember,
     ]),
+    NotificationModule,
   ],
   controllers: [OrchestrationController],
   providers: [
@@ -54,6 +62,8 @@ import { OrchestrationGateway } from './orchestration.gateway.js';
     AuditService,
     EscalationService,
     OrchestrationGateway,
+    StuckTaskDetectorService,
+    OrchestrationSetService,
   ],
   exports: [
     MissionControlService,
@@ -66,6 +76,8 @@ import { OrchestrationGateway } from './orchestration.gateway.js';
     AuditService,
     EscalationService,
     OrchestrationGateway,
+    StuckTaskDetectorService,
+    OrchestrationSetService,
   ],
 })
 export class OrchestrationModule {}

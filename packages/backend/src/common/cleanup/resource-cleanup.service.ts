@@ -16,6 +16,8 @@ export class ResourceCleanupService implements OnModuleInit {
   onModuleInit() {
     // Schedule cleanup every hour
     setInterval(() => this.runCleanup(), 60 * 60 * 1000);
+    // Schedule memory monitoring every 5 minutes
+    setInterval(() => this.monitorMemory(), 5 * 60 * 1000);
     // Trigger initial cleanup
     this.runCleanup().catch(e => this.logger.error(`Initial cleanup failed: ${e.message}`));
   }
@@ -33,6 +35,23 @@ export class ResourceCleanupService implements OnModuleInit {
       this.logger.log('Resource cleanup finished.');
     } catch (e) {
       this.logger.error(`Cleanup failed: ${e.message}`);
+    }
+  }
+
+  /**
+   * Monitor process memory usage
+   */
+  monitorMemory() {
+    const usage = process.memoryUsage();
+    const heapUsedMB = usage.heapUsed / 1024 / 1024;
+    const heapTotalMB = usage.heapTotal / 1024 / 1024;
+    const usedPercent = (heapUsedMB / heapTotalMB) * 100;
+
+    this.logger.log(`Memory Usage: ${heapUsedMB.toFixed(2)}MB / ${heapTotalMB.toFixed(2)}MB (${usedPercent.toFixed(1)}%)`);
+
+    if (usedPercent > 80 && (global as any).gc) {
+      this.logger.warn('High memory usage detected. Triggering garbage collection...');
+      (global as any).gc();
     }
   }
 

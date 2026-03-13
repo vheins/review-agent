@@ -30,7 +30,7 @@ export class AIExecutorValidator {
 
     for (const type of executorTypes) {
       const fileName = `${type}.executor.ts`;
-      const exists = executorFiles.includes(fileName) || (type === 'others' && executorFiles.includes('others.executor.ts'));
+      const exists = executorFiles.includes(fileName);
       
       // Special case for types combined in others.executor.ts
       let implemented = exists;

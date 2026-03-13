@@ -67,7 +67,7 @@ export class AutoMergeService {
 
     // 3. Security Findings Check
     const unresolvedSecurity = await this.securityRepository.count({
-      where: { prNumber: pr.number, repository: pr.repository, is_resolved: false }
+      where: { prNumber: pr.number, repository: pr.repository, isResolved: false }
     });
 
     if (unresolvedSecurity > 0) {

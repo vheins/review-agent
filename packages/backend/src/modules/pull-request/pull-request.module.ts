@@ -5,6 +5,7 @@ import { DashboardController } from './dashboard.controller.js';
 import { PullRequestService } from './pull-request.service.js';
 import { BatchProcessorService } from './batch-processor.service.js';
 import { AutoMergeService } from './services/auto-merge.service.js';
+import { CIIntegrationService } from './services/ci-integration.service.js';
 import { PullRequest as PullRequestEntity } from '../../database/entities/pull-request.entity.js';
 import { ReviewMetrics } from '../../database/entities/review-metrics.entity.js';
 import { RepositoryConfig } from '../../database/entities/repository-config.entity.js';
@@ -30,7 +31,7 @@ import { ConfigModule } from '../../config/config.module.js';
     ConfigModule,
   ],
   controllers: [PullRequestController, DashboardController],
-  providers: [PullRequestService, BatchProcessorService, AutoMergeService],
-  exports: [PullRequestService, BatchProcessorService, AutoMergeService],
+  providers: [PullRequestService, BatchProcessorService, AutoMergeService, CIIntegrationService],
+  exports: [PullRequestService, BatchProcessorService, AutoMergeService, CIIntegrationService],
 })
 export class PullRequestModule {}

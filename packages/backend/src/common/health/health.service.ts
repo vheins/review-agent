@@ -1,13 +1,18 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import * as os from 'os';
-import { execa } from 'execa';
+import { GithubApiService } from '../../modules/github/services/github-api.service.js';
+import { GithubCliService } from '../../modules/github/services/github-cli.service.js';
 
 @Injectable()
 export class HealthService {
   private readonly logger = new Logger(HealthService.name);
 
-  constructor(private readonly dataSource: DataSource) {}
+  constructor(
+    private readonly dataSource: DataSource,
+    private readonly githubApi: GithubApiService,
+    private readonly githubCli: GithubCliService,
+  ) {}
 
   async getHealthStatus() {
     const status = {
@@ -22,7 +27,7 @@ export class HealthService {
       overall: 'healthy'
     };
 
-    const serviceStatuses = Object.values(status.services).map(s => s.status);
+    const serviceStatuses = Object.values(status.services).map((s: any) => s.status);
     if (serviceStatuses.includes('unhealthy')) {
       status.overall = 'unhealthy';
     } else if (serviceStatuses.includes('degraded')) {
@@ -62,19 +67,29 @@ export class HealthService {
   }
 
   private async checkGitHub() {
+    let data: any = null;
+    let source = 'api';
+
     try {
-      const { stdout } = await execa('gh', ['api', 'rate_limit'], { reject: false });
-      const data = JSON.parse(stdout || '{}');
-      const core = data.resources?.core || {};
-      
-      return {
-        status: core.remaining < 10 ? 'degraded' : 'healthy',
-        remaining: core.remaining,
-        limit: core.limit,
-        reset: core.reset ? new Date(core.reset * 1000).toISOString() : null
-      };
-    } catch (e) {
-      return { status: 'degraded', error: 'Could not fetch rate limits' };
+      data = await this.githubApi.getRateLimit();
+    } catch (apiError) {
+      this.logger.warn(`Health check: GitHub API failed, falling back to CLI: ${apiError.message}`);
+      try {
+        data = await this.githubCli.getRateLimit();
+        source = 'cli';
+      } catch (cliError) {
+        return { status: 'degraded', error: 'Could not fetch rate limits from API or CLI' };
+      }
     }
+
+    const core = data.resources?.core || {};
+    
+    return {
+      status: core.remaining < 10 ? 'degraded' : 'healthy',
+      remaining: core.remaining,
+      limit: core.limit,
+      reset: core.reset ? new Date(core.reset * 1000).toISOString() : null,
+      source
+    };
   }
 }

@@ -32,6 +32,12 @@ export class MissionStep {
   @Column({ name: 'completed_at', type: 'datetime', nullable: true })
   completedAt: Date | null;
 
+  @Column({ name: 'attempt_count', type: 'integer', default: 0 })
+  attemptCount: number;
+
+  @Column({ name: 'last_error_summary', type: 'text', nullable: true })
+  lastErrorSummary: string | null;
+
   @Column({ type: 'simple-json', nullable: true })
   metadata: any | null;
 

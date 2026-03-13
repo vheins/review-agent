@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AiExecutorService } from './ai-executor.service.js';
 import { AiFixGeneratorService } from './ai-fix-generator.service.js';
+import { GeminiExecutor } from './executors/gemini.executor.js';
 import { ConfigModule } from '../../config/config.module.js';
 import { CommentParserModule } from '../../common/parser/comment-parser.module.js';
 
@@ -13,7 +14,7 @@ import { CommentParserModule } from '../../common/parser/comment-parser.module.j
  */
 @Module({
   imports: [ConfigModule, CommentParserModule],
-  providers: [AiExecutorService, AiFixGeneratorService],
-  exports: [AiExecutorService, AiFixGeneratorService],
+  providers: [AiExecutorService, AiFixGeneratorService, GeminiExecutor],
+  exports: [AiExecutorService, AiFixGeneratorService, GeminiExecutor],
 })
 export class AiModule {}

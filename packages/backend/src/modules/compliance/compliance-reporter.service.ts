@@ -45,7 +45,7 @@ export class ComplianceReporterService {
     const resolvedFindings = await this.securityRepository.count({
       where: {
         detectedAt: MoreThanOrEqual(since),
-        is_resolved: true
+        isResolved: true
       }
     });
 
