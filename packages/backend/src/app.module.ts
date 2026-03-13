@@ -20,6 +20,7 @@ import { ErrorHandlingModule } from './common/filters/error-handling.module.js';
 import { NotificationModule } from './common/notification/notification.module.js';
 import { ShutdownModule } from './common/shutdown/shutdown.module.js';
 import { CleanupModule } from './common/cleanup/cleanup.module.js';
+import { QueueModule } from './modules/queue/queue.module.js';
 
 /**
  * AppModule - Root NestJS Module
@@ -55,6 +56,7 @@ import { CleanupModule } from './common/cleanup/cleanup.module.js';
     NotificationModule,
     ShutdownModule,
     CleanupModule,
+    QueueModule,
   ],
   controllers: [],
   providers: [],

@@ -29,6 +29,9 @@ import {
   CustomRule,
   ReviewTemplate,
   TestRun,
+  OrchestrationSet,
+  OrchestrationSetMember,
+  Job,
 } from './entities/index.js';
 
 // ES module equivalent of __dirname
@@ -77,6 +80,9 @@ const __dirname = path.dirname(__filename);
             CustomRule,
             ReviewTemplate,
             TestRun,
+            OrchestrationSet,
+            OrchestrationSetMember,
+            Job,
           ],
           synchronize: isDevelopment,
           logging: isDevelopment ? ['query', 'error', 'warn'] : ['error'],
@@ -110,6 +116,9 @@ const __dirname = path.dirname(__filename);
       CustomRule,
       ReviewTemplate,
       TestRun,
+      OrchestrationSet,
+      OrchestrationSetMember,
+      Job,
     ]),
   ],
   exports: [TypeOrmModule],

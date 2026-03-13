@@ -18,6 +18,7 @@ export * from './review-template.entity.js';
 export * from './test-run.entity.js';
 export * from './orchestration-set.entity.js';
 export * from './orchestration-set-member.entity.js';
+export * from './job.entity.js';
 
 // Orchestration Entities
 export * from './mission-session.entity.js';
