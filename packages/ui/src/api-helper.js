@@ -62,9 +62,35 @@ export const api = {
         return apiCall('/prs/filters');
     },
 
+    getFilters: async () => {
+        return apiCall('/prs/filters');
+    },
+
+    getPRById: async (id) => {
+        return apiCall(`/prs/id/${id}`);
+    },
+
     getPRDetail: async (repo, number) => {
         const repoParam = repo.replace('/', '-');
         return apiCall(`/prs/${repoParam}/${number}`);
+    },
+
+    listPRCommits: async (repo, number) => {
+        const repoParam = repo.toString().replace('/', ':');
+        return apiCall(`/prs/${repoParam}/${number}/commits`);
+    },
+
+    listPRCommitsById: async (id) => {
+        return apiCall(`/prs/id/${id}/commits`);
+    },
+
+    listPRFiles: async (repo, number) => {
+        const repoParam = repo.toString().replace('/', ':');
+        return apiCall(`/prs/${repoParam}/${number}/files`);
+    },
+
+    listPRFilesById: async (id) => {
+        return apiCall(`/prs/id/${id}/files`);
     },
 
     // Team & Security

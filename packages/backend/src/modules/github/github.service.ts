@@ -315,6 +315,13 @@ export class GitHubClientService {
   /**
    * Get full details for a single Pull Request
    */
+  async getPR(repoName: string, prNumber: number): Promise<PullRequest> {
+    return this.getPRDetail(repoName, prNumber);
+  }
+
+  /**
+   * Get full details for a single Pull Request
+   */
   async getPRDetail(repoName: string, prNumber: number): Promise<PullRequest> {
     const token = this.configService.get<string>('GITHUB_TOKEN');
     this.logger.debug(`[Sync] Getting deep PR details for ${repoName}#${prNumber}`);

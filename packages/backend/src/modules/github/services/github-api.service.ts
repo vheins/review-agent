@@ -27,7 +27,8 @@ export class GithubApiService {
       ...options,
       headers: {
         'Authorization': `token ${token}`,
-        'Accept': 'application/vnd.github.v3+json',
+        'Accept': 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
         'User-Agent': 'PR-Review-Agent',
         ...options.headers,
       },
@@ -76,9 +77,13 @@ export class GithubApiService {
     });
   }
 
-  async getPRDetail(repoName: string, prNumber: number): Promise<any> {
+  async getPR(repoName: string, prNumber: number): Promise<any> {
     this.logger.debug(`[API] Getting PR detail: ${repoName}#${prNumber}`);
     return this.fetchApi(`/repos/${repoName}/pulls/${prNumber}`);
+  }
+
+  async getPRDetail(repoName: string, prNumber: number): Promise<any> {
+    return this.getPR(repoName, prNumber);
   }
 
   async updatePR(repoName: string, prNumber: number, data: { title?: string; body?: string; state?: 'open' | 'closed'; base?: string; maintainer_can_modify?: boolean }): Promise<any> {

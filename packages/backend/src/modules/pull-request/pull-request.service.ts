@@ -110,6 +110,13 @@ export class PullRequestService {
     return pr;
   }
 
+  /**
+   * Get fresh data from GitHub for a specific PR
+   */
+  async getGithubPR(repoName: string, prNumber: number): Promise<any> {
+    return this.github.getPR(repoName, prNumber);
+  }
+
   async createPR(repoName: string, data: any) {
     return this.github.createPR(repoName, data);
   }
@@ -267,8 +274,9 @@ export class PullRequestService {
     return this.reviewEngine.reviewPullRequest(pr);
   }
 
-  async calculateHealth(repoName: string, number: number) {
-    return this.healthScoreService.calculatePRHealthScore(number, repoName);
+  async calculateHealth(repoNameOrId: string | number, number?: number) {
+    const pr = await this.findOne(repoNameOrId, number);
+    return this.healthScoreService.calculatePRHealthScore(pr.number, pr.repository);
   }
 
   async getHistory(repoName: string, number: number) {

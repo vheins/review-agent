@@ -84,14 +84,21 @@ export function PRsTab({
                                         <span className="text-sm font-medium text-muted-foreground">Repository</span>
                                         <Select value={prFilters.repositoryId} onChange={(event) => setPrFilters((current) => ({ ...current, repositoryId: event.target.value }))}>
                                             <option value="">All Repositories</option>
-                                            {repositories.map((repo) => <option key={repo} value={repo}>{repo}</option>)}
+                                            {Array.isArray(repositories) && repositories.map((repo) => (
+                                                <option key={repo} value={repo}>
+                                                    {repo}
+                                                </option>
+                                            ))}
                                         </Select>
-                                    </div>
-                                    <div className="grid gap-2">
+                                    </div>                                    <div className="grid gap-2">
                                         <span className="text-sm font-medium text-muted-foreground">Author</span>
                                         <Select value={prFilters.authorId} onChange={(event) => setPrFilters((current) => ({ ...current, authorId: event.target.value }))}>
                                             <option value="">All Authors</option>
-                                            {authorOptions.map((author) => <option key={author} value={author}>{author}</option>)}
+                                            {Array.isArray(authorOptions) && authorOptions.map((author) => (
+                                                <option key={author} value={author}>
+                                                    {author}
+                                                </option>
+                                            ))}
                                         </Select>
                                     </div>
                                     <div className="grid gap-2">

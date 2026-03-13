@@ -33,6 +33,7 @@ import { TeamTab } from './components/TeamTab.tsx';
 import { SecurityTab } from './components/SecurityTab.tsx';
 import { ConfigTab } from './components/ConfigTab.tsx';
 import { LogsTab } from './components/LogsTab.tsx';
+import { PRDetailSlideOver } from './components/PRDetailSlideOver.tsx';
 
 import { 
     getStoredThemeMode, 
@@ -204,10 +205,14 @@ export default function App() {
         if (result.meta) {
             setPrs(result.data || []);
             setPrMeta(result.meta);
-            setSelectedPrId((current) => current ?? result.data?.[0]?.id ?? null);
         } else {
             setPrs(result.prs || []);
-            setSelectedPrId((current) => current ?? result.prs?.[0]?.id ?? null);
+        }
+
+        // Refresh filter options
+        const filtersResult = await api.getPRFilters();
+        if (filtersResult && filtersResult.success) {
+            setFilterOptions({ authors: filtersResult.authors || [], repositories: filtersResult.repositories || [] });
         }
     });
 
@@ -323,9 +328,9 @@ export default function App() {
             const pr = prs.find(p => p.id === selectedPrId);
             if (!pr) return;
             
-            const result = await api.getPRDetail(pr.repository, pr.number);
+            const result = await api.getPRById(pr.id);
             if (result.success) {
-                setPrDetail(result.detail);
+                setPrDetail(result.data);
             }
         })();
     }, [selectedPrId, prs]);
@@ -806,6 +811,19 @@ export default function App() {
                     </div>
                 </main>
             </div>
+
+            {/* PR Detail Slide-Over */}
+            {selectedPrId && (() => {
+                const selectedPr = prs.find(p => p.id === selectedPrId);
+                if (!selectedPr) return null;
+                return (
+                    <PRDetailSlideOver
+                        pr={selectedPr}
+                        onClose={() => setSelectedPrId(null)}
+                    />
+                );
+            })()}
         </div>
     );
 }
+

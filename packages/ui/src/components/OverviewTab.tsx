@@ -106,11 +106,11 @@ export function OverviewTab({
                 <Section eyebrow="Priority Queue" title="Review Queue">
                     <div className="grid gap-3">
                         {snapshot?.reviewQueue?.length ? snapshot.reviewQueue.map((pr) => (
-                            <Card key={pr.github_pr_id} className="border-border/80 bg-panel/80 p-4">
+                            <Card key={pr.id} className="border-border/80 bg-panel/80 p-4">
                                 <div className="grid gap-3">
                                     <div className="flex flex-wrap items-center justify-between gap-3">
                                         <div className="flex flex-wrap items-center gap-3">
-                                            <strong className="text-base font-semibold">#{pr.github_pr_id}</strong>
+                                            <strong className="text-base font-semibold">#{pr.number}</strong>
                                             <Badge variant={pr.is_blocking ? 'danger' : 'warn'}>{pr.is_blocking ? 'Blocking' : 'Queued'}</Badge>
                                         </div>
                                         <Button size="sm" variant="ghost" onClick={() => {
@@ -135,7 +135,7 @@ export function OverviewTab({
                 <Section eyebrow="Activity Stream" title="Recent Activity">
                     <div className="grid gap-3">
                         {activityItems.length ? activityItems.map((item, index) => (
-                            <Card key={item.id ?? `${item.title}-${index}`} className="border-border/80 bg-panel/80 p-4">
+                            <Card key={item.id ?? `activity-${item.title}-${index}-${item.occurred_at || item.created_at}`} className="border-border/80 bg-panel/80 p-4">
                                 <div className="grid gap-3">
                                     <div className="flex flex-wrap items-center gap-3">
                                         <strong className="text-base font-semibold">{item.title ?? item.status ?? 'Live event'}</strong>
