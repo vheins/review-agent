@@ -323,9 +323,8 @@ export class ReviewEngineService {
     let prs = await this.github.fetchOpenPRs();
     this.logger.log(`Found ${prs.length} open PRs to review.`);
 
-    const appConfig = this.config.getAppConfig();
-    if (appConfig.dryRun && prs.length > 0) {
-      this.logger.log('[DryRun] Limiting to 1 PR for simulation.');
+    if (prs.length > 0) {
+      this.logger.log('Limiting to 1 PR for single-run execution.');
       prs = prs.slice(0, 1);
     }
 
