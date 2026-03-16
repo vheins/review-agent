@@ -738,7 +738,7 @@ export class GitHubClientService {
   async getChangedFiles(repoDir: string, pr: PullRequest): Promise<{ path: string; content: string }[]> {
     this.logger.debug(`[Sync] Getting changed files for PR ${pr.repository.nameWithOwner}#${pr.number}`);
     try {
-      const { stdout } = await this.cli.execaVerbose('git', ['diff', '--name-only', `${pr.baseRefName}...${pr.headRefName}`], { cwd: repoDir });
+      const { stdout } = await this.cli.execaVerbose('git', ['diff', '--name-only', `origin/${pr.baseRefName}...${pr.headRefName}`], { cwd: repoDir });
       const filePaths = stdout.split('\n').filter(line => line.trim() !== '');
       
       const changedFiles: { path: string; content: string }[] = [];

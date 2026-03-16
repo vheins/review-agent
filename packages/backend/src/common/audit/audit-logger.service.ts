@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AuditTrail } from '../../database/entities/audit-trail.entity.js';
+import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class AuditLoggerService {
@@ -14,6 +15,7 @@ export class AuditLoggerService {
 
   async logAction(actionType: string, actorId: string, resourceType: string, resourceId: string, details: any = {}, options: any = {}) {
     const log = this.auditRepo.create({
+      id: uuidv4(),
       actionType,
       actorId,
       actorType: options.actorType || 'system',

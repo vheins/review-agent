@@ -90,10 +90,22 @@ export class ReviewEngineService {
         pr.baseRefName || 'unknown'
       );
 
+      // Ensure base branch is available locally as remote-tracking ref
+      const baseBranch = deepPR.baseRefName || pr.baseRefName || 'main';
+      try {
+        await this.github.execaVerbose('git', [
+          'fetch', 'origin',
+          `${baseBranch}:refs/remotes/origin/${baseBranch}`
+        ], { cwd: repoDir });
+      } catch (e) {
+        this.logger.warn(`Failed to fetch base branch '${baseBranch}': ${e.message}`);
+      }
+      const baseRef = `origin/${baseBranch}`;
+
       // Resolve base SHA if missing (common from CLI)
       if (!deepPR.baseSha) {
         try {
-          const { stdout } = await this.github.execaVerbose('git', ['rev-parse', pr.baseRefName || 'development'], { cwd: repoDir });
+          const { stdout } = await this.github.execaVerbose('git', ['rev-parse', baseRef], { cwd: repoDir });
           deepPR.baseSha = stdout.trim();
         } catch (e) {
           this.logger.warn(`Failed to resolve base SHA via git: ${e.message}`);
@@ -102,8 +114,8 @@ export class ReviewEngineService {
       
       // 2. Get changed files and diff
       this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 20, 'Analyzing changed files...');
-      const changedFiles = await this.github.getChangedFiles(repoDir, pr);
-      const { stdout: diff } = await this.github.execaVerbose('git', ['diff', `${pr.baseRefName}...${pr.headRefName}`], { cwd: repoDir });
+      const changedFiles = await this.github.getChangedFiles(repoDir, deepPR);
+      const { stdout: diff } = await this.github.execaVerbose('git', ['diff', `${baseRef}...${deepPR.headRefName}`], { cwd: repoDir });
       
       if (!diff && changedFiles.length === 0) {
         this.logger.warn(`No changes found for PR #${pr.number}, skipping review.`);
@@ -321,7 +333,8 @@ export class ReviewEngineService {
   async runOnce(): Promise<void> {
     this.logger.log('Starting Review Engine (Once Mode)...');
     let prs = await this.github.fetchOpenPRs();
-    this.logger.log(`Found ${prs.length} open PRs to review.`);
+    prs = prs.filter(pr => !pr.draft);
+    this.logger.log(`Found ${prs.length} open (non-draft) PRs to review.`);
 
     if (prs.length > 0) {
       this.logger.log('Limiting to 1 PR for single-run execution.');

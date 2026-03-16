@@ -135,11 +135,12 @@ export class GithubCliService {
 
   async addReview(repoName: string, prNumber: number, body: string, event: string): Promise<void> {
     this.logger.log(`[CLI] Adding ${event} review to ${repoName}#${prNumber}`);
+    const flag = event.toLowerCase().replace(/_/g, '-');
     await this.execaVerbose('gh', [
       'pr', 'review', prNumber.toString(),
       '--repo', repoName,
       '--body', body,
-      `--${event.toLowerCase()}`
+      `--${flag}`
     ]);
   }
 
