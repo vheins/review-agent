@@ -139,6 +139,8 @@ export class GitHubClientService {
           updatedAt: item.updatedAt,
           createdAt: item.createdAt || item.updatedAt,
           closedAt: item.closedAt || null,
+          headRefName: item.headRefName,
+          baseRefName: item.baseRefName,
           author: { login: item.author?.login || item.author },
           labels: (item.labels || []).map(l => typeof l === 'string' ? l : l.name)
         }));
@@ -207,6 +209,8 @@ export class GitHubClientService {
             url: item.html_url,
             updatedAt: item.updated_at,
             createdAt: item.created_at,
+            headRefName: (item as any).head?.ref,
+            baseRefName: (item as any).base?.ref,
             author: { login: item.user?.login || 'unknown', id: item.user?.id },
             labels: (item.labels || []).map(l => typeof l === 'string' ? l : l.name)
           }));
@@ -226,6 +230,8 @@ export class GitHubClientService {
             url: item.html_url,
             updatedAt: item.updated_at,
             createdAt: item.created_at,
+            headRefName: (item as any).head?.ref,
+            baseRefName: (item as any).base?.ref,
             author: { login: item.user?.login || 'unknown', id: item.user?.id },
             labels: (item.labels || []).map(l => typeof l === 'string' ? l : l.name)
           }));

@@ -59,9 +59,19 @@ export class ReviewEngineService {
     await queryRunner.startTransaction();
 
     const startTime = Date.now();
+    const appConfig = this.config.getAppConfig();
 
     try {
       this.logger.log(`Starting review for PR #${pr.number}: ${pr.title}`);
+      
+      // Retroactive Enrichment: if branch info is missing (common from bulk CLI search), fetch deep details
+      if (!pr.headRefName || pr.headRefName === 'unknown') {
+        this.logger.log(`[Sync] Fetching deep details for PR #${pr.number} to resolve branch info...`);
+        const deepPR = await this.github.getPRDetail(pr.repository.nameWithOwner, pr.number);
+        pr.headRefName = deepPR.headRefName;
+        pr.baseRefName = deepPR.baseRefName;
+      }
+      
       this.gateway.broadcastReviewStarted(pr.number, pr.repository.nameWithOwner);
 
       const reviewConfig = this.config.getReviewConfig();
@@ -190,15 +200,20 @@ export class ReviewEngineService {
         if (fixableComments.length > 0) {
           this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 85, 'Applying and verifying auto-fixes...');
           
-          await this.autoFix.applyFixes(repoDir, fixableComments);
-          await this.autoFix.runProjectFixers(repoDir);
-          
-          const verified = await this.autoFix.verifyFixes(repoDir);
-          if (verified) {
-            fixesApplied = await this.autoFix.commitAndPushFixes(repoDir, pr.headRefName);
+          if (appConfig.dryRun) {
+            this.logger.log(`[DryRun] Skipping auto-fixes application for PR #${pr.number}`);
+            fixesApplied = true; // Simulate success for dry run logic
           } else {
-            this.logger.warn(`Auto-fixes failed verification for PR #${pr.number}, rolling back changes.`);
-            await this.github.execaVerbose('git', ['reset', '--hard', 'HEAD'], { cwd: repoDir });
+            await this.autoFix.applyFixes(repoDir, fixableComments);
+            await this.autoFix.runProjectFixers(repoDir);
+            
+            const verified = await this.autoFix.verifyFixes(repoDir);
+            if (verified) {
+              fixesApplied = await this.autoFix.commitAndPushFixes(repoDir, pr.headRefName);
+            } else {
+              this.logger.warn(`Auto-fixes failed verification for PR #${pr.number}, rolling back changes.`);
+              await this.github.execaVerbose('git', ['reset', '--hard', 'HEAD'], { cwd: repoDir });
+            }
           }
         }
       }
@@ -215,7 +230,13 @@ export class ReviewEngineService {
       // 13. Post comments to GitHub
       this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 90, 'Posting to GitHub...');
       const summaryMessage = this.buildSummaryMessage(aiComments, allSecurityFindings, decision, healthScore, repoConfig.reviewMode, fixesApplied);
-      await this.github.addReview(pr.repository.nameWithOwner, pr.number, summaryMessage, decision);
+      
+      if (appConfig.dryRun) {
+        this.logger.log(`[DryRun] Skipping GitHub review for PR #${pr.number}`);
+        console.log(`[DryRun] Summary for PR #${pr.number}:`, summaryMessage);
+      } else {
+        await this.github.addReview(pr.repository.nameWithOwner, pr.number, summaryMessage, decision);
+      }
 
       // 14. Commit transaction
       await queryRunner.commitTransaction();
@@ -230,8 +251,12 @@ export class ReviewEngineService {
 
       // 17. Auto-merge
       if (decision === 'APPROVE' && repoConfig.autoMerge && (repoConfig.reviewMode === 'comment' || fixesApplied)) {
-        this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 95, 'Auto-merging PR...');
-        await this.github.mergePR(pr.repository.nameWithOwner, pr.number);
+        if (appConfig.dryRun) {
+          this.logger.log(`[DryRun] Skipping auto-merge for PR #${pr.number}`);
+        } else {
+          this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 95, 'Auto-merging PR...');
+          await this.github.mergePR(pr.repository.nameWithOwner, pr.number);
+        }
       }
 
       this.logger.log(`Successfully completed review for PR #${pr.number}`);
@@ -273,8 +298,14 @@ export class ReviewEngineService {
 
   async runOnce(): Promise<void> {
     this.logger.log('Starting Review Engine (Once Mode)...');
-    const prs = await this.github.fetchOpenPRs();
+    let prs = await this.github.fetchOpenPRs();
     this.logger.log(`Found ${prs.length} open PRs to review.`);
+
+    const appConfig = this.config.getAppConfig();
+    if (appConfig.dryRun && prs.length > 0) {
+      this.logger.log('[DryRun] Limiting to 1 PR for simulation.');
+      prs = prs.slice(0, 1);
+    }
 
     for (const pr of prs) {
       await this.reviewPullRequest(pr);
