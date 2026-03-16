@@ -393,6 +393,10 @@ export class GitHubClientService {
       url: cliDetail.url,
       updatedAt: cliDetail.updatedAt,
       createdAt: cliDetail.createdAt,
+      headRefName: cliDetail.headRefName,
+      headSha: cliDetail.headRefOid,
+      baseRefName: cliDetail.baseRefName,
+      baseSha: '', // PR view doesn't provide base OID by default, will be resolved via git
       author: { login: cliDetail.author?.login || cliDetail.author },
       labels: cliDetail.labels || []
     } as PullRequest;

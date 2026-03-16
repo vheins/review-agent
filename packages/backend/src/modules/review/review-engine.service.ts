@@ -64,12 +64,17 @@ export class ReviewEngineService {
     try {
       this.logger.log(`Starting review for PR #${pr.number}: ${pr.title}`);
       
-      // Retroactive Enrichment: if branch info is missing (common from bulk CLI search), fetch deep details
-      if (!pr.headRefName || pr.headRefName === 'unknown') {
-        this.logger.log(`[Sync] Fetching deep details for PR #${pr.number} to resolve branch info...`);
-        const deepPR = await this.github.getPRDetail(pr.repository.nameWithOwner, pr.number);
-        pr.headRefName = deepPR.headRefName;
-        pr.baseRefName = deepPR.baseRefName;
+      // Retroactive Enrichment: if branch info or OIDs are missing (common from bulk CLI search), fetch deep details
+      let deepPR: PullRequest = pr;
+      if (!pr.headRefName || !pr.headSha || pr.headRefName === 'unknown') {
+        this.logger.log(`[Sync] Fetching deep details for PR #${pr.number} to resolve branch/OID info...`);
+        deepPR = await this.github.getPRDetail(pr.repository.nameWithOwner, pr.number);
+        // Sync original PR object to avoid inconsistencies if passed elsewhere
+        pr.headRefName = deepPR.headRefName || 'unknown';
+        pr.baseRefName = deepPR.baseRefName || 'unknown';
+        pr.headSha = deepPR.headSha;
+        pr.baseSha = deepPR.baseSha;
+        this.logger.log(`[Sync] Resolved branch info for PR #${pr.number}: head=${pr.headRefName}, base=${pr.baseRefName}`);
       }
       
       this.gateway.broadcastReviewStarted(pr.number, pr.repository.nameWithOwner);
@@ -84,6 +89,16 @@ export class ReviewEngineService {
         pr.headRefName || 'unknown',
         pr.baseRefName || 'unknown'
       );
+
+      // Resolve base SHA if missing (common from CLI)
+      if (!deepPR.baseSha) {
+        try {
+          const { stdout } = await this.github.execaVerbose('git', ['rev-parse', pr.baseRefName || 'development'], { cwd: repoDir });
+          deepPR.baseSha = stdout.trim();
+        } catch (e) {
+          this.logger.warn(`Failed to resolve base SHA via git: ${e.message}`);
+        }
+      }
       
       // 2. Get changed files and diff
       this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 20, 'Analyzing changed files...');
@@ -128,24 +143,31 @@ export class ReviewEngineService {
       // 6. Save/Update PR Entity
       this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 80, 'Saving to database...');
       let prEntity = await this.prRepository.findOne({ where: { number: pr.number, repository: pr.repository.nameWithOwner } });
+      
       if (!prEntity) {
         prEntity = this.prRepository.create({
+          id: deepPR.id,
           number: pr.number,
           repository: pr.repository.nameWithOwner,
           title: pr.title,
           url: pr.url,
           status: 'open',
-          author: pr.author?.login || 'unknown',
-          branch: pr.headRefName || 'unknown',
-          baseBranch: pr.baseRefName || 'unknown',
-          isDraft: false,
-          labels: [],
+          state: 'open',
+          node_id: deepPR.node_id || deepPR.id,
+          author: pr.author?.login || deepPR.author?.login || 'unknown',
+          branch: deepPR.headRefName || 'unknown',
+          head_sha: deepPR.headSha || '',
+          baseBranch: deepPR.baseRefName || 'unknown',
+          base_sha: deepPR.baseSha || '',
+          isDraft: deepPR.draft || false,
+          labels: deepPR.labels || [],
         });
         prEntity = await queryRunner.manager.save(prEntity);
       }
 
       // 7. Create Review Entity
       const review = this.reviewRepository.create({
+        prId: prEntity.id,
         prNumber: pr.number,
         repository: pr.repository.nameWithOwner,
         status: 'completed',
