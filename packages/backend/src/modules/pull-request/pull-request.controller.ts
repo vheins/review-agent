@@ -1,10 +1,14 @@
 import { Controller, Get, Post, Param, Query, ParseIntPipe, Body } from '@nestjs/common';
 import { PullRequestService } from './pull-request.service.js';
+import { GitHubClientService } from '../github/github.service.js';
 import { sanitizeHtml } from '../../common/utils/sanitization.util.js';
 
 @Controller('prs')
 export class PullRequestController {
-  constructor(private readonly prService: PullRequestService) {}
+  constructor(
+    private readonly prService: PullRequestService,
+    private readonly github: GitHubClientService
+  ) {}
 
   @Get()
   async list(
@@ -95,12 +99,60 @@ export class PullRequestController {
         // Save the updated entity
         await (this.prService as any).prRepository.save(pr);
       }
+    let githubConversations: any[] = [];
+    let latestOutcome: string | null = null;
+    
+    try {
+      if (pr.repository && pr.number) {
+        // Fetch both reviews and issue comments concurrently
+        const [reviews, issueComments] = await Promise.all([
+          this.prService.listReviews(pr.repository, pr.number).catch(() => []),
+          this.github.listIssueComments(pr.repository, pr.number).catch(() => [])
+        ]);
+
+        // Map formal reviews
+        const reviewEvents = (reviews || []).map((r: any) => ({
+          id: `review-${r.id}`,
+          type: 'review',
+          author: r.user?.login || 'unknown',
+          state: r.state,
+          body: r.body || '',
+          url: r.html_url,
+          createdAt: r.submitted_at || r.created_at,
+          updatedAt: r.updated_at || r.submitted_at || r.created_at
+        }));
+
+        // Keep track of the latest significant review state
+        const significantReviews = reviewEvents
+          .filter(r => ['CHANGES_REQUESTED', 'APPROVED'].includes(r.state?.toUpperCase()))
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        
+        if (significantReviews.length > 0) {
+          latestOutcome = significantReviews[0].state.toLowerCase();
+        }
+
+        // Map general comments
+        const commentEvents = (issueComments || []).map((c: any) => ({
+          id: `comment-${c.id}`,
+          type: 'comment',
+          author: c.user?.login || 'unknown',
+          state: 'COMMENTED',
+          body: c.body || '',
+          url: c.html_url,
+          createdAt: c.created_at,
+          updatedAt: c.updated_at
+        }));
+
+        // Combine and sort chronologically
+        githubConversations = [...reviewEvents, ...commentEvents].sort((a, b) => {
+          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        });
+      }
     } catch (e) {
-      // Log error but don't fail the request - we can still return the cached DB version
-      console.warn(`[Sync] Failed to fetch fresh data for PR ${pr.id}: ${e.message}`);
+      console.warn(`[Sync] Failed to fetch conversations for PR ${pr.id}: ${e.message}`);
     }
     
-    return { success: true, data: pr };
+    return { success: true, data: pr, github_conversations: githubConversations, latest_outcome: latestOutcome };
   }
 
   @Get('id/:id/health')

@@ -620,6 +620,20 @@ export class GitHubClientService {
     return this.cli.listReviewComments(repoName, prNumber);
   }
 
+  async listIssueComments(repoName: string, issueNumber: number): Promise<any[]> {
+    this.logger.debug(`[Sync] Listing issue comments for ${repoName}#${issueNumber}`);
+    const token = this.configService.get<string>('GITHUB_TOKEN');
+    if (token) {
+      try {
+        return await this.api.listIssueComments(repoName, issueNumber);
+      } catch (e) {
+        this.logger.warn(`API list issue comments failed: ${e.message}`);
+        return [];
+      }
+    }
+    return [];
+  }
+
   async createReviewComment(repoName: string, prNumber: number, data: any): Promise<any> {
     this.logger.log(`[Sync] Creating review comment on PR ${repoName}#${prNumber}`);
     const token = this.configService.get<string>('GITHUB_TOKEN');

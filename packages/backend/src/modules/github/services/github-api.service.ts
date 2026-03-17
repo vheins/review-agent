@@ -184,6 +184,11 @@ export class GithubApiService {
     return this.fetchApi(`/repos/${repoName}/pulls/${prNumber}/comments`);
   }
 
+  async listIssueComments(repoName: string, issueNumber: number): Promise<any> {
+    this.logger.debug(`[API] Listing issue comments for ${repoName}#${issueNumber}`);
+    return this.fetchApi(`/repos/${repoName}/issues/${issueNumber}/comments`);
+  }
+
   async getReviewComment(repoName: string, commentId: number): Promise<any> {
     this.logger.debug(`[API] Getting review comment ${commentId}`);
     return this.fetchApi(`/repos/${repoName}/pulls/comments/${commentId}`);

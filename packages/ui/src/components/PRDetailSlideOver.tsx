@@ -198,7 +198,7 @@ export function PRDetailSlideOver({ pr, onClose }: { pr: any; onClose: () => voi
     const reviewers: string[] = pr.requested_reviewers ?? [];
     const outcome = pr.latest_outcome;
     const labels: string[] = pr.labels ?? [];
-    const reviews = pr.reviews ?? [];
+    const conversations = pr.github_conversations ?? [];
 
 
     return (
@@ -342,30 +342,48 @@ export function PRDetailSlideOver({ pr, onClose }: { pr: any; onClose: () => voi
                                 </div>
                             )}
 
-                            {/* Reviews timeline */}
-                            {reviews.length > 0 && (
+                            {/* Conversation history timeline */}
+                            {conversations.length > 0 && (
                                 <div>
-                                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Review Activity</p>
-                                    <div className="space-y-2">
-                                        {reviews.slice(0, 5).map((review: any, i: number) => (
-                                            <div key={review.id || i} className="flex items-start gap-2.5 rounded-lg border border-border bg-muted/20 p-3">
-                                                <Avatar login={review.reviewer || review.author || '?'} size="sm" />
-                                                <div className="min-w-0 flex-1">
-                                                    <div className="flex items-center gap-2 text-xs">
-                                                        <span className="font-medium text-foreground">{review.reviewer || review.author || 'Unknown'}</span>
-                                                        {review.outcome && (
-                                                            <Badge variant={toneForStatus(review.outcome)} className="text-[10px] h-4 px-1 capitalize">
-                                                                {review.outcome === 'changes_requested' ? 'Changes requested' : review.outcome}
-                                                            </Badge>
-                                                        )}
-                                                        <span className="ml-auto text-muted-foreground">{formatRelativeTime(review.createdAt || review.created_at)}</span>
+                                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Conversation History</p>
+                                    <div className="space-y-3">
+                                        {conversations.map((conv: any, i: number) => {
+                                            const isReview = conv.type === 'review';
+                                            const isComment = conv.type === 'comment';
+                                            const outcome = conv.state?.toLowerCase();
+                                            const hasBody = !!conv.body;
+                                            
+                                            // Don't show empty approved/commented reviews lacking bodies unless it's a structural change request.
+                                            if (isReview && !hasBody && outcome !== 'changes_requested' && outcome !== 'approved') return null;
+
+                                            return (
+                                                <div key={conv.id || i} className={`flex flex-col gap-2 rounded-lg border ${isReview ? 'border-primary/20 bg-primary/5' : 'border-border bg-muted/20'} p-3`}>
+                                                    <div className="flex items-center gap-2.5">
+                                                        <Avatar login={conv.author || '?'} size="sm" />
+                                                        <div className="min-w-0 flex-1 flex items-center gap-2 text-xs">
+                                                            <span className="font-bold text-foreground">{conv.author || 'Unknown'}</span>
+                                                            
+                                                            {isReview ? (
+                                                                <Badge variant={toneForStatus(outcome)} className="text-[10px] h-4 px-1.5 capitalize">
+                                                                    {outcome === 'changes_requested' ? 'Changes requested' : outcome}
+                                                                </Badge>
+                                                            ) : (
+                                                                <span className="text-muted-foreground text-[10px] uppercase tracking-wider font-medium">commented</span>
+                                                            )}
+                                                            
+                                                            <a href={conv.url} target="_blank" rel="noopener noreferrer" className="ml-auto text-muted-foreground hover:text-foreground transition-colors hover:underline">
+                                                                {formatRelativeTime(conv.createdAt)}
+                                                            </a>
+                                                        </div>
                                                     </div>
-                                                    {review.summary && (
-                                                        <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{review.summary}</p>
+                                                    {hasBody && (
+                                                        <div className="pl-8 pt-1">
+                                                            <MarkdownBody text={conv.body} />
+                                                        </div>
                                                     )}
                                                 </div>
-                                            </div>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             )}
