@@ -554,6 +554,17 @@ export class ReviewEngineService {
             this.logger.warn(`Could not check for fixable comments on PR #${pr.number}: ${e.message}`);
           }
 
+          // If autoMerge is enabled, don't skip — let reviewPullRequest handle the merge
+          try {
+            const repoConfig = await this.config.getRepositoryConfig(pr.repository.nameWithOwner);
+            if (repoConfig.autoMerge) {
+              this.logger.log(`PR #${pr.number} is approved and clean but not yet merged — proceeding to auto-merge.`);
+              return false;
+            }
+          } catch (e) {
+            this.logger.warn(`Could not check autoMerge config for PR #${pr.number}: ${e.message}`);
+          }
+
           this.logger.log(`PR #${pr.number} already approved at HEAD ${headSha.slice(0, 7)} and is clean — skipping.`);
           return true;
         }
