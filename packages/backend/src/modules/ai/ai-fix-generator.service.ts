@@ -1,16 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AiReviewComment } from './executors/index.js';
-import { GeminiExecutor } from './executors/gemini.executor.js';
+import { AiExecutorService } from './ai-executor.service.js';
 import { AppConfigService } from '../../config/app-config.service.js';
+import fs from 'fs-extra';
+import * as path from 'path';
 
 /**
  * AiFixGeneratorService - Service for generating and validating AI fixes
- * 
- * Features:
- * - Complex fix generation using AI
- * - Fix validation (syntax and logic) 
- * 
- * Requirements: 8.6
  */
 @Injectable()
 export class AiFixGeneratorService {
@@ -18,49 +14,47 @@ export class AiFixGeneratorService {
 
   constructor(
     private readonly config: AppConfigService,
-    private readonly gemini: GeminiExecutor,
+    private readonly aiExecutor: AiExecutorService,
   ) {}
 
   /**
    * Generate a complex fix for a review comment
-   * 
-   * @param comment - Review comment with issue details
-   * @param fileContent - Original file content
-   * @param filePath - Path to the file
-   * @returns Generated fix or null if failed
    */
   async generateComplexFix(comment: AiReviewComment, fileContent: string, filePath: string): Promise<string | null> {
     this.logger.log(`Generating AI fix for: ${comment.message} in ${filePath}`);
     
     try {
+      const fixPromptContent = await fs.readFile(path.resolve(process.cwd(), 'context/fix-prompt.md'), 'utf8');
+      
       const prompt = `
-Context: You are an expert developer fixing a code issue.
+${fixPromptContent}
+
+Tugas Spesifik: Perbaiki issue berikut pada file.
 File: ${filePath}
 Issue: ${comment.message}
 Issue Type: ${comment.issue_type}
-Severity: ${comment.severity}
 Line Number: ${comment.line_number}
 
-Original File Content:
-\`\`\
+Isi File Asli:
+\`\`\`
 ${fileContent}
-\`\`\
+\`\`\`
 
-Task: Provide the full corrected content of the file. Ensure the fix addresses the reported issue while maintaining the overall logic and style.
-Only return the file content, no explanations or markdown blocks.
+Tugas: Berikan isi file LENGKAP yang sudah diperbaiki.
+Hanya kembalikan isi file, jangan ada penjelasan atau markdown blocks.
 `;
 
-      const response = await this.gemini.model.generateContent(prompt);
-      const text = response.response.text();
+      // Use actual AI executor
+      const repoConfig = await this.config.getRepositoryConfig('');
+      const fixedContent = await this.aiExecutor.executePrompt(repoConfig.executor, prompt);
       
-      // Clean up potential markdown blocks if AI ignored instructions
-      let fixedContent = text.trim();
-      if (fixedContent.startsWith('```')) {
-        fixedContent = fixedContent.replace(/^```[a-z]*\n/, '').replace(/\n```$/, '');
+      let cleanedContent = fixedContent.trim();
+      if (cleanedContent.startsWith('```')) {
+        cleanedContent = cleanedContent.replace(/^```[a-z]*\n/, '').replace(/\n```$/, '');
       }
 
-      if (await this.validateFix(fixedContent, fileContent)) {
-        return fixedContent;
+      if (await this.validateFix(cleanedContent, fileContent)) {
+        return cleanedContent;
       }
     } catch (error) {
       this.logger.error(`Failed to generate complex fix: ${error.message}`);
@@ -70,45 +64,42 @@ Only return the file content, no explanations or markdown blocks.
   }
 
   /**
-   * Resolve merge conflicts in a file using AI with specific fix context
+   * Resolve merge conflicts in a file using the actual AI model
    */
   async resolveConflicts(fileContent: string, filePath: string, prInfo?: { number: number, title: string, repository: string, headRefName: string }): Promise<string | null> {
-    this.logger.log(`AI resolving merge conflicts in: ${filePath} using fix context`);
+    this.logger.log(`AI resolving merge conflicts in: ${filePath}`);
     
     try {
-      const prContext = prInfo ? `
-Repository: ${prInfo.repository}
-Pull Request: #${prInfo.number} ${prInfo.title}
-Branch: ${prInfo.headRefName}
-` : '';
-
+      const fixPromptContent = await fs.readFile(path.resolve(process.cwd(), 'context/fix-prompt.md'), 'utf8');
+      
       const prompt = `
-Kamu adalah code reviewer dan fixer. Tugas kamu adalah menyelesaikan konflik merge (merge conflict).
-${prContext}
+${fixPromptContent}
+
+Tugas Spesifik: Selesaikan konflik merge pada file berikut.
 File: ${filePath}
 
-File di bawah ini mengandung marker konflik Git (<<<<<<<, =======, >>>>>>>). 
-Selesaikan konflik dengan menggabungkan perubahan secara benar, pertahankan integritas fungsional kode, dan ikuti coding style yang sudah ada.
-
-Conflicted File Content:
-\`\`\
+Isi File dengan Konflik:
+\`\`\`
 ${fileContent}
-\`\`\
+\`\`\`
 
-Tugas: Berikan hasil akhir isi file yang sudah diperbaiki (resolved) secara lengkap TANPA marker konflik.
-Hanya kembalikan isi file, jangan ada penjelasan atau markdown blocks.
+Berikan isi file LENGKAP yang sudah diperbaiki tanpa marker konflik. 
+PENTING: Jangan tambahkan penjelasan, jangan gunakan markdown wrapper. Hanya kode mentah.
 `;
 
-      const response = await this.gemini.model.generateContent(prompt);
-      const text = response.response.text();
+      const repoConfig = await this.config.getRepositoryConfig(prInfo?.repository || '');
+      const resolvedCode = await this.aiExecutor.executePrompt(repoConfig.executor, prompt);
       
-      let resolvedContent = text.trim();
-      if (resolvedContent.startsWith('```')) {
-        resolvedContent = resolvedContent.replace(/^```[a-z]*\n/, '').replace(/\n```$/, '');
+      let cleanedCode = resolvedCode.trim();
+      if (cleanedCode.startsWith('```')) {
+        cleanedCode = cleanedCode.replace(/^```[a-z]*\n/, '').replace(/\n```$/, '');
       }
 
-      if (resolvedContent && !resolvedContent.includes('<<<<<<<')) {
-        return resolvedContent;
+      // Safety check: code must be valid and not containing markers
+      if (cleanedCode && !cleanedCode.includes('<<<<<<<') && cleanedCode.length > (fileContent.length * 0.3)) {
+        return cleanedCode;
+      } else {
+        this.logger.error(`AI returned invalid content for ${filePath}`);
       }
     } catch (error) {
       this.logger.error(`AI failed to resolve conflicts in ${filePath}: ${error.message}`);
@@ -119,20 +110,11 @@ Hanya kembalikan isi file, jangan ada penjelasan atau markdown blocks.
 
   /**
    * Validate a generated fix
-   * 
-   * @param fix - Generated fix content
-   * @param originalContent - Original content
-   * @returns Validation result
    */
   async validateFix(fix: string | null, originalContent: string): Promise<boolean> {
-    try {
-      // Basic validation: fix shouldn't be empty or same as original
-      if (!fix || fix === originalContent) return false;
-      
-      // We could add syntax checking here (e.g., using a parser)
-      return true;
-    } catch (e) {
-      return false;
-    }
+    if (!fix || fix === originalContent) return false;
+    // Basic length sanity check
+    if (fix.length < originalContent.length * 0.2) return false;
+    return true;
   }
 }

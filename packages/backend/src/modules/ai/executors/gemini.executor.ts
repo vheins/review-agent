@@ -4,15 +4,9 @@ import { PullRequest } from '../../github/github.service.js';
 
 export class GeminiExecutor extends BaseAiExecutor {
   private readonly logger = new Logger(GeminiExecutor.name);
-  public model: any;
 
   constructor() {
     super('gemini');
-    this.model = {
-      generateContent: async (prompt: string) => ({
-        response: { text: () => 'AI Fixed: Corrected code content' }
-      })
-    };
   }
 
   async review(pr: PullRequest, changedFiles: string[], repoDir: string): Promise<string> {

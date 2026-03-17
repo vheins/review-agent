@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AppConfigService } from '../../config/app-config.service.js';
 import { PullRequest } from '../github/github.service.js';
-import { AiExecutor, AiReviewComment } from './executors/index.js';
+import { AiExecutor, AiReviewComment, BaseAiExecutor } from './executors/index.js';
 import { GeminiExecutor } from './executors/gemini.executor.js';
 import { CopilotExecutor } from './executors/copilot.executor.js';
 import { KiroExecutor, ClaudeExecutor, CodexExecutor, OpenCodeExecutor } from './executors/others.executor.js';
@@ -80,12 +80,21 @@ export class AiExecutorService {
     return executor.review(pr, changedFiles, repoDir);
   }
 
+  async executePrompt(executorName: string, prompt: string, repoDir?: string): Promise<string> {
+    const executor = this.executors.get(executorName.toLowerCase()) || this.executors.get('gemini')!;
+    this.logger.log(`Executing custom prompt using ${executor.name}`);
+    if (executor instanceof BaseAiExecutor) {
+      // Use the internal execCli of the executor
+      return (executor as any).execCli(executor.name, ['--yolo'], { cwd: repoDir || process.cwd(), input: prompt });
+    }
+    throw new Error(`Executor ${executorName} does not support raw prompts`);
+  }
+
   /**
    * Generate high-level insights for a Tech Lead
    */
   async generateLeadInsights(pr: PullRequest, diff: string): Promise<{ summary: string; risk: number; impact: number; category: string }> {
     try {
-      const executor = this.executors.get('gemini')!; // Use Gemini for insights
       const prompt = `As a Technical Lead, analyze this PR and provide:
 1. A 2-sentence executive summary.
 2. A risk score (0-100) based on complexity and potential breakage.
@@ -98,8 +107,7 @@ ${diff.slice(0, 5000)}
 
 Return JSON: { "summary": "...", "risk": 0, "impact": 0, "category": "..." }`;
 
-      const response = await (executor as any).model.generateContent(prompt);
-      const text = response.response.text();
+      const text = await this.executePrompt('gemini', prompt);
       const jsonStr = text.match(/\{.*\}/s)?.[0];
       
       if (jsonStr) {
