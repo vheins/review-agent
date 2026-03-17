@@ -24,7 +24,7 @@ export class AiFixGeneratorService {
     this.logger.log(`Generating AI fix for: ${comment.message} in ${filePath}`);
     
     try {
-      const fixPromptContent = await fs.readFile(path.resolve(process.cwd(), 'context/fix-prompt.md'), 'utf8');
+      const fixPromptContent = await fs.readFile(path.resolve(process.cwd(), '../../context/fix-prompt.md'), 'utf8');
       
       const prompt = `
 ${fixPromptContent}
@@ -70,7 +70,7 @@ Hanya kembalikan isi file, jangan ada penjelasan atau markdown blocks.
     this.logger.log(`AI resolving merge conflicts in: ${filePath}`);
     
     try {
-      const fixPromptContent = await fs.readFile(path.resolve(process.cwd(), 'context/fix-prompt.md'), 'utf8');
+      const fixPromptContent = await fs.readFile(path.resolve(process.cwd(), '../../context/fix-prompt.md'), 'utf8');
       
       const prompt = `
 ${fixPromptContent}

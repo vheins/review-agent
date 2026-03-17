@@ -332,6 +332,8 @@ export class ReviewEngineService {
               currentMergeableState = 'clean';
             } else {
               this.logger.warn(`Failed to resolve conflicts automatically for PR #${pr.number}`);
+              decision = 'REQUEST_CHANGES';
+              summaryMessage = '❌ **Auto-merge gagal karena terdapat merge conflicts yang tidak dapat diselesaikan oleh AI.** Silakan resolve conflicts secara manual.';
             }
           }
 
@@ -442,15 +444,19 @@ export class ReviewEngineService {
 
       // 17. Auto-merge
       // Logic: Merge if decision is APPROVE AND autoMerge is enabled in repo config
-      // AND (not in auto-fix mode OR fixes were applied/not needed OR was already approved)
-      const shouldAutoMerge = decision === 'APPROVE' && repoConfig.autoMerge;
+      // AND current state is not dirty (conflicts resolved)
+      const shouldAutoMerge = decision === 'APPROVE' && repoConfig.autoMerge && currentMergeableState !== 'dirty';
       
       if (shouldAutoMerge) {
         if (appConfig.dryRun) {
           this.logger.log(`[DryRun] Skipping auto-merge for PR #${pr.number}`);
         } else {
           this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 95, 'Auto-merging PR...');
-          await this.github.mergePR(pr.repository.nameWithOwner, pr.number, 'merge');
+          const merged = await this.github.mergePR(pr.repository.nameWithOwner, pr.number, 'merge');
+          if (!merged) {
+             this.logger.error(`GitHub CLI merge failed for PR #${pr.number}.`);
+             // We can proceed, but log it as an error
+          }
         }
       }
 
