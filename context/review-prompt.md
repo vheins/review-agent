@@ -132,7 +132,12 @@ Scoring per issue:
 
 Decision rules:
 1. Ada CRITICAL atau HIGH → selalu `REQUEST_CHANGES`
-2. Tidak ada CRITICAL/HIGH → tergantung total score vs threshold {{severityThreshold}}
+2. Tidak ada CRITICAL/HIGH (lulus threshold {{severityThreshold}}) → **WAJIB lakukan AUTO-MERGE**:
+   - Gunakan metode **MERGE COMMIT** (jangan squash, jangan rebase).
+   - Jika ada konflik merge, kamu WAJIB menyelesaikannya terlebih dahulu.
+   - Selesaikan konflik dengan perbaikan yang benar (tetap mengikuti best practice, jangan asal tindih).
+   - Setelah konflik beres dan review lulus, selesaikan dengan merge ke base branch.
+3. Jika total score melebihi threshold → `REQUEST_CHANGES` atau evaluasi ulang poin-poin MEDIUM/LOW yang ada.
 
 ### STEP 7: Simpan ke memory
 - `memory-store` untuk pattern penting atau issue berulang
