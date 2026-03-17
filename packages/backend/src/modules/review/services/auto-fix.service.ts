@@ -148,10 +148,14 @@ export class AutoFixService {
         const conflictFilesStr = conflictedFiles.join(', ');
         await this.github.execaVerbose('git', ['commit', '-m', `fix(conflict): selesaikan konflik di ${conflictFilesStr}`], { cwd: repoDir });
         this.logger.log('Conflicts successfully resolved via AI and merge completed.');
+        
+        // Push immediately after resolution to ensure remote is updated
+        await this.github.execaVerbose('git', ['push', 'origin', 'HEAD', '--force-with-lease'], { cwd: repoDir });
         return true;
       }
       
       this.logger.log('Conflicts successfully resolved via standard merge.');
+      await this.github.execaVerbose('git', ['push', 'origin', 'HEAD', '--force-with-lease'], { cwd: repoDir });
       return true;
     } catch (e) {
       this.logger.error(`Failed during conflict resolution attempt: ${e.message}`);

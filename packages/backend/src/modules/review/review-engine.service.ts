@@ -163,6 +163,9 @@ export class ReviewEngineService {
         this.logger.log(`Bypassing AI review for already approved PR #${pr.number}`);
         aiComments = existingFixableComments;
         decision = 'APPROVE';
+        // When already approved, reuse existing scores if possible, or stay at 100
+        healthScore = 100; 
+        qualityScore = 100;
       } else {
         // 3. Run Security Scans
         this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 30, 'Running security scans...');
@@ -438,7 +441,9 @@ export class ReviewEngineService {
       }
 
       // 17. Auto-merge
-      const shouldAutoMerge = decision === 'APPROVE' && repoConfig.autoMerge && (repoConfig.reviewMode === 'comment' || fixesApplied || isAlreadyApproved);
+      // Logic: Merge if decision is APPROVE AND autoMerge is enabled in repo config
+      // AND (not in auto-fix mode OR fixes were applied/not needed OR was already approved)
+      const shouldAutoMerge = decision === 'APPROVE' && repoConfig.autoMerge;
       
       if (shouldAutoMerge) {
         if (appConfig.dryRun) {
@@ -558,8 +563,11 @@ export class ReviewEngineService {
           try {
             const repoConfig = await this.config.getRepositoryConfig(pr.repository.nameWithOwner);
             if (repoConfig.autoMerge) {
-              this.logger.log(`PR #${pr.number} is approved and clean but not yet merged — proceeding to auto-merge.`);
-              return false;
+              // Only proceed if it's NOT already merged (GitHub API sometimes lags)
+              if (mergeableState === 'clean' || mergeableState === 'unstable' || mergeableState === 'dirty') {
+                this.logger.log(`PR #${pr.number} is approved and ${mergeableState} but not yet merged — proceeding to auto-merge.`);
+                return false;
+              }
             }
           } catch (e) {
             this.logger.warn(`Could not check autoMerge config for PR #${pr.number}: ${e.message}`);

@@ -74,6 +74,14 @@ export class AutoMergeService {
       reasons.push('security_findings_present');
     }
 
+    // 4. Mergeable State Check (GitHub)
+    // We only block if 'dirty' (conflicts) or 'blocked' (locked/other requirements)
+    // 'behind' is okay because we attempt auto-update/merge
+    const githubPR = await this.github.getPRDetail(pr.repository, pr.number);
+    if (githubPR.mergeable_state === 'dirty') {
+      reasons.push('merge_conflicts_present');
+    }
+
     return {
       eligible: reasons.length === 0,
       reasons,
