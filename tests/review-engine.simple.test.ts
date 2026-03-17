@@ -1,11 +1,13 @@
 import 'reflect-metadata';
-import { ReviewEngineService } from '../src/modules/review/review-engine.service.js';
+import { ReviewEngineService } from '../packages/backend/src/modules/review/review-engine.service.js';
+import { AutoFixService } from '../packages/backend/src/modules/review/services/auto-fix.service.js';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import * as fc from 'fast-check';
 
 describe('ReviewEngineService Simplified', () => {
   let service: ReviewEngineService;
   let githubService: any;
+  let repoManager: any;
   let aiService: any;
   let aiFix: any;
   let gateway: any;
@@ -26,15 +28,19 @@ describe('ReviewEngineService Simplified', () => {
   beforeEach(() => {
     githubService = {
       prepareRepository: vi.fn(),
+      getPRDetail: vi.fn(),
       execaVerbose: vi.fn(),
       addReview: vi.fn(),
       mergePR: vi.fn(),
       fetchOpenPRs: vi.fn(),
-      getChangedFiles: vi.fn().mockResolvedValue([]),
+      getChangedFiles: vi.fn().mockResolvedValue([{ path: 'src/app.ts', content: 'code' }]),
+      listReviews: vi.fn().mockResolvedValue([]),
     };
 
     aiService = {
       executeReview: vi.fn(),
+      executeRaw: vi.fn().mockResolvedValue('Summary'),
+      parseOutput: vi.fn().mockReturnValue([]),
     };
 
     aiFix = {
@@ -58,6 +64,11 @@ describe('ReviewEngineService Simplified', () => {
       }),
       getRepositoryConfig: vi.fn().mockResolvedValue({
         executor: 'gemini',
+        reviewMode: 'comment',
+        autoMerge: true,
+      }),
+      getReviewConfig: vi.fn().mockReturnValue({
+        reviewMode: 'comment',
       }),
     };
 
@@ -112,10 +123,25 @@ describe('ReviewEngineService Simplified', () => {
       create: vi.fn().mockImplementation(val => val),
     };
 
+    repoManager = {
+      prepareRepository: vi.fn().mockResolvedValue('/tmp/repo'),
+    };
+
+    const autoFixServiceInstance = {
+      isFixable: vi.fn().mockReturnValue(false),
+      applyFixes: vi.fn(),
+      runProjectFixers: vi.fn(),
+      verifyFixes: vi.fn(),
+      commitAndPushFixes: vi.fn(),
+      fixConflicts: vi.fn(),
+    };
+
     service = new ReviewEngineService(
       githubService,
+      repoManager as any,
       aiService,
       aiFix,
+      autoFixServiceInstance as any,
       gateway,
       configService,
       dataSource,
@@ -144,27 +170,21 @@ describe('ReviewEngineService Simplified', () => {
       url: 'https://github.com/owner/repo/pull/123',
       headRefName: 'feature',
       baseRefName: 'main',
+      headSha: '1234567',
+      baseSha: '0987654',
+      mergeable_state: 'clean',
     };
 
     githubService.prepareRepository.mockResolvedValue('/tmp/repo');
     githubService.execaVerbose.mockResolvedValue({ stdout: 'diff', exitCode: 0 });
-    aiService.executeReview.mockResolvedValue([
-      {
-        file_path: 'src/app.ts',
-        line_number: 10,
-        issue_type: 'quality',
-        severity: 'info',
-        message: 'msg',
-        is_auto_fixable: false,
-      }
-    ]);
+    aiService.executeReview.mockResolvedValue([]);
     githubService.addReview.mockResolvedValue(true);
 
     const result = await service.reviewPullRequest(mockPR as any);
 
     expect(result).toBe(true);
-    expect(githubService.prepareRepository).toHaveBeenCalled();
-    expect(aiService.executeReview).toHaveBeenCalled();
+    expect(repoManager.prepareRepository).toHaveBeenCalled();
+    expect(aiService.executeRaw).toHaveBeenCalled();
     expect(githubService.addReview).toHaveBeenCalled();
     expect(securityScanner.scanFiles).toHaveBeenCalled();
     expect(dependencyScanner.scanDependencies).toHaveBeenCalled();

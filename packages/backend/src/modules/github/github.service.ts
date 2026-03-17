@@ -678,7 +678,7 @@ export class GitHubClientService {
   /**
    * Merge a Pull Request
    */
-  async mergePR(repoName: string, prNumber: number, method: 'squash' | 'merge' | 'rebase' = 'squash'): Promise<boolean> {
+  async mergePR(repoName: string, prNumber: number, method: 'squash' | 'merge' | 'rebase' = 'merge'): Promise<boolean> {
     this.logger.log(`[Sync] Merging PR ${repoName}#${prNumber} using ${method}`);
     const token = this.configService.get<string>('GITHUB_TOKEN');
     if (token) {

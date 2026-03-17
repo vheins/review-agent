@@ -65,7 +65,7 @@ describe('GitHubClientService', () => {
       execaVerbose: vi.fn().mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 }),
     };
 
-    service = new GitHubClientService(appConfig as any, configService as any, githubApi as any, githubCli as any);
+    service = new GitHubClientService(configService as any, appConfig as any, githubApi as any, githubCli as any);
   });
 
   describe('fetchOpenPRs', () => {
@@ -175,10 +175,10 @@ describe('GitHubClientService', () => {
     it('should merge PR via API', async () => {
       githubApi.mergePR.mockResolvedValue({});
 
-      const result = await service.mergePR('owner/repo', 1, 'squash');
+      const result = await service.mergePR('owner/repo', 1, 'merge');
 
       expect(result).toBe(true);
-      expect(githubApi.mergePR).toHaveBeenCalledWith('owner/repo', 1, 'squash');
+      expect(githubApi.mergePR).toHaveBeenCalledWith('owner/repo', 1, 'merge');
     });
   });
 

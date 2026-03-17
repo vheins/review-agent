@@ -47,33 +47,38 @@ describe('RepositoryManagerService', () => {
     vi.mocked(fs.pathExists).mockResolvedValue(false);
 
     github.execaVerbose
-      .mockResolvedValueOnce({ stdout: '', stderr: '', exitCode: 0 })
-      .mockRejectedValueOnce(new Error("error: pathspec 'feature/demo' did not match any file(s) known to git"))
-      .mockResolvedValueOnce({ stdout: '', stderr: '', exitCode: 0 })
-      .mockResolvedValueOnce({ stdout: '', stderr: '', exitCode: 0 });
+      .mockResolvedValueOnce({ stdout: '', stderr: '', exitCode: 0 }) // clone
+      .mockResolvedValueOnce({ stdout: '', stderr: '', exitCode: 0 }) // merge abort
+      .mockResolvedValueOnce({ stdout: '', stderr: '', exitCode: 0 }) // am abort
+      .mockResolvedValueOnce({ stdout: '', stderr: '', exitCode: 0 }) // rebase abort
+      .mockResolvedValueOnce({ stdout: '', stderr: '', exitCode: 0 }) // reset hard
+      .mockRejectedValueOnce(new Error("error: pathspec 'feature/demo' did not match any file(s) known to git")) // checkout
+      .mockResolvedValueOnce({ stdout: '', stderr: '', exitCode: 0 }) // fetch pull
+      .mockResolvedValueOnce({ stdout: '', stderr: '', exitCode: 0 }); // checkout -B
 
     const repoDir = await service.prepareRepository('owner/repo', 'feature/demo', 'main', 99);
 
     expect(repoDir).toBe('/tmp/review-agent-workspace/owner-repo');
-    expect(github.execaVerbose).toHaveBeenNthCalledWith(
-      1,
+    expect(github.execaVerbose).toHaveBeenCalledWith(
       'git',
       ['clone', 'git@github.com:owner/repo.git', '/tmp/review-agent-workspace/owner-repo'],
     );
-    expect(github.execaVerbose).toHaveBeenNthCalledWith(
-      2,
+    expect(github.execaVerbose).toHaveBeenCalledWith(
+      'git',
+      ['merge', '--abort'],
+      { cwd: '/tmp/review-agent-workspace/owner-repo', allowFail: true },
+    );
+    expect(github.execaVerbose).toHaveBeenCalledWith(
       'git',
       ['checkout', 'feature/demo'],
       { cwd: '/tmp/review-agent-workspace/owner-repo' },
     );
-    expect(github.execaVerbose).toHaveBeenNthCalledWith(
-      3,
+    expect(github.execaVerbose).toHaveBeenCalledWith(
       'git',
       ['fetch', 'origin', 'pull/99/head'],
       { cwd: '/tmp/review-agent-workspace/owner-repo' },
     );
-    expect(github.execaVerbose).toHaveBeenNthCalledWith(
-      4,
+    expect(github.execaVerbose).toHaveBeenCalledWith(
       'git',
       ['checkout', '-B', 'feature/demo', 'FETCH_HEAD'],
       { cwd: '/tmp/review-agent-workspace/owner-repo' },

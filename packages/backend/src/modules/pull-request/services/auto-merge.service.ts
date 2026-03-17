@@ -92,7 +92,7 @@ export class AutoMergeService {
       };
     }
 
-    const merged = await this.github.mergePR(pr.repository, pr.number);
+    const merged = await this.github.mergePR(pr.repository, pr.number, 'merge');
 
     if (!merged) {
       return { status: 'merge_failed', merged: false, reasons: ['github_merge_failed'] };

@@ -96,6 +96,13 @@ export class RepositoryManagerService {
       await this.cloneRepository(repoName, repoDir);
     }
 
+    // Force cleanup of any pending merge/conflict states before checkout
+    this.logger.debug(`[Manager] Ensuring clean state at ${repoDir}`);
+    await this.github.execaVerbose('git', ['merge', '--abort'], { cwd: repoDir, allowFail: true });
+    await this.github.execaVerbose('git', ['am', '--abort'], { cwd: repoDir, allowFail: true });
+    await this.github.execaVerbose('git', ['rebase', '--abort'], { cwd: repoDir, allowFail: true });
+    await this.github.execaVerbose('git', ['reset', '--hard', 'HEAD'], { cwd: repoDir, allowFail: true });
+
     this.logger.debug(`[Manager] Checking out branch: ${headRef}`);
     try {
       await this.github.execaVerbose('git', ['checkout', headRef], { cwd: repoDir });

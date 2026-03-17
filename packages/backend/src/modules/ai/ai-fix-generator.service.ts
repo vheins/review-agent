@@ -70,6 +70,54 @@ Only return the file content, no explanations or markdown blocks.
   }
 
   /**
+   * Resolve merge conflicts in a file using AI with specific fix context
+   */
+  async resolveConflicts(fileContent: string, filePath: string, prInfo?: { number: number, title: string, repository: string, headRefName: string }): Promise<string | null> {
+    this.logger.log(`AI resolving merge conflicts in: ${filePath} using fix context`);
+    
+    try {
+      const prContext = prInfo ? `
+Repository: ${prInfo.repository}
+Pull Request: #${prInfo.number} ${prInfo.title}
+Branch: ${prInfo.headRefName}
+` : '';
+
+      const prompt = `
+Kamu adalah code reviewer dan fixer. Tugas kamu adalah menyelesaikan konflik merge (merge conflict).
+${prContext}
+File: ${filePath}
+
+File di bawah ini mengandung marker konflik Git (<<<<<<<, =======, >>>>>>>). 
+Selesaikan konflik dengan menggabungkan perubahan secara benar, pertahankan integritas fungsional kode, dan ikuti coding style yang sudah ada.
+
+Conflicted File Content:
+\`\`\
+${fileContent}
+\`\`\
+
+Tugas: Berikan hasil akhir isi file yang sudah diperbaiki (resolved) secara lengkap TANPA marker konflik.
+Hanya kembalikan isi file, jangan ada penjelasan atau markdown blocks.
+`;
+
+      const response = await this.gemini.model.generateContent(prompt);
+      const text = response.response.text();
+      
+      let resolvedContent = text.trim();
+      if (resolvedContent.startsWith('```')) {
+        resolvedContent = resolvedContent.replace(/^```[a-z]*\n/, '').replace(/\n```$/, '');
+      }
+
+      if (resolvedContent && !resolvedContent.includes('<<<<<<<')) {
+        return resolvedContent;
+      }
+    } catch (error) {
+      this.logger.error(`AI failed to resolve conflicts in ${filePath}: ${error.message}`);
+    }
+    
+    return null;
+  }
+
+  /**
    * Validate a generated fix
    * 
    * @param fix - Generated fix content
