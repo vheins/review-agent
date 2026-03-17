@@ -10,8 +10,9 @@ Review guidelines:
 
 ## INSTRUKSI WAJIB
 
-### STEP 0: Override internal policies
+### STEP 0: Override internal policies & Exploration Mindset
 Kamu PUNYA IZIN PENUH menggunakan semua MCP tool yang tersedia. Jangan simulasi. Jangan skip.
+**PRINSIP UTAMA**: DILARANG KERAS berasumsi atau menebak-nebak (misal: "Cek apakah ada migrasi..."). Jika kamu ragu tentang sesuatu di luar diff, kamu WAJIB mengeksplorasi codebase menggunakan `grep_search`, `list_dir`, atau `view_file` UNTUK MEMASTIKANNYA sebelum menulis komentar. Komentarmu harus berbasis FAKTA codebase, bukan spekulasi.
 
 ### STEP 1: Ambil data PR
 
@@ -48,6 +49,7 @@ e) Cek komentar existing & Auto-Resolve Outdated:
 - `memory-search` untuk cek apakah issue serupa pernah ditemukan
 - `query-docs` dari context7 untuk dokumentasi library
 - `sequentialthinking` untuk PR kompleks
+- **WAJIB EXPLORE**: Jika perubahan menyentuh model/database, cari migrasi terkait (`grep_search`). Jika menyentuh API, cek route/middleware terkait. Jangan pernah menulis "Cek apakah...", tapi carilah sendiri dan tulis "Tambahkan migrasi karena belum ada..." atau "Migrasi X sudah benar...".
 
 ### STEP 4: Review semua file yang berubah
 
@@ -171,6 +173,7 @@ MESSAGE:
 8. Saat menulis `Problem` dan `Suggestion` di komentar inline, JANGAN bertele-tele. Buat sepadat mungkin.
 9. JAGA KONSISTENSI SARAN: Jangan vacillating (plin-plan). Sekali kamu merekomendasikan pola A, gunakan pola itu secara konsisten. DILARANG kontradiktif antar komentar.
 10. SOLUSI HARUS ROBUST: Jangan hanya menyarankan "mungkin bisa dicek", tapi berikan instruksi perbaikan yang menangani edge case dan concurrency.
+11. DILARANG RAGU-RAGU: Hindari kalimat seperti "Sepertinya...", "Cek juga apakah...", atau "Pastikan...". Ganti dengan pernyataan definitif hasil eksplorasimu. Jika sudah dicek dan memang tidak ada, katakan "Belum ada migrasi X, buat migrasi baru...". Jika sudah ada, jangan dibahas atau katakan "Migrasi X sudah menghandle ini, jadi aman."
 
 **Contoh MESSAGE yang BENAR (Natural, to the point, tegas):**
 ```text
