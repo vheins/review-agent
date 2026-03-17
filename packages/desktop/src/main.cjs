@@ -96,11 +96,27 @@ async function startBackendServer() {
     });
 
     backendServerProcess.stdout.on('data', (data) => {
-        console.log(`[Backend] ${data.toString().trim()}`);
+        const text = data.toString();
+        console.log(`[Backend] ${text.trim()}`);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            text.split('\n').forEach(line => {
+                if (line.trim()) {
+                    mainWindow.webContents.send('log-output', { type: 'info', message: line });
+                }
+            });
+        }
     });
 
     backendServerProcess.stderr.on('data', (data) => {
-        console.error(`[Backend Error] ${data.toString().trim()}`);
+        const text = data.toString();
+        console.error(`[Backend Error] ${text.trim()}`);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            text.split('\n').forEach(line => {
+                if (line.trim()) {
+                    mainWindow.webContents.send('log-output', { type: 'error', message: line });
+                }
+            });
+        }
     });
 
     backendServerProcess.on('close', (code) => {
