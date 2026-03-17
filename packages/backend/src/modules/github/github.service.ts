@@ -112,13 +112,14 @@ export class GitHubClientService {
       { scope: 'assigned',         query: `assignee:${username}`,         label: `assigned to ${username}` },
       { scope: 'review-requested', query: `review-requested:${username}`, label: `review-requested ${username}` },
       { scope: 'mentions',         query: `mentions:${username}`,         label: `mentions ${username}` },
+      { scope: 'involves',         query: `involves:${username}`,         label: `involves ${username}` },
     ];
 
     try {
       this.logger.debug('[CLI] Performing targeted search for all states via gh search prs');
       for (const { scope, query } of scopeActions) {
-        // If scope is not in config and it's not the default mentions fallback, skip
-        if (!appConfig.prScope.includes(scope) && scope !== 'mentions') continue;
+        // If scope is not in config and it's not the default involves fallback, skip
+        if (!appConfig.prScope.includes(scope) && scope !== 'involves') continue;
         
         // Search all states, no archived filter to include historical data
         const items = await this.cli.searchPRs(`${query}`);
@@ -148,10 +149,10 @@ export class GitHubClientService {
         allPRs.push(...(normalizedItems as any[] as PullRequest[]));
       }
 
-      // If absolutely nothing found in specific scopes, try targeted mentions/involves
+      // If absolutely nothing found in specific scopes, try targeted involves
       if (allPRs.length === 0) {
           this.logger.debug('[CLI] No specific scope matches, trying involves filter (all states)');
-          const items = await this.cli.searchPRs(`mentions:${username} archived:false`);
+          const items = await this.cli.searchPRs(`involves:${username}`);
           const normalizedItems = items.map(item => ({
             id: item.id,
             github_id: null,

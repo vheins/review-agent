@@ -559,26 +559,23 @@ export class ReviewEngineService {
             this.logger.warn(`Could not check for fixable comments on PR #${pr.number}: ${e.message}`);
           }
 
-          // If autoMerge is enabled, don't skip — let reviewPullRequest handle the merge
+          // If autoMerge is enabled, don't skip if the PR is still open!
           try {
             const repoConfig = await this.config.getRepositoryConfig(pr.repository.nameWithOwner);
             if (repoConfig.autoMerge) {
-              // Only proceed if it's NOT already merged (GitHub API sometimes lags)
-              if (mergeableState === 'clean' || mergeableState === 'unstable' || mergeableState === 'dirty') {
-                this.logger.log(`PR #${pr.number} is approved and ${mergeableState} but not yet merged — proceeding to auto-merge.`);
-                return false;
-              }
+              this.logger.log(`PR #${pr.number} is approved but still open — proceeding to auto-merge pipeline.`);
+              return false;
             }
           } catch (e) {
             this.logger.warn(`Could not check autoMerge config for PR #${pr.number}: ${e.message}`);
           }
 
-          this.logger.log(`PR #${pr.number} already approved at HEAD ${headSha.slice(0, 7)} and is clean — skipping.`);
+          this.logger.log(`PR #${pr.number} already approved at HEAD ${headSha.slice(0, 7)} and autoMerge is disabled — skipping.`);
           return true;
         }
       }
 
-      this.logger.log(`PR #${pr.number} needs re-review: state=${lastReview.state}, match=${lastReview.commit_id?.slice(0, 7)}===${headSha?.slice(0, 7)}`);
+      this.logger.log(`PR #${pr.number} needs re-review: state=${lastReview?.state || 'NONE'}, match=${lastReview?.commit_id?.slice(0, 7)}===${headSha?.slice(0, 7)}`);
       return false;
     } catch (e) {
       this.logger.warn(`Could not check reviews for PR #${pr.number}: ${e.message}`);
