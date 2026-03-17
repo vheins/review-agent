@@ -34,8 +34,10 @@ d) Cek konflik merge:
    - Cari marker `<<<<<<<`, `=======`, `>>>>>>>` di diff
    - Jika ada konflik: gunakan `update_pull_request_branch` dulu
 
-e) Cek komentar existing:
+e) Cek komentar existing & Auto-Resolve Outdated:
    - `pull_request_read(method="get_review_comments", owner, repo, pullNumber)`
+   - Periksa properti `isOutdated` pada tiap thread/komentar dari hasil pemanggilan di atas.
+   - Jika ada komentar/thread yang `isOutdated: true` dan belum di-resolve, LANGSUNG resolve comment tersebut (kamu bisa menggunakan `gh api graphql` dengan mutation `resolveReviewThread` atau memanggil endpoint API GitHub yang sesuai). Jangan biarkan komentar outdated menggantung.
 
 ### STEP 2: Security scan
 - `scan_vulnerable_dependencies` dari osvScanner
