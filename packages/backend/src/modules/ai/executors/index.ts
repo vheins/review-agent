@@ -4,9 +4,14 @@ import fs from 'fs-extra';
 import * as path from 'path';
 import * as os from 'os';
 
-/**
- * AI Review Comment Interface
- */
+// Capture project root at module load time (before any cwd changes)
+// When run via `yarn workspace`, cwd is packages/backend — go up to monorepo root
+const _cwd = process.cwd();
+const PROJECT_ROOT = path.basename(_cwd) === 'backend' && path.basename(path.dirname(_cwd)) === 'packages'
+  ? path.resolve(_cwd, '../..')
+  : _cwd;
+
+
 export interface AiReviewComment {
   file_path: string;
   line_number: number;
@@ -40,7 +45,6 @@ export abstract class BaseAiExecutor implements AiExecutor {
   abstract review(pr: PullRequest, changedFiles: string[], repoDir: string): Promise<string>;
 
   protected buildReviewPrompt(pr: PullRequest, changedFiles: string[]): string {
-    const [owner, repo] = pr.repository.nameWithOwner.split('/');
     const guidelines = this.loadFile('agents.md');
     const template = this.loadFile('context/review-prompt.md');
 
@@ -68,7 +72,7 @@ export abstract class BaseAiExecutor implements AiExecutor {
   }
 
   private loadFile(relativePath: string): string {
-    const p = path.resolve(process.cwd(), relativePath);
+    const p = path.resolve(PROJECT_ROOT, relativePath);
     if (fs.existsSync(p)) return fs.readFileSync(p, 'utf-8');
     return '';
   }

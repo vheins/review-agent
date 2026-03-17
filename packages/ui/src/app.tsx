@@ -285,6 +285,12 @@ export default function App() {
             if (filtersResult && filtersResult.success) {
                 setFilterOptions({ authors: filtersResult.authors || [], repositories: filtersResult.repositories || [] });
             }
+
+            // Sync running state from backend
+            const statusResult = await window.electronAPI?.getReviewStatus?.();
+            if (statusResult?.isRunning !== undefined) {
+                setRunning(statusResult.isRunning);
+            }
         })();
 
         window.electronAPI?.onLogOutput?.((data) => appendLog(data.type, data.message));
@@ -452,7 +458,7 @@ export default function App() {
             return;
         }
         if (result.success) {
-            setRunning(true);
+            if (!once) setRunning(true);
             appendLog('info', once ? 'Single review started' : 'Review loop started');
         } else {
             appendLog('error', result.message);
@@ -476,8 +482,10 @@ export default function App() {
         }
         if (result.success) {
             setRunning(false);
+            appendLog('info', 'Stop requested — will stop after current review completes');
+        } else {
+            appendLog('error', result.message);
         }
-        appendLog(result.success ? 'info' : 'error', result.message);
     }
 
     async function handleExport() {

@@ -35,7 +35,7 @@ async function bootstrap() {
 
   while (true) {
     try {
-      await reviewEngine.runOnce();
+      await reviewEngine.runAll();
     } catch (error) {
       console.error('[NestJS] Error during review run:', error.message);
     }

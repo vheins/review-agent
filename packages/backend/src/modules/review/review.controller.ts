@@ -12,6 +12,9 @@ import { sanitizeHtml, sanitizeObject } from '../../common/utils/sanitization.ut
 
 @Controller('reviews')
 export class ReviewController {
+  private isRunning = false;
+  private stopRequested = false;
+
   constructor(
     private readonly reviewEngine: ReviewEngineService,
     private readonly ruleEngine: RuleEngineService,
@@ -32,6 +35,11 @@ export class ReviewController {
       order: { startedAt: 'DESC' },
       relations: ['pullRequest'],
     });
+  }
+
+  @Get('status')
+  async status() {
+    return { isRunning: this.isRunning, stopRequested: this.stopRequested };
   }
 
   @Get(':id')
@@ -70,8 +78,43 @@ export class ReviewController {
 
   @Post('run-once')
   async runOnce() {
+    if (this.isRunning) return { success: false, message: 'Already running' };
     this.reviewEngine.runOnce();
-    return { message: 'Review engine started in once mode' };
+    return { success: true, message: 'Review engine started in once mode' };
+  }
+
+  @Post('run-all')
+  async runAll() {
+    if (this.isRunning) return { success: false, message: 'Already running' };
+    this.isRunning = true;
+    this.stopRequested = false;
+
+    const REVIEW_INTERVAL = parseInt(process.env.REVIEW_INTERVAL || '600', 10);
+
+    // Run in background (non-blocking)
+    (async () => {
+      while (!this.stopRequested) {
+        try {
+          await this.reviewEngine.runAll();
+        } catch (e) {
+          console.error('[ReviewController] Error during review run:', e.message);
+        }
+        if (this.stopRequested) break;
+        // Wait interval in 1s ticks so stop can interrupt
+        for (let i = 0; i < REVIEW_INTERVAL && !this.stopRequested; i++) {
+          await new Promise(r => setTimeout(r, 1000));
+        }
+      }
+      this.isRunning = false;
+    })();
+
+    return { success: true, message: 'Continuous review started' };
+  }
+
+  @Post('stop')
+  async stop() {
+    this.stopRequested = true;
+    return { success: true, message: 'Stop requested', wasRunning: this.isRunning };
   }
 
   @Post(':id/cancel')

@@ -6,6 +6,7 @@
     "dev": "nest start --watch",
     "build": "nest build",
     "start": "node ./dist/main.js",
+    "start:continuous": "node --loader ts-node/esm ./src/start.ts",
     "debug": "nest start --debug --watch",
     "once": "node --loader ts-node/esm ./src/once.ts",
     "start": "node --loader ts-node/esm ./src/start.ts",

@@ -749,6 +749,23 @@ export class GitHubClientService {
     };
   }
 
+  async createPendingReview(repoName: string, prNumber: number): Promise<void> {
+    await this.cli.execaVerbose('gh', [
+      'api', '--method', 'POST',
+      `repos/${repoName}/pulls/${prNumber}/reviews`,
+      '-f', 'event=',
+    ], { allowFail: true });
+  }
+
+  async addFileComment(repoName: string, prNumber: number, filePath: string, body: string): Promise<void> {
+    // Post as a PR comment (not inline) since dep findings don't have a specific line
+    await this.cli.execaVerbose('gh', [
+      'api', '--method', 'POST',
+      `repos/${repoName}/issues/${prNumber}/comments`,
+      '-f', `body=${body}`,
+    ]);
+  }
+
   async submitPendingReview(repoName: string, prNumber: number, reviewId: number, event: string, body: string): Promise<void> {
     await this.cli.execaVerbose('gh', [
       'api', '--method', 'POST',

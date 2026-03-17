@@ -4,6 +4,7 @@ const electronAPI = {
     startReview: (config) => ipcRenderer.invoke('start-review', config),
     stopReview: () => ipcRenderer.invoke('stop-review'),
     executeNow: () => ipcRenderer.invoke('execute-now'),
+    getReviewStatus: () => ipcRenderer.invoke('get-review-status'),
     showNotification: (data) => ipcRenderer.invoke('show-notification', data),
     openExternal: (url) => ipcRenderer.invoke('open-external', url),
     getRuntimeConfig: () => ipcRenderer.invoke('get-runtime-config'),

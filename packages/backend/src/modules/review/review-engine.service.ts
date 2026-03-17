@@ -292,6 +292,9 @@ export class ReviewEngineService {
       if (appConfig.dryRun) {
         this.logger.log(`[DryRun] Skipping GitHub review for PR #${pr.number}`);
         console.log(`[DryRun] Summary for PR #${pr.number}:`, finalMessage);
+        if (depFindings.length > 0) {
+          console.log(`[DryRun] Dependency findings (${depFindings.length}):`, depFindings.map(f => f.title));
+        }
       } else {
         // Check if AI already posted a review (pending or submitted)
         let alreadyReviewed = false;
@@ -301,7 +304,10 @@ export class ReviewEngineService {
           const submittedReviews = reviews.filter((r: any) => r.state !== 'PENDING');
 
           if (pendingReview) {
-            // Submit the pending review created by AI
+            // Post dependency findings as inline comments on the pending review
+            if (depFindings.length > 0) {
+              await this.postDepFindingsAsComments(pr.repository.nameWithOwner, pr.number, depFindings);
+            }
             this.logger.log(`Found pending review id=${pendingReview.id} — submitting as ${decision}`);
             await this.github.submitPendingReview(pr.repository.nameWithOwner, pr.number, pendingReview.id, decision, finalMessage);
             alreadyReviewed = true;
@@ -314,8 +320,26 @@ export class ReviewEngineService {
         }
 
         if (!alreadyReviewed) {
-          this.logger.log(`No pending review found — posting fallback summary review`);
-          await this.github.addReview(pr.repository.nameWithOwner, pr.number, finalMessage, decision);
+          // Create pending review, post dep findings, then submit
+          if (depFindings.length > 0) {
+            try {
+              await this.github.createPendingReview(pr.repository.nameWithOwner, pr.number);
+              await this.postDepFindingsAsComments(pr.repository.nameWithOwner, pr.number, depFindings);
+              const reviews = await this.github.listReviews(pr.repository.nameWithOwner, pr.number);
+              const pendingReview = reviews.find((r: any) => r.state === 'PENDING');
+              if (pendingReview) {
+                await this.github.submitPendingReview(pr.repository.nameWithOwner, pr.number, pendingReview.id, decision, finalMessage);
+                alreadyReviewed = true;
+              }
+            } catch (e) {
+              this.logger.warn(`Failed to post dep findings as inline comments: ${e.message}`);
+            }
+          }
+
+          if (!alreadyReviewed) {
+            this.logger.log(`No pending review found — posting fallback summary review`);
+            await this.github.addReview(pr.repository.nameWithOwner, pr.number, finalMessage, decision);
+          }
         }
 
         // Open PR in browser
@@ -358,6 +382,18 @@ export class ReviewEngineService {
     }
   }
 
+  private async postDepFindingsAsComments(repoName: string, prNumber: number, findings: any[]): Promise<void> {
+    for (const f of findings) {
+      const severity = f.severity?.toUpperCase() || 'MEDIUM';
+      const body = `[${severity}] **${f.title}**\n\n${f.description}`;
+      try {
+        await this.github.addFileComment(repoName, prNumber, f.filePath, body);
+      } catch (e) {
+        this.logger.warn(`Failed to post dep finding comment for ${f.filePath}: ${e.message}`);
+      }
+    }
+  }
+
   private buildSummaryMessage(aiComments: any[], securityFindings: any[], decision: string, healthScore: number, mode: string, fixesApplied: boolean): string {
     let msg = `### AI Review Summary (${mode} mode)\n\n`;
     msg += `**Decision:** ${decision}\n`;
@@ -382,6 +418,58 @@ export class ReviewEngineService {
     return msg;
   }
 
+  /**
+   * Returns true if PR should be skipped (already reviewed at current HEAD).
+   * Returns false if PR needs review:
+   *   - No submitted review yet, OR
+   *   - Has new commits since last review (re-review needed), OR
+   *   - review-requested is set (team asked for re-review)
+   */
+  private async shouldSkipPR(pr: any): Promise<boolean> {
+    try {
+      const reviews = await this.github.listReviews(pr.repository.nameWithOwner, pr.number);
+      const submitted = reviews.filter((r: any) => r.state === 'APPROVED' || r.state === 'CHANGES_REQUESTED');
+      if (submitted.length === 0) return false;
+
+      const lastReview = submitted[submitted.length - 1];
+
+      // Get current HEAD sha — use pr.headSha if available, else fetch from API
+      let headSha = pr.headSha;
+      if (!headSha) {
+        const detail: any = await this.github.getPRDetail(pr.repository.nameWithOwner, pr.number);
+        headSha = detail.headRefOid || detail.head?.sha;
+      }
+
+      if (headSha && lastReview.commit_id === headSha) {
+        this.logger.log(`PR #${pr.number} already reviewed at HEAD ${headSha.slice(0, 7)} — skipping.`);
+        return true;
+      }
+
+      this.logger.log(`PR #${pr.number} has new commits since last review (${lastReview.commit_id?.slice(0, 7)} → ${headSha?.slice(0, 7)}) — re-reviewing.`);
+      return false;
+    } catch (e) {
+      this.logger.warn(`Could not check reviews for PR #${pr.number}: ${e.message}`);
+      return false;
+    }
+  }
+
+  async runAll(): Promise<void> {
+    this.logger.log('Starting Review Engine (Continuous Mode)...');
+    let prs = await this.github.fetchOpenPRs();
+    prs = prs.filter(pr => !pr.draft && pr.state === 'open');
+    prs.sort((a, b) => a.number - b.number);
+    this.logger.log(`Found ${prs.length} open (non-draft) PRs.`);
+
+    let reviewed = 0;
+    for (const pr of prs) {
+      if (await this.shouldSkipPR(pr)) continue;
+      const success = await this.reviewPullRequest(pr);
+      if (success) reviewed++;
+    }
+
+    this.logger.log(`Review Engine (Continuous Mode) completed. Reviewed ${reviewed} PR(s).`);
+  }
+
   async runOnce(): Promise<void> {
     this.logger.log('Starting Review Engine (Once Mode)...');
     let prs = await this.github.fetchOpenPRs();
@@ -396,18 +484,7 @@ export class ReviewEngineService {
 
     this.logger.log('Limiting to 1 PR for single-run execution.');
     for (const pr of prs) {
-      // Skip PRs that already have a submitted review (APPROVED or CHANGES_REQUESTED)
-      try {
-        const reviews = await this.github.listReviews(pr.repository.nameWithOwner, pr.number);
-        const submitted = reviews.filter((r: any) => r.state === 'APPROVED' || r.state === 'CHANGES_REQUESTED');
-        if (submitted.length > 0) {
-          this.logger.log(`PR #${pr.number} already has a ${submitted[submitted.length - 1].state} review — skipping.`);
-          continue;
-        }
-      } catch (e) {
-        this.logger.warn(`Could not check reviews for PR #${pr.number}: ${e.message}`);
-      }
-
+      if (await this.shouldSkipPR(pr)) continue;
       const reviewed = await this.reviewPullRequest(pr);
       if (reviewed) break;
       this.logger.warn(`PR #${pr.number} was skipped, trying next...`);

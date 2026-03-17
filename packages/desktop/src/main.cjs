@@ -238,19 +238,24 @@ async function backendRequest(endpoint, method = 'GET', body = null) {
 
 ipcMain.handle('start-review', async (event, config) => {
     console.log(`[IPC] start-review requested (once: ${config?.once})`);
-    return await backendRequest('/reviews/run-once', 'POST', config);
+    if (config?.once) {
+        return await backendRequest('/reviews/run-once', 'POST', config);
+    }
+    return await backendRequest('/reviews/run-all', 'POST', config);
 });
 
 ipcMain.handle('stop-review', async () => {
     console.log('[IPC] stop-review requested');
-    // For now, NestJS doesn't have a specific stop endpoint if it's running a loop in background
-    // but we can return success to update UI
-    return { success: true, message: 'Review loop stop requested' };
+    return await backendRequest('/reviews/stop', 'POST');
 });
 
 ipcMain.handle('execute-now', async () => {
     console.log('[IPC] execute-now requested');
     return await backendRequest('/reviews/run-once', 'POST', { once: true });
+});
+
+ipcMain.handle('get-review-status', async () => {
+    return await backendRequest('/reviews/status', 'GET');
 });
 
 ipcMain.handle('show-notification', async (event, data) => {
