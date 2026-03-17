@@ -15,15 +15,12 @@ export class GeminiExecutor extends BaseAiExecutor {
     };
   }
 
-  async review(pr: PullRequest, diff: string, repoDir: string): Promise<string> {
+  async review(pr: PullRequest, changedFiles: string[], repoDir: string): Promise<string> {
     this.logger.log(`Gemini reviewing PR #${pr.number}...`);
     const model = process.env.GEMINI_MODEL || 'auto-3';
-    const yolo = process.env.GEMINI_YOLO === 'true';
-    const prompt = this.buildReviewPrompt(pr, diff);
-
-    const args = ['--model', model, '-p', prompt];
-    if (yolo) args.push('--yolo');
-
-    return this.execCli('gemini', args);
+    const prompt = this.buildReviewPrompt(pr, changedFiles);
+    const args = ['--yolo'];
+    if (model && !model.startsWith('auto')) args.push('--model', model);
+    return this.execCli('gemini', args, { cwd: repoDir, input: prompt });
   }
 }

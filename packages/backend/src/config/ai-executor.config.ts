@@ -30,34 +30,34 @@ export default registerAs('aiExecutor', (): AiExecutorConfig => ({
   gemini: {
     enabled: process.env.GEMINI_ENABLED === 'true',
     model: process.env.GEMINI_MODEL || 'auto-3',
-    yolo: process.env.GEMINI_YOLO === 'true',
+    yolo: process.env.GEMINI_YOLO !== 'false',
   },
   copilot: {
     enabled: process.env.COPILOT_ENABLED === 'true',
     model: process.env.COPILOT_MODEL || 'claude-haiku-4.5',
-    yolo: process.env.COPILOT_YOLO === 'true',
+    yolo: process.env.COPILOT_YOLO !== 'false',
   },
   kiro: {
     enabled: process.env.KIRO_ENABLED === 'true',
     model: process.env.KIRO_AGENT || 'auto',
-    yolo: process.env.KIRO_YOLO === 'true',
+    yolo: process.env.KIRO_YOLO !== 'false',
     agent: process.env.KIRO_AGENT,
   },
   claude: {
     enabled: process.env.CLAUDE_ENABLED === 'true',
     model: process.env.CLAUDE_MODEL || 'sonnet',
-    yolo: process.env.CLAUDE_YOLO === 'true',
+    yolo: process.env.CLAUDE_YOLO !== 'false',
     agent: process.env.CLAUDE_AGENT,
   },
   codex: {
     enabled: process.env.CODEX_ENABLED === 'true',
     model: process.env.CODEX_MODEL || 'auto',
-    yolo: process.env.CODEX_YOLO === 'true',
+    yolo: process.env.CODEX_YOLO !== 'false',
   },
   opencode: {
     enabled: process.env.OPENCODE_ENABLED === 'true',
     model: process.env.OPENCODE_MODEL || 'auto',
-    yolo: process.env.OPENCODE_YOLO === 'true',
+    yolo: process.env.OPENCODE_YOLO !== 'false',
     agent: process.env.OPENCODE_AGENT,
   },
 }));

@@ -1,5 +1,5 @@
 import Joi from 'joi';
-import path from 'path';
+import { resolveWorkspaceDir } from './workspace-path.util.js';
 
 /**
  * Configuration Validation Schema
@@ -19,7 +19,7 @@ export const validationSchema = Joi.object({
   LOG_LEVEL: Joi.string()
     .valid('error', 'warn', 'info', 'debug')
     .default('info'),
-  WORKSPACE_DIR: Joi.string().default(process.cwd().includes('packages/backend') ? path.resolve(process.cwd(), '../../workspace') : path.resolve(process.cwd(), 'workspace')),
+  WORKSPACE_DIR: Joi.string().default(resolveWorkspaceDir()),
   EXCLUDE_REPO_OWNERS: Joi.string().allow('').default(''),
   PR_SCOPE: Joi.string().default('authored,assigned,review-requested'),
   AUTO_MERGE: Joi.boolean().default(false),
@@ -41,32 +41,32 @@ export const validationSchema = Joi.object({
   // Gemini
   GEMINI_ENABLED: Joi.boolean().default(true),
   GEMINI_MODEL: Joi.string().default('auto-3'),
-  GEMINI_YOLO: Joi.boolean().default(false),
+  GEMINI_YOLO: Joi.boolean().default(true),
 
   // Copilot
   COPILOT_ENABLED: Joi.boolean().default(false),
   COPILOT_MODEL: Joi.string().default('claude-haiku-4.5'),
-  COPILOT_YOLO: Joi.boolean().default(false),
+  COPILOT_YOLO: Joi.boolean().default(true),
 
   // Kiro
   KIRO_ENABLED: Joi.boolean().default(false),
   KIRO_AGENT: Joi.string().allow('').default('auto'),
-  KIRO_YOLO: Joi.boolean().default(false),
+  KIRO_YOLO: Joi.boolean().default(true),
 
   // Claude
   CLAUDE_ENABLED: Joi.boolean().default(false),
   CLAUDE_MODEL: Joi.string().default('sonnet'),
   CLAUDE_AGENT: Joi.string().allow('').default(''),
-  CLAUDE_YOLO: Joi.boolean().default(false),
+  CLAUDE_YOLO: Joi.boolean().default(true),
 
   // Codex
   CODEX_ENABLED: Joi.boolean().default(false),
   CODEX_MODEL: Joi.string().default('auto'),
-  CODEX_YOLO: Joi.boolean().default(false),
+  CODEX_YOLO: Joi.boolean().default(true),
 
   // OpenCode
   OPENCODE_ENABLED: Joi.boolean().default(false),
   OPENCODE_MODEL: Joi.string().default('auto'),
   OPENCODE_AGENT: Joi.string().allow('').default(''),
-  OPENCODE_YOLO: Joi.boolean().default(false),
+  OPENCODE_YOLO: Joi.boolean().default(true),
 });

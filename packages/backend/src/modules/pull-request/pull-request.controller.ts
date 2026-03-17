@@ -99,6 +99,10 @@ export class PullRequestController {
         // Save the updated entity
         await (this.prService as any).prRepository.save(pr);
       }
+    } catch (error) {
+      console.warn(`[Sync] Failed to refresh PR ${pr.id} from GitHub:`, error);
+    }
+
     let githubConversations: any[] = [];
     let latestOutcome: string | null = null;
     
@@ -106,7 +110,7 @@ export class PullRequestController {
       if (pr.repository && pr.number) {
         // Fetch both reviews and issue comments concurrently
         const [reviews, issueComments] = await Promise.all([
-          this.prService.listReviews(pr.repository, pr.number).catch(() => []),
+          this.github.listReviews(pr.repository, pr.number).catch(() => []),
           this.github.listIssueComments(pr.repository, pr.number).catch(() => [])
         ]);
 

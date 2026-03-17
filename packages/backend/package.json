@@ -8,6 +8,7 @@
     "start": "node ./dist/main.js",
     "debug": "nest start --debug --watch",
     "once": "node --loader ts-node/esm ./src/once.ts",
+    "start": "node --loader ts-node/esm ./src/start.ts",
     "validate-migration": "node --loader ts-node/esm ./src/migration/migration-validator.cli.ts validate"
   },
   "dependencies": {

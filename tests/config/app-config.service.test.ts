@@ -1,8 +1,9 @@
 import { ConfigService } from '@nestjs/config';
 import { Repository } from 'typeorm';
-import { AppConfigService } from '../../src/config/app-config.service.js';
-import { RepositoryConfig } from '../../src/database/entities/repository-config.entity.js';
+import { AppConfigService } from '../../packages/backend/src/config/app-config.service.js';
+import { RepositoryConfig } from '../../packages/backend/src/database/entities/repository-config.entity.js';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import path from 'path';
 
 describe('AppConfigService', () => {
   let service: AppConfigService;
@@ -15,7 +16,7 @@ describe('AppConfigService', () => {
     apiPort: 3000,
     reviewInterval: 600,
     logLevel: 'info',
-    workspaceDir: './workspace',
+    workspaceDir: path.resolve(process.cwd(), 'workspace'),
     excludeRepoOwners: [],
     prScope: ['authored', 'assigned', 'review-requested'],
     autoMerge: false,

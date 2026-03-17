@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import appConfig from '../../src/config/app.config.js';
-import reviewConfig from '../../src/config/review.config.js';
-import aiExecutorConfig from '../../src/config/ai-executor.config.js';
-import databaseConfig from '../../src/config/database.config.js';
+import path from 'path';
+import appConfig from '../../packages/backend/src/config/app.config.js';
+import reviewConfig from '../../packages/backend/src/config/review.config.js';
+import aiExecutorConfig from '../../packages/backend/src/config/ai-executor.config.js';
+import databaseConfig from '../../packages/backend/src/config/database.config.js';
 
 /**
  * Configuration Factory Tests
@@ -59,7 +60,7 @@ describe('Configuration Factories', () => {
       expect(config.apiPort).toBe(3000);
       expect(config.reviewInterval).toBe(600);
       expect(config.logLevel).toBe('info');
-      expect(config.workspaceDir).toBe('./workspace');
+      expect(config.workspaceDir).toBe(path.resolve(process.cwd(), 'workspace'));
       expect(config.autoMerge).toBe(false);
     });
 

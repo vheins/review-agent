@@ -9,6 +9,7 @@ import { AppConfigService } from '../../config/app-config.service.js';
 import { Export } from '../../database/entities/export.entity.js';
 import { ReviewMetrics } from '../../database/entities/review-metrics.entity.js';
 import { Review } from '../../database/entities/review.entity.js';
+import { resolveWorkspaceDir } from '../../config/workspace-path.util.js';
 
 /**
  * DataExporterService - Service for exporting application data
@@ -35,7 +36,7 @@ export class DataExporterService implements OnModuleInit {
       fs.ensureDirSync(this.exportDir);
     } catch (e) {
       this.logger.error(`Failed to initialize export directory: ${e.message}`);
-      this.exportDir = path.join(process.cwd(), 'workspace', 'exports');
+      this.exportDir = path.join(resolveWorkspaceDir(), 'exports');
       fs.ensureDirSync(this.exportDir);
     }
   }

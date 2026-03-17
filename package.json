@@ -11,6 +11,7 @@
     "backend:build": "yarn workspace @review-agent/backend build",
     "backend:start": "yarn workspace @review-agent/backend start",
     "once": "yarn workspace @review-agent/backend once",
+    "start": "yarn workspace @review-agent/backend start",
     "dry-run": "cross-env DRY_RUN=true yarn workspace @review-agent/backend once",
     "ui:dev": "yarn workspace @review-agent/ui dev",
     "ui:build": "yarn workspace @review-agent/ui build",

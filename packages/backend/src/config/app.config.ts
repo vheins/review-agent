@@ -1,5 +1,5 @@
 import { registerAs } from '@nestjs/config';
-import path from 'path';
+import { resolveWorkspaceDir } from './workspace-path.util.js';
 
 /**
  * Application Configuration
@@ -25,7 +25,7 @@ export default registerAs('app', (): AppConfig => ({
   apiPort: parseInt(process.env.API_PORT || '3000', 10),
   reviewInterval: parseInt(process.env.REVIEW_INTERVAL || '600', 10),
   logLevel: process.env.LOG_LEVEL || 'info',
-  workspaceDir: process.env.WORKSPACE_DIR || (process.cwd().includes('packages/backend') ? path.resolve(process.cwd(), '../../workspace') : path.resolve(process.cwd(), 'workspace')),
+  workspaceDir: resolveWorkspaceDir(),
   excludeRepoOwners: process.env.EXCLUDE_REPO_OWNERS
     ? process.env.EXCLUDE_REPO_OWNERS.split(',').map(s => s.trim())
     : [],

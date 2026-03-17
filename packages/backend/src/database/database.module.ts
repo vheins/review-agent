@@ -85,7 +85,7 @@ const __dirname = path.dirname(__filename);
             Job,
           ],
           synchronize: isDevelopment,
-          logging: isDevelopment ? ['query', 'error', 'warn'] : ['error'],
+          logging: isDevelopment ? ['error', 'warn'] : ['error'],
           autoLoadEntities: false,
         };
       },

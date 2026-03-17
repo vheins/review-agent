@@ -62,17 +62,22 @@ export class AiExecutorService {
    * 
    * Requirements: 8.3, 8.4
    */
-  async executeReview(pr: PullRequest, diff: string, repoDir: string): Promise<AiReviewComment[]> {
+  async executeReview(pr: PullRequest, changedFiles: string[], repoDir: string): Promise<AiReviewComment[]> {
     try {
       const executor = await this.selectExecutor(pr);
       this.logger.log(`Executing review using ${executor.name} for PR #${pr.number}`);
-      
-      const rawOutput = await executor.review(pr, diff, repoDir);
+      const rawOutput = await executor.review(pr, changedFiles, repoDir);
       return this.parser.parse(rawOutput) as any;
     } catch (error) {
       this.logger.error(`AI review failed: ${error.message}`, error.stack);
       throw error;
     }
+  }
+
+  async executeRaw(pr: PullRequest, changedFiles: string[], repoDir: string): Promise<string> {
+    const executor = await this.selectExecutor(pr);
+    this.logger.log(`Executing raw review using ${executor.name} for PR #${pr.number}`);
+    return executor.review(pr, changedFiles, repoDir);
   }
 
   /**

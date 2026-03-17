@@ -749,18 +749,47 @@ export class GitHubClientService {
     };
   }
 
+  async submitPendingReview(repoName: string, prNumber: number, reviewId: number, event: string, body: string): Promise<void> {
+    await this.cli.execaVerbose('gh', [
+      'api', '--method', 'POST',
+      `repos/${repoName}/pulls/${prNumber}/reviews/${reviewId}/events`,
+      '-f', `event=${event}`,
+      '-f', `body=${body}`,
+    ]);
+  }
+
   async getChangedFiles(repoDir: string, pr: PullRequest): Promise<{ path: string; content: string }[]> {
     this.logger.debug(`[Sync] Getting changed files for PR ${pr.repository.nameWithOwner}#${pr.number}`);
     try {
-      const { stdout } = await this.cli.execaVerbose('git', ['diff', '--name-only', `origin/${pr.baseRefName}...${pr.headRefName}`], { cwd: repoDir });
+      // Verify PR is still open before diffing
+      const detail = await this.cli.getPRDetail(pr.repository.nameWithOwner, pr.number);
+      if (detail.state !== 'OPEN' && detail.state !== 'open') {
+        this.logger.warn(`PR #${pr.number} is ${detail.state} — skipping diff`);
+        return [];
+      }
+
+      const base = `origin/${pr.baseRefName}`;
+      const head = pr.headRefName;
+
+      // Try three-dot diff first, fallback to two-dot if empty
+      let stdout = '';
+      for (const diffArgs of [
+        ['diff', '--name-only', `${base}...${head}`],
+        ['diff', '--name-only', `${base}..${head}`],
+      ]) {
+        const result = await this.cli.execaVerbose('git', diffArgs, { cwd: repoDir });
+        stdout = result.stdout;
+        if (stdout.trim()) break;
+        this.logger.warn(`git ${diffArgs.join(' ')} returned empty, trying fallback...`);
+      }
+
       const filePaths = stdout.split('\n').filter(line => line.trim() !== '');
-      
       const changedFiles: { path: string; content: string }[] = [];
       for (const filePath of filePaths) {
         const fullPath = path.join(repoDir, filePath);
         if (await fs.pathExists(fullPath)) {
           const stats = await fs.stat(fullPath);
-          if (stats.isFile() && stats.size < 500000) { // Limit 500KB
+          if (stats.isFile() && stats.size < 500000) {
             const content = await fs.readFile(fullPath, 'utf8');
             changedFiles.push({ path: filePath, content });
           }

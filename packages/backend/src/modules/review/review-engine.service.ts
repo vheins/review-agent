@@ -87,7 +87,8 @@ export class ReviewEngineService {
       const repoDir = await this.repoManager.prepareRepository(
         pr.repository.nameWithOwner,
         pr.headRefName || 'unknown',
-        pr.baseRefName || 'unknown'
+        pr.baseRefName || 'unknown',
+        pr.number,
       );
 
       // Ensure base branch is available locally as remote-tracking ref
@@ -112,16 +113,15 @@ export class ReviewEngineService {
         }
       }
       
-      // 2. Get changed files and diff
+      // 2. Get changed files
       this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 20, 'Analyzing changed files...');
       const changedFiles = await this.github.getChangedFiles(repoDir, deepPR);
-      const { stdout: diff } = await this.github.execaVerbose('git', ['diff', `${baseRef}...${deepPR.headRefName}`], { cwd: repoDir });
-      
-      if (!diff && changedFiles.length === 0) {
+
+      if (changedFiles.length === 0) {
         this.logger.warn(`No changes found for PR #${pr.number}, skipping review.`);
         this.gateway.broadcastReviewCompleted(pr.number, pr.repository.nameWithOwner, { status: 'skipped', reason: 'no changes' });
         await queryRunner.rollbackTransaction();
-        return true;
+        return false;
       }
 
       // 3. Run Security Scans
@@ -132,7 +132,29 @@ export class ReviewEngineService {
 
       // 4. AI Review
       this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 50, 'Executing AI review...');
-      const aiComments = await this.ai.executeReview(pr, diff || '', repoDir);
+      const rawAiOutput = await this.ai.executeRaw(pr, changedFiles.map((file) => file.path), repoDir);
+      const aiComments = this.ai.parseOutput(rawAiOutput);
+
+      // Parse structured output from AI (DECISION, SEVERITY_SCORE, MESSAGE)
+      const severityScoreMatch = rawAiOutput.match(/\*?\*?SEVERITY[_\s]SCORE\*?\*?:\s*(\d+)/i);
+      const severityBreakdownMatch = rawAiOutput.match(/\*?\*?SEVERITY[_\s]BREAKDOWN\*?\*?:\s*([^\n]+)/i);
+      const decisionMatch = rawAiOutput.match(/\*?\*?DECISION\*?\*?:\s*(APPROVE|REQUEST[_\s]CHANGES)/i);
+      const messageMatch = rawAiOutput.match(/\*?\*?MESSAGE\*?\*?:\s*([\s\S]+)/i);
+
+      const severityBreakdown = severityBreakdownMatch ? severityBreakdownMatch[1].trim() : 'N/A';
+      let severityScore = severityScoreMatch ? parseInt(severityScoreMatch[1], 10) : 0;
+      let parsedDecision = decisionMatch ? decisionMatch[1].toUpperCase().replace(/[\s_]+/, '_') : null;
+      let summaryMessage = messageMatch ? messageMatch[1].trim() : '';
+
+      // Override APPROVE → REQUEST_CHANGES if critical/high found in breakdown
+      if (parsedDecision === 'APPROVE' && severityBreakdownMatch) {
+        const criticalCount = parseInt(severityBreakdown.match(/Critical:\s*(\d+)/i)?.[1] || '0', 10);
+        const highCount = parseInt(severityBreakdown.match(/High:\s*(\d+)/i)?.[1] || '0', 10);
+        if (criticalCount > 0 || highCount > 0) {
+          this.logger.warn(`Overriding APPROVE → REQUEST_CHANGES due to Critical/High findings`);
+          parsedDecision = 'REQUEST_CHANGES';
+        }
+      }
       
       // 5. Calculate metrics and decision
       this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 70, 'Calculating scores...');
@@ -146,7 +168,9 @@ export class ReviewEngineService {
       const healthScore = this.metricsService.calculateHealthScore(allSecurityFindings, tempComments);
       const qualityScore = this.metricsService.calculateQualityScore(tempComments);
 
-      let decision: 'APPROVE' | 'REQUEST_CHANGES' = (healthScore < (100 - reviewConfig.severityThreshold)) ? 'REQUEST_CHANGES' : 'APPROVE';
+      // Use parsed decision from AI output, fallback to score-based
+      let decision: 'APPROVE' | 'REQUEST_CHANGES' = parsedDecision as any
+        || ((healthScore < (100 - reviewConfig.severityThreshold)) ? 'REQUEST_CHANGES' : 'APPROVE');
 
       if ((allSecurityFindings.length > 0 || aiComments.some(c => c.severity === 'error')) && decision === 'APPROVE') {
         decision = 'REQUEST_CHANGES';
@@ -263,13 +287,41 @@ export class ReviewEngineService {
 
       // 13. Post comments to GitHub
       this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 90, 'Posting to GitHub...');
-      const summaryMessage = this.buildSummaryMessage(aiComments, allSecurityFindings, decision, healthScore, repoConfig.reviewMode, fixesApplied);
+      const finalMessage = summaryMessage || this.buildSummaryMessage(aiComments, allSecurityFindings, decision, healthScore, repoConfig.reviewMode, fixesApplied);
       
       if (appConfig.dryRun) {
         this.logger.log(`[DryRun] Skipping GitHub review for PR #${pr.number}`);
-        console.log(`[DryRun] Summary for PR #${pr.number}:`, summaryMessage);
+        console.log(`[DryRun] Summary for PR #${pr.number}:`, finalMessage);
       } else {
-        await this.github.addReview(pr.repository.nameWithOwner, pr.number, summaryMessage, decision);
+        // Check if AI already posted a review (pending or submitted)
+        let alreadyReviewed = false;
+        try {
+          const reviews = await this.github.listReviews(pr.repository.nameWithOwner, pr.number);
+          const pendingReview = reviews.find((r: any) => r.state === 'PENDING');
+          const submittedReviews = reviews.filter((r: any) => r.state !== 'PENDING');
+
+          if (pendingReview) {
+            // Submit the pending review created by AI
+            this.logger.log(`Found pending review id=${pendingReview.id} — submitting as ${decision}`);
+            await this.github.submitPendingReview(pr.repository.nameWithOwner, pr.number, pendingReview.id, decision, finalMessage);
+            alreadyReviewed = true;
+          } else if (submittedReviews.length > 0) {
+            this.logger.log(`AI already submitted ${submittedReviews.length} review(s) — skipping fallback`);
+            alreadyReviewed = true;
+          }
+        } catch (e) {
+          this.logger.warn(`Could not check existing reviews: ${e.message}`);
+        }
+
+        if (!alreadyReviewed) {
+          this.logger.log(`No pending review found — posting fallback summary review`);
+          await this.github.addReview(pr.repository.nameWithOwner, pr.number, finalMessage, decision);
+        }
+
+        // Open PR in browser
+        try {
+          await this.github.execaVerbose('gh', ['pr', 'view', String(pr.number), '--repo', pr.repository.nameWithOwner, '--web'], { allowFail: true });
+        } catch (_) {}
       }
 
       // 14. Commit transaction
@@ -333,16 +385,32 @@ export class ReviewEngineService {
   async runOnce(): Promise<void> {
     this.logger.log('Starting Review Engine (Once Mode)...');
     let prs = await this.github.fetchOpenPRs();
-    prs = prs.filter(pr => !pr.draft);
+    prs = prs.filter(pr => !pr.draft && pr.state === 'open');
+    prs.sort((a, b) => a.number - b.number);
     this.logger.log(`Found ${prs.length} open (non-draft) PRs to review.`);
 
-    if (prs.length > 0) {
-      this.logger.log('Limiting to 1 PR for single-run execution.');
-      prs = prs.slice(0, 1);
+    if (prs.length === 0) {
+      this.logger.log('No PRs to process.');
+      return;
     }
 
+    this.logger.log('Limiting to 1 PR for single-run execution.');
     for (const pr of prs) {
-      await this.reviewPullRequest(pr);
+      // Skip PRs that already have a submitted review (APPROVED or CHANGES_REQUESTED)
+      try {
+        const reviews = await this.github.listReviews(pr.repository.nameWithOwner, pr.number);
+        const submitted = reviews.filter((r: any) => r.state === 'APPROVED' || r.state === 'CHANGES_REQUESTED');
+        if (submitted.length > 0) {
+          this.logger.log(`PR #${pr.number} already has a ${submitted[submitted.length - 1].state} review — skipping.`);
+          continue;
+        }
+      } catch (e) {
+        this.logger.warn(`Could not check reviews for PR #${pr.number}: ${e.message}`);
+      }
+
+      const reviewed = await this.reviewPullRequest(pr);
+      if (reviewed) break;
+      this.logger.warn(`PR #${pr.number} was skipped, trying next...`);
     }
     this.logger.log('Review Engine (Once Mode) completed.');
   }
