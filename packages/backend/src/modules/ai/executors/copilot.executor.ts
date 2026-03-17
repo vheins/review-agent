@@ -11,6 +11,8 @@ export class CopilotExecutor extends BaseAiExecutor {
 
   async review(pr: PullRequest, diff: string, repoDir: string): Promise<string> {
     this.logger.log(`Copilot reviewing PR #${pr.number}...`);
-    return "[File: src/index.js] [Line: 5] [Type: style] [Severity: low] Missing semicolon.";
+    const model = process.env.COPILOT_MODEL || 'claude-haiku-4.5';
+    const prompt = this.buildReviewPrompt(pr, diff);
+    return this.execCli('gh', ['copilot', 'suggest', '-t', 'shell', prompt, '--model', model]);
   }
 }

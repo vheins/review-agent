@@ -59,9 +59,24 @@ export class ReviewEngineService {
     await queryRunner.startTransaction();
 
     const startTime = Date.now();
+    const appConfig = this.config.getAppConfig();
 
     try {
       this.logger.log(`Starting review for PR #${pr.number}: ${pr.title}`);
+      
+      // Retroactive Enrichment: if branch info or OIDs are missing (common from bulk CLI search), fetch deep details
+      let deepPR: PullRequest = pr;
+      if (!pr.headRefName || !pr.headSha || pr.headRefName === 'unknown') {
+        this.logger.log(`[Sync] Fetching deep details for PR #${pr.number} to resolve branch/OID info...`);
+        deepPR = await this.github.getPRDetail(pr.repository.nameWithOwner, pr.number);
+        // Sync original PR object to avoid inconsistencies if passed elsewhere
+        pr.headRefName = deepPR.headRefName || 'unknown';
+        pr.baseRefName = deepPR.baseRefName || 'unknown';
+        pr.headSha = deepPR.headSha;
+        pr.baseSha = deepPR.baseSha;
+        this.logger.log(`[Sync] Resolved branch info for PR #${pr.number}: head=${pr.headRefName}, base=${pr.baseRefName}`);
+      }
+      
       this.gateway.broadcastReviewStarted(pr.number, pr.repository.nameWithOwner);
 
       const reviewConfig = this.config.getReviewConfig();
@@ -74,11 +89,33 @@ export class ReviewEngineService {
         pr.headRefName || 'unknown',
         pr.baseRefName || 'unknown'
       );
+
+      // Ensure base branch is available locally as remote-tracking ref
+      const baseBranch = deepPR.baseRefName || pr.baseRefName || 'main';
+      try {
+        await this.github.execaVerbose('git', [
+          'fetch', 'origin',
+          `${baseBranch}:refs/remotes/origin/${baseBranch}`
+        ], { cwd: repoDir });
+      } catch (e) {
+        this.logger.warn(`Failed to fetch base branch '${baseBranch}': ${e.message}`);
+      }
+      const baseRef = `origin/${baseBranch}`;
+
+      // Resolve base SHA if missing (common from CLI)
+      if (!deepPR.baseSha) {
+        try {
+          const { stdout } = await this.github.execaVerbose('git', ['rev-parse', baseRef], { cwd: repoDir });
+          deepPR.baseSha = stdout.trim();
+        } catch (e) {
+          this.logger.warn(`Failed to resolve base SHA via git: ${e.message}`);
+        }
+      }
       
       // 2. Get changed files and diff
       this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 20, 'Analyzing changed files...');
-      const changedFiles = await this.github.getChangedFiles(repoDir, pr);
-      const { stdout: diff } = await this.github.execaVerbose('git', ['diff', `${pr.baseRefName}...${pr.headRefName}`], { cwd: repoDir });
+      const changedFiles = await this.github.getChangedFiles(repoDir, deepPR);
+      const { stdout: diff } = await this.github.execaVerbose('git', ['diff', `${baseRef}...${deepPR.headRefName}`], { cwd: repoDir });
       
       if (!diff && changedFiles.length === 0) {
         this.logger.warn(`No changes found for PR #${pr.number}, skipping review.`);
@@ -118,24 +155,31 @@ export class ReviewEngineService {
       // 6. Save/Update PR Entity
       this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 80, 'Saving to database...');
       let prEntity = await this.prRepository.findOne({ where: { number: pr.number, repository: pr.repository.nameWithOwner } });
+      
       if (!prEntity) {
         prEntity = this.prRepository.create({
+          id: deepPR.id,
           number: pr.number,
           repository: pr.repository.nameWithOwner,
           title: pr.title,
           url: pr.url,
           status: 'open',
-          author: pr.author?.login || 'unknown',
-          branch: pr.headRefName || 'unknown',
-          baseBranch: pr.baseRefName || 'unknown',
-          isDraft: false,
-          labels: [],
+          state: 'open',
+          node_id: deepPR.node_id || deepPR.id,
+          author: pr.author?.login || deepPR.author?.login || 'unknown',
+          branch: deepPR.headRefName || 'unknown',
+          head_sha: deepPR.headSha || '',
+          baseBranch: deepPR.baseRefName || 'unknown',
+          base_sha: deepPR.baseSha || '',
+          isDraft: deepPR.draft || false,
+          labels: deepPR.labels || [],
         });
         prEntity = await queryRunner.manager.save(prEntity);
       }
 
       // 7. Create Review Entity
       const review = this.reviewRepository.create({
+        prId: prEntity.id,
         prNumber: pr.number,
         repository: pr.repository.nameWithOwner,
         status: 'completed',
@@ -190,15 +234,20 @@ export class ReviewEngineService {
         if (fixableComments.length > 0) {
           this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 85, 'Applying and verifying auto-fixes...');
           
-          await this.autoFix.applyFixes(repoDir, fixableComments);
-          await this.autoFix.runProjectFixers(repoDir);
-          
-          const verified = await this.autoFix.verifyFixes(repoDir);
-          if (verified) {
-            fixesApplied = await this.autoFix.commitAndPushFixes(repoDir, pr.headRefName);
+          if (appConfig.dryRun) {
+            this.logger.log(`[DryRun] Skipping auto-fixes application for PR #${pr.number}`);
+            fixesApplied = true; // Simulate success for dry run logic
           } else {
-            this.logger.warn(`Auto-fixes failed verification for PR #${pr.number}, rolling back changes.`);
-            await this.github.execaVerbose('git', ['reset', '--hard', 'HEAD'], { cwd: repoDir });
+            await this.autoFix.applyFixes(repoDir, fixableComments);
+            await this.autoFix.runProjectFixers(repoDir);
+            
+            const verified = await this.autoFix.verifyFixes(repoDir);
+            if (verified) {
+              fixesApplied = await this.autoFix.commitAndPushFixes(repoDir, pr.headRefName);
+            } else {
+              this.logger.warn(`Auto-fixes failed verification for PR #${pr.number}, rolling back changes.`);
+              await this.github.execaVerbose('git', ['reset', '--hard', 'HEAD'], { cwd: repoDir });
+            }
           }
         }
       }
@@ -215,7 +264,13 @@ export class ReviewEngineService {
       // 13. Post comments to GitHub
       this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 90, 'Posting to GitHub...');
       const summaryMessage = this.buildSummaryMessage(aiComments, allSecurityFindings, decision, healthScore, repoConfig.reviewMode, fixesApplied);
-      await this.github.addReview(pr.repository.nameWithOwner, pr.number, summaryMessage, decision);
+      
+      if (appConfig.dryRun) {
+        this.logger.log(`[DryRun] Skipping GitHub review for PR #${pr.number}`);
+        console.log(`[DryRun] Summary for PR #${pr.number}:`, summaryMessage);
+      } else {
+        await this.github.addReview(pr.repository.nameWithOwner, pr.number, summaryMessage, decision);
+      }
 
       // 14. Commit transaction
       await queryRunner.commitTransaction();
@@ -230,8 +285,12 @@ export class ReviewEngineService {
 
       // 17. Auto-merge
       if (decision === 'APPROVE' && repoConfig.autoMerge && (repoConfig.reviewMode === 'comment' || fixesApplied)) {
-        this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 95, 'Auto-merging PR...');
-        await this.github.mergePR(pr.repository.nameWithOwner, pr.number);
+        if (appConfig.dryRun) {
+          this.logger.log(`[DryRun] Skipping auto-merge for PR #${pr.number}`);
+        } else {
+          this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 95, 'Auto-merging PR...');
+          await this.github.mergePR(pr.repository.nameWithOwner, pr.number);
+        }
       }
 
       this.logger.log(`Successfully completed review for PR #${pr.number}`);
@@ -273,8 +332,14 @@ export class ReviewEngineService {
 
   async runOnce(): Promise<void> {
     this.logger.log('Starting Review Engine (Once Mode)...');
-    const prs = await this.github.fetchOpenPRs();
-    this.logger.log(`Found ${prs.length} open PRs to review.`);
+    let prs = await this.github.fetchOpenPRs();
+    prs = prs.filter(pr => !pr.draft);
+    this.logger.log(`Found ${prs.length} open (non-draft) PRs to review.`);
+
+    if (prs.length > 0) {
+      this.logger.log('Limiting to 1 PR for single-run execution.');
+      prs = prs.slice(0, 1);
+    }
 
     for (const pr of prs) {
       await this.reviewPullRequest(pr);

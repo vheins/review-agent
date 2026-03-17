@@ -17,6 +17,7 @@ export interface AppConfig {
   excludeRepoOwners: string[];
   prScope: string[];
   autoMerge: boolean;
+  dryRun: boolean;
 }
 
 export default registerAs('app', (): AppConfig => ({
@@ -32,4 +33,5 @@ export default registerAs('app', (): AppConfig => ({
     ? process.env.PR_SCOPE.split(',').map(s => s.trim())
     : ['authored', 'assigned', 'review-requested'],
   autoMerge: process.env.AUTO_MERGE === 'true',
+  dryRun: process.env.DRY_RUN === 'true',
 }));

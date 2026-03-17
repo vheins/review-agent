@@ -139,6 +139,8 @@ export class GitHubClientService {
           updatedAt: item.updatedAt,
           createdAt: item.createdAt || item.updatedAt,
           closedAt: item.closedAt || null,
+          headRefName: item.headRefName,
+          baseRefName: item.baseRefName,
           author: { login: item.author?.login || item.author },
           labels: (item.labels || []).map(l => typeof l === 'string' ? l : l.name)
         }));
@@ -207,6 +209,8 @@ export class GitHubClientService {
             url: item.html_url,
             updatedAt: item.updated_at,
             createdAt: item.created_at,
+            headRefName: (item as any).head?.ref,
+            baseRefName: (item as any).base?.ref,
             author: { login: item.user?.login || 'unknown', id: item.user?.id },
             labels: (item.labels || []).map(l => typeof l === 'string' ? l : l.name)
           }));
@@ -226,6 +230,8 @@ export class GitHubClientService {
             url: item.html_url,
             updatedAt: item.updated_at,
             createdAt: item.created_at,
+            headRefName: (item as any).head?.ref,
+            baseRefName: (item as any).base?.ref,
             author: { login: item.user?.login || 'unknown', id: item.user?.id },
             labels: (item.labels || []).map(l => typeof l === 'string' ? l : l.name)
           }));
@@ -387,6 +393,10 @@ export class GitHubClientService {
       url: cliDetail.url,
       updatedAt: cliDetail.updatedAt,
       createdAt: cliDetail.createdAt,
+      headRefName: cliDetail.headRefName,
+      headSha: cliDetail.headRefOid,
+      baseRefName: cliDetail.baseRefName,
+      baseSha: '', // PR view doesn't provide base OID by default, will be resolved via git
       author: { login: cliDetail.author?.login || cliDetail.author },
       labels: cliDetail.labels || []
     } as PullRequest;
@@ -742,7 +752,7 @@ export class GitHubClientService {
   async getChangedFiles(repoDir: string, pr: PullRequest): Promise<{ path: string; content: string }[]> {
     this.logger.debug(`[Sync] Getting changed files for PR ${pr.repository.nameWithOwner}#${pr.number}`);
     try {
-      const { stdout } = await this.cli.execaVerbose('git', ['diff', '--name-only', `${pr.baseRefName}...${pr.headRefName}`], { cwd: repoDir });
+      const { stdout } = await this.cli.execaVerbose('git', ['diff', '--name-only', `origin/${pr.baseRefName}...${pr.headRefName}`], { cwd: repoDir });
       const filePaths = stdout.split('\n').filter(line => line.trim() !== '');
       
       const changedFiles: { path: string; content: string }[] = [];
