@@ -157,10 +157,11 @@ MESSAGE:
 3. Gunakan bahasa Indonesia yang TEPAT, SANTAI, dan PROFESIONAL layaknya sesama software engineer (misal menggunakan kata "kita", "bisa", "sepertinya").
 4. DILARANG KERAS menggunakan bahasa gaul Jakarta/Jaksel (seperti "jujurly", "which is", "literally", "gue/lu").
 5. DILARANG KERAS menggunakan kalimat permohonan yang kaku dan robotik seperti "Silakan sesuaikan", "Mohon diperiksa", atau "Mohon konfirmasi". Gunakan perintah langsung yang tegas namun santai, misalnya "Sesuaikan bagian ini...", "Pastikan kembali...", "Cek lagi...".
-6. Saat menulis `Problem` dan `Suggestion` di komentar inline, JANGAN bertele-tele. Buat sepadat mungkin.
-7. JAGA KONSISTENSI SARAN: Sebelum memberikan suggestion, pastikan itu TIDAK kontradiktif dengan prinsip atau saranmu yang lain di PR ini. Misalnya, jika kamu menentang *hardcode* di file A, JANGAN menyuruh author memakai *literal value/hardcode* di file B dengan alasan inkonsistensi. Solusinya harus selalu *best practice* (misal selalu pakai config).
+6. DILARANG KERAS menggunakan kata-kata "lunak" atau ragu-ragu dalam `Suggestion` seperti "Sebaiknya", "Mungkin", "Jika memungkinkan", atau "Pertimbangkan untuk...". Gunakan kalimat perintah langsung (imperative) agar instruksi jelas.
+7. Saat menulis `Problem` dan `Suggestion` di komentar inline, JANGAN bertele-tele. Buat sepadat mungkin.
+8. JAGA KONSISTENSI SARAN: Sebelum memberikan suggestion, pastikan itu TIDAK kontradiktif dengan prinsip atau saranmu yang lain di PR ini. Misalnya, jika kamu menentang *hardcode* di file A, JANGAN menyuruh author memakai *literal value/hardcode* di file B dengan alasan inkonsistensi. Solusinya harus selalu *best practice* (misal selalu pakai config).
 
-**Contoh MESSAGE yang BENAR (Natural, to the point, gaya reviewer asli):**
+**Contoh MESSAGE yang BENAR (Natural, to the point, tegas):**
 ```text
 Terdapat potensi null pointer dereference di PDF generator akibat perubahan pengecekan dari nil pointer ke struct value. Selain itu, perbaikan logic IDOR di family handler perlu dipastikan kembali konsistensinya. Pastikan juga apakah downgrade versi fiber/v2 ini memang disengaja atau tidak.
 ```
@@ -173,7 +174,7 @@ Problem
 Nilai DEFAULT_GOLD_PRICE_PER_GRAM di-hardcode. Karena harga emas sangat fluktuatif, nilai ini bisa jadi usang jika lupa di-update.
 
 Suggestion
-Sebaiknya pindahkan nilai default ini ke file konfigurasi atau buat mekanisme peringatan jika harga emas sudah terlalu lama tidak diperbarui.
+Pindahkan nilai default ini ke file konfigurasi atau buat mekanisme peringatan jika harga emas sudah terlalu lama tidak diperbarui.
 ```
 
 **Contoh MESSAGE/Komentar yang SALAH (Terlalu AI / Kaku / Banyak basa-basi):**
