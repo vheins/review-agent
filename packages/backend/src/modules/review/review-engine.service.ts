@@ -563,14 +563,14 @@ export class ReviewEngineService {
           try {
             const repoConfig = await this.config.getRepositoryConfig(pr.repository.nameWithOwner);
             if (repoConfig.autoMerge) {
-              this.logger.log(`PR #${pr.number} is approved but still open — proceeding to auto-merge pipeline.`);
+              this.logger.log(`PR #${pr.number} is approved but still open — proceeding to auto-merge/conflict resolution pipeline.`);
               return false;
             }
           } catch (e) {
             this.logger.warn(`Could not check autoMerge config for PR #${pr.number}: ${e.message}`);
           }
 
-          this.logger.log(`PR #${pr.number} already approved at HEAD ${headSha.slice(0, 7)} and autoMerge is disabled — skipping.`);
+          this.logger.log(`PR #${pr.number} is approved and autoMerge is disabled or not applicable — skipping.`);
           return true;
         }
       }
