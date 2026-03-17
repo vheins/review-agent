@@ -65,19 +65,36 @@ export class AiExecutorService {
   async executeReview(pr: PullRequest, changedFiles: string[], repoDir: string): Promise<AiReviewComment[]> {
     try {
       const executor = await this.selectExecutor(pr);
-      this.logger.log(`Executing review using ${executor.name} for PR #${pr.number}`);
+      this.logger.log(`🔍 Starting ${executor.name} review for PR #${pr.number}: "${pr.title}"`);
+      this.logger.debug(`📁 Changed files: ${changedFiles.join(', ')}`);
+
+      const startTime = Date.now();
       const rawOutput = await executor.review(pr, changedFiles, repoDir);
-      return this.parser.parse(rawOutput) as any;
+      const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+
+      this.logger.log(`✅ ${executor.name} review completed in ${duration}s for PR #${pr.number}`);
+      this.logger.debug(`📋 Raw output length: ${rawOutput.length} characters`);
+
+      const comments = this.parser.parse(rawOutput) as any;
+      this.logger.log(`📝 Parsed ${comments.length} comments from review`);
+
+      return comments;
     } catch (error) {
-      this.logger.error(`AI review failed: ${error.message}`, error.stack);
+      this.logger.error(`❌ AI review failed: ${error.message}`, error.stack);
       throw error;
     }
   }
 
   async executeRaw(pr: PullRequest, changedFiles: string[], repoDir: string): Promise<string> {
     const executor = await this.selectExecutor(pr);
-    this.logger.log(`Executing raw review using ${executor.name} for PR #${pr.number}`);
-    return executor.review(pr, changedFiles, repoDir);
+    this.logger.log(`🔍 Starting raw ${executor.name} review for PR #${pr.number}`);
+
+    const startTime = Date.now();
+    const output = await executor.review(pr, changedFiles, repoDir);
+    const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+
+    this.logger.log(`✅ Raw review completed in ${duration}s (${output.length} chars)`);
+    return output;
   }
 
   async executePrompt(executorName: string, prompt: string, repoDir?: string): Promise<string> {

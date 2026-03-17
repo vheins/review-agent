@@ -1,9 +1,7 @@
-import { Logger } from '@nestjs/common';
 import { BaseAiExecutor } from './index.js';
 import { PullRequest } from '../../github/github.service.js';
 
 export class KiroExecutor extends BaseAiExecutor {
-  private readonly logger = new Logger(KiroExecutor.name);
   constructor() { super('kiro'); }
 
   async review(pr: PullRequest, changedFiles: string[], repoDir: string): Promise<string> {
@@ -17,24 +15,43 @@ export class KiroExecutor extends BaseAiExecutor {
 }
 
 export class ClaudeExecutor extends BaseAiExecutor {
-  private readonly logger = new Logger(ClaudeExecutor.name);
   constructor() { super('claude'); }
 
   async review(pr: PullRequest, changedFiles: string[], repoDir: string): Promise<string> {
-    this.logger.log(`Claude reviewing PR #${pr.number}...`);
     const model = process.env.CLAUDE_MODEL || 'sonnet';
     const agent = process.env.CLAUDE_AGENT || '';
-    const yolo = process.env.CLAUDE_YOLO !== 'false';
+
+    this.logger.log(`▶ Claude reviewing PR #${pr.number} (model: ${model}, yolo: ALWAYS)...`);
+    this.logger.debug(`📋 Files to review: ${changedFiles.length} changed files`);
+
     const prompt = this.buildReviewPrompt(pr, changedFiles);
-    const args = ['--print', '--model', model, '--output-format', 'text', '--add-dir', repoDir, '--permission-mode', yolo ? 'bypassPermissions' : 'dontAsk', '-p', '__PROMPT_FILE__'];
+    const args = [
+      '--print',
+      '--model',
+      model,
+      '--output-format',
+      'text',
+      '--add-dir',
+      repoDir,
+      '--permission-mode',
+      'bypassPermissions',
+      '-p',
+      '__PROMPT_FILE__',
+    ];
     if (agent) args.push('--agent', agent);
-    if (yolo) args.push('--dangerously-skip-permissions');
-    return this.execCliWithPromptFile('claude', args, prompt, { cwd: repoDir });
+    args.push('--dangerously-skip-permissions');
+
+    this.logger.debug(`🔧 Claude args: ${args.join(' ')}`);
+    this.logger.log(`⏳ Executing claude --print command...`);
+
+    const result = await this.execCliWithPromptFile('claude', args, prompt, { cwd: repoDir });
+
+    this.logger.log(`✨ Claude output received (${result.length} chars)`);
+    return result;
   }
 }
 
 export class CodexExecutor extends BaseAiExecutor {
-  private readonly logger = new Logger(CodexExecutor.name);
   constructor() { super('codex'); }
 
   async review(pr: PullRequest, changedFiles: string[], repoDir: string): Promise<string> {
@@ -54,7 +71,6 @@ export class CodexExecutor extends BaseAiExecutor {
 }
 
 export class OpenCodeExecutor extends BaseAiExecutor {
-  private readonly logger = new Logger(OpenCodeExecutor.name);
   constructor() { super('opencode'); }
 
   async review(pr: PullRequest, changedFiles: string[], repoDir: string): Promise<string> {

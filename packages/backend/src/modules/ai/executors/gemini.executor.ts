@@ -3,8 +3,6 @@ import { BaseAiExecutor } from './index.js';
 import { PullRequest } from '../../github/github.service.js';
 
 export class GeminiExecutor extends BaseAiExecutor {
-  private readonly logger = new Logger(GeminiExecutor.name);
-
   constructor() {
     super('gemini');
   }

@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { PullRequest } from '../../github/github.service.js';
 import { execa } from 'execa';
 import fs from 'fs-extra';
@@ -40,7 +41,11 @@ export interface ExecCliOptions {
  * Base AI Executor class
  */
 export abstract class BaseAiExecutor implements AiExecutor {
-  constructor(public readonly name: string) {}
+  protected logger: Logger;
+
+  constructor(public readonly name: string) {
+    this.logger = new Logger(this.name);
+  }
 
   abstract review(pr: PullRequest, changedFiles: string[], repoDir: string): Promise<string>;
 
@@ -93,28 +98,41 @@ export abstract class BaseAiExecutor implements AiExecutor {
     }
 
     const stdoutLines: string[] = [];
+    const stderrLines: string[] = [];
     let stdoutBuf = '';
+    let stderrBuf = '';
 
-    function flushLines(buf: string): string {
+    const flushLines = (buf: string, isStderr = false): string => {
       const parts = buf.split('\n');
       const remaining = parts.pop()!;
+      const lines = isStderr ? stderrLines : stdoutLines;
+      const method = isStderr ? 'warn' : 'verbose';
+
       for (const part of parts) {
         if (part.trim()) {
           process.stdout.write('  │ ' + part + '\n');
-          stdoutLines.push(part);
+          lines.push(part);
+          if (isStderr) {
+            this.logger.warn(`[${cmd.toUpperCase()}] ${part}`);
+          } else {
+            this.logger.debug(`[${cmd.toUpperCase()}] ${part}`);
+          }
         }
       }
       return remaining;
-    }
+    };
 
     if (proc.stdout) {
       proc.stdout.on('data', (chunk: Buffer) => {
         stdoutBuf += chunk.toString();
-        stdoutBuf = flushLines(stdoutBuf);
+        stdoutBuf = flushLines(stdoutBuf, false);
       });
     }
+
     if (proc.stderr) {
       proc.stderr.on('data', (chunk: Buffer) => {
+        stderrBuf += chunk.toString();
+        stderrBuf = flushLines(stderrBuf, true);
         process.stderr.write(chunk);
       });
     }
@@ -124,9 +142,16 @@ export abstract class BaseAiExecutor implements AiExecutor {
     if (stdoutBuf.trim()) {
       process.stdout.write('  │ ' + stdoutBuf + '\n');
       stdoutLines.push(stdoutBuf);
+      this.logger.debug(`[${cmd.toUpperCase()}] ${stdoutBuf}`);
+    }
+
+    if (stderrBuf.trim()) {
+      stderrLines.push(stderrBuf);
+      this.logger.warn(`[${cmd.toUpperCase()}] stderr: ${stderrBuf}`);
     }
 
     if (result.exitCode !== 0 && !allowFail) {
+      this.logger.error(`${cmd} failed with exit code ${result.exitCode}`);
       const err = new Error(result.stderr || `${cmd} failed with exit code ${result.exitCode}`) as any;
       err.exitCode = result.exitCode;
       throw err;
