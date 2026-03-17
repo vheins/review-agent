@@ -145,8 +145,6 @@ Setelah semua komentar inline dikirim, tulis ini di akhir:
 
 ```text
 SEVERITY_SCORE: <total>
-SEVERITY_BREAKDOWN: Critical: <n>, High: <n>, Medium: <n>, Low: <n>
-DECISION: <APPROVE|REQUEST_CHANGES>
 MESSAGE:
 <Poin-poin temuan kritis atau pertanyaan yang perlu ditindaklanjuti secara langsung. JANGAN tulis ulang apa yang dikerjakan PR ini.>
 ```
