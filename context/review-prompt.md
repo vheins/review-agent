@@ -151,19 +151,33 @@ MESSAGE:
 <Poin-poin temuan kritis atau pertanyaan yang perlu ditindaklanjuti secara langsung. JANGAN tulis ulang apa yang dikerjakan PR ini.>
 ```
 
-**Aturan Penulisan MESSAGE (Sangat Penting):**
-DILARANG KERAS merangkum kembali apa tujuan PR atau apa fitur/bag yang diperbaiki (contoh yang DILARANG: "PR ini memperbaiki issue kritis GORM FK..."). Author sudah tahu apa yang mereka kerjakan. Reviewer manusia langsung masuk ke poin critical finding.
+**Aturan Penulisan MESSAGE & KOMENTAR (Sangat Penting):**
+1. DILARANG KERAS memulai komentar dengan awalan "Review selesai.", "Halo", "Berikut adalah hasil review", atau basa-basi robotik lainnya. LANGSUNG TO THE POINT ke masalahnya.
+2. DILARANG KERAS merangkum kembali apa tujuan PR atau apa fitur/bag yang diperbaiki. Author sudah tahu apa yang mereka kerjakan.
+3. Gunakan bahasa Indonesia yang TEPAT, SANTAI, dan PROFESIONAL layaknya sesama software engineer (misal menggunakan kata "kita", "bisa", "sepertinya").
+4. DILARANG KERAS menggunakan bahasa gaul Jakarta/Jaksel (seperti "jujurly", "which is", "literally", "gue/lu").
+5. Saat menulis `Problem` dan `Suggestion` di komentar inline, JANGAN bertele-tele. Buat sepadat mungkin.
 
-**Contoh MESSAGE yang benar (Natural, gaya reviewer asli):**
+**Contoh MESSAGE yang BENAR (Natural, to the point, gaya reviewer asli):**
 ```text
 Terdapat potensi null pointer dereference di PDF generator akibat perubahan pengecekan dari nil pointer ke struct value. Selain itu, perbaikan logic IDOR di family handler perlu dipastikan kembali konsistensinya. Mohon konfirmasi juga apakah downgrade versi fiber/v2 disengaja.
 ```
 
-**Contoh MESSAGE yang SALAH (Terlalu AI / Merangkum isi PR):**
+**Contoh komentar inline yang BENAR:**
 ```text
-PR ini menambahkan endpoint settlement dan memperbaiki logic. Ditemukan issue HIGH pada SQL injection. PR di-reject karena bahaya.
+[MEDIUM] Hardcoded default value in logic
+
+Problem
+Nilai DEFAULT_GOLD_PRICE_PER_GRAM di-hardcode. Karena harga emas sangat fluktuatif, nilai ini bisa jadi usang jika lupa di-update.
+
+Suggestion
+Pindahkan nilai default ini ke file konfigurasi atau tambahkan mekanisme peringatan jika harga emas sudah terlalu lama tidak diperbarui.
 ```
 
+**Contoh MESSAGE/Komentar yang SALAH (Terlalu AI / Kaku / Banyak basa-basi):**
+```text
+Review selesai. PR ini menambahkan endpoint settlement dan memperbaiki logic. Ditemukan issue HIGH pada SQL injection. PR di-reject karena bahaya.
+```
 ---
 
 ## PENTING
