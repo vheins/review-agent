@@ -52,10 +52,10 @@ export class AutoFixService {
     const hasEslint = await fs.pathExists(path.join(repoDir, '.eslintrc.json')) || 
                      await fs.pathExists(path.join(repoDir, 'package.json'));
     
-    if (hasEslint) {
+      if (hasEslint) {
       try {
         this.logger.log('Running eslint --fix...');
-        await this.github.execaVerbose('npm', ['run', 'lint', '--', '--fix'], { cwd: repoDir, reject: false });
+        await this.github.execaVerbose('npm', ['run', 'lint', '--', '--fix'], { cwd: repoDir, allowFail: true });
       } catch (e) {}
     }
 
@@ -63,7 +63,7 @@ export class AutoFixService {
     if (hasPrettier) {
       try {
         this.logger.log('Running prettier --write...');
-        await this.github.execaVerbose('npx', ['prettier', '--write', '.'], { cwd: repoDir, reject: false });
+        await this.github.execaVerbose('npx', ['prettier', '--write', '.'], { cwd: repoDir, allowFail: true });
       } catch (e) {}
     }
   }
@@ -74,7 +74,7 @@ export class AutoFixService {
       const { exitCode } = await this.github.execaVerbose(
         testCommand.split(' ')[0], 
         testCommand.split(' ').slice(1), 
-        { cwd: repoDir, reject: false }
+        { cwd: repoDir, allowFail: true }
       );
       return exitCode === 0;
     } catch (e) {
@@ -123,7 +123,7 @@ export class AutoFixService {
         
         if (conflictedFiles.length === 0) {
           this.logger.error('Git reported conflicts but no conflicted files found.');
-          await this.github.execaVerbose('git', ['merge', '--abort'], { cwd: repoDir, reject: false });
+          await this.github.execaVerbose('git', ['merge', '--abort'], { cwd: repoDir, allowFail: true });
           return false;
         }
 
@@ -139,7 +139,7 @@ export class AutoFixService {
             this.logger.log(`AI successfully resolved conflict in: ${relativePath}`);
           } else {
             this.logger.error(`AI failed to resolve conflict in: ${relativePath}`);
-            await this.github.execaVerbose('git', ['merge', '--abort'], { cwd: repoDir, reject: false });
+            await this.github.execaVerbose('git', ['merge', '--abort'], { cwd: repoDir, allowFail: true });
             return false;
           }
         }

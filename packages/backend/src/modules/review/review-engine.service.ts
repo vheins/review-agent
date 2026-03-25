@@ -119,6 +119,43 @@ export class ReviewEngineService {
           this.logger.warn(`Failed to resolve base SHA via git: ${e.message}`);
         }
       }
+
+      // 1.5 Pre-Review Conflict Resolution
+      let currentMergeableState = deepPR?.mergeable_state || pr.mergeable_state;
+      if (!currentMergeableState || currentMergeableState === 'unknown') {
+        const detail = await this.github.getPRDetail(pr.repository.nameWithOwner, pr.number);
+        currentMergeableState = detail.mergeable_state;
+        deepPR = { ...deepPR, ...detail };
+      }
+
+      let conflictsResolvedBeforeReview = false;
+      if (currentMergeableState === 'dirty') {
+        this.logger.log(`PR #${pr.number} has conflicts (state: ${currentMergeableState}) — attempting pre-review auto-resolution.`);
+        this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 15, 'Resolving merge conflicts before review...');
+        
+        const resolved = await this.autoFix.fixConflicts(repoDir, pr.baseRefName || deepPR.baseRefName, {
+          number: pr.number,
+          title: pr.title,
+          repository: pr.repository.nameWithOwner,
+          headRefName: pr.headRefName || deepPR.headRefName
+        });
+        
+        if (resolved) {
+          this.logger.log(`Successfully resolved conflicts for PR #${pr.number} before review.`);
+          currentMergeableState = 'clean';
+          conflictsResolvedBeforeReview = true;
+          // Update tracking SHA since we pushed a merge commit
+          try {
+            const { stdout } = await this.github.execaVerbose('git', ['rev-parse', 'HEAD'], { cwd: repoDir });
+            deepPR.headSha = stdout.trim();
+            pr.headSha = deepPR.headSha;
+          } catch (e) {
+            this.logger.warn(`Failed to update HEAD SHA after conflict resolution: ${e.message}`);
+          }
+        } else {
+          this.logger.warn(`Failed to resolve conflicts automatically for PR #${pr.number}. Continuing review on existing branch state.`);
+        }
+      }
       
       // 2. Get changed files
       this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 20, 'Analyzing changed files...');
@@ -299,45 +336,18 @@ export class ReviewEngineService {
       let fixesApplied = false;
       const fixableComments = aiComments.filter(c => this.autoFix.isFixable(c));
       
-      // Use the most up-to-date mergeable state from deepPR or refresh it
-      let currentMergeableState = deepPR?.mergeable_state || pr.mergeable_state;
-      if (!currentMergeableState || currentMergeableState === 'unknown') {
-        const detail = await this.github.getPRDetail(pr.repository.nameWithOwner, pr.number);
-        currentMergeableState = detail.mergeable_state;
-      }
-
-      // Auto-fix ONLY if approved AND (has fixable suggestions OR has conflicts)
-      const shouldAutoFix = decision === 'APPROVE' && (fixableComments.length > 0 || currentMergeableState === 'dirty');
+      // Auto-fix ONLY if approved AND (has fixable suggestions)
+      // Conflicts are already resolved in step 1.5
+      const shouldAutoFix = decision === 'APPROVE' && (fixableComments.length > 0);
       
       if (shouldAutoFix) {
         if (appConfig.dryRun) {
           this.logger.log(`[DryRun] Skipping auto-fixes for PR #${pr.number}`);
           fixesApplied = true;
         } else {
-          this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 85, 'Applying fixes and resolving conflicts...');
+          this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 85, 'Applying fixes...');
           
-          // 1. Resolve conflicts if PR is dirty
-          if (currentMergeableState === 'dirty') {
-            this.logger.log(`PR #${pr.number} has conflicts (state: ${currentMergeableState}) — attempting auto-resolution.`);
-            const resolved = await this.autoFix.fixConflicts(repoDir, pr.baseRefName || deepPR.baseRefName, {
-              number: pr.number,
-              title: pr.title,
-              repository: pr.repository.nameWithOwner,
-              headRefName: pr.headRefName || deepPR.headRefName
-            });
-            if (resolved) {
-              fixesApplied = true;
-              this.logger.log(`Resolved merge conflicts for PR #${pr.number}`);
-              // Update state for subsequent merge check
-              currentMergeableState = 'clean';
-            } else {
-              this.logger.warn(`Failed to resolve conflicts automatically for PR #${pr.number}`);
-              decision = 'REQUEST_CHANGES';
-              summaryMessage = '❌ **Auto-merge gagal karena terdapat merge conflicts yang tidak dapat diselesaikan oleh AI.** Silakan resolve conflicts secara manual.';
-            }
-          }
-
-          // 2. Apply AI suggestions
+          // Apply AI suggestions
           if (fixableComments.length > 0) {
             await this.autoFix.applyFixes(repoDir, fixableComments);
             await this.autoFix.runProjectFixers(repoDir);
@@ -351,12 +361,11 @@ export class ReviewEngineService {
               this.logger.warn(`Auto-fixes failed verification for PR #${pr.number}, rolling back changes.`);
               await this.github.execaVerbose('git', ['reset', '--hard', 'HEAD'], { cwd: repoDir });
             }
-          } else if (fixesApplied) {
-            // If we ONLY resolved conflicts, fixConflicts already committed but NOT pushed
-            this.logger.log(`Pushing conflict resolution for PR #${pr.number}`);
-            await this.github.execaVerbose('git', ['push', 'origin', 'HEAD'], { cwd: repoDir });
           }
         }
+      } else if (conflictsResolvedBeforeReview && decision === 'APPROVE' && repoConfig.autoMerge) {
+        // If we ONLY resolved conflicts in step 1.5 and didn't apply any other auto-fixes, 
+        // the commit was already pushed.
       }
 
       // 12. Audit Log
