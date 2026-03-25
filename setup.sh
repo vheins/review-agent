@@ -34,7 +34,7 @@ echo ""
 
 # Rebuild native modules
 echo "🔨 Building native modules..."
-npm rebuild better-sqlite3
+yarn rebuild better-sqlite3
 
 if [ $? -ne 0 ]; then
     echo "❌ Failed to rebuild better-sqlite3"

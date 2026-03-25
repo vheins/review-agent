@@ -242,7 +242,7 @@ API_PORT=3001
 **Solution**:
 ```bash
 # Rebuild native modules
-npm rebuild better-sqlite3
+yarn rebuild better-sqlite3
 
 # Check database
 ls -lh data/history.db

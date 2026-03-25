@@ -55,7 +55,7 @@ export class AutoFixService {
       if (hasEslint) {
       try {
         this.logger.log('Running eslint --fix...');
-        await this.github.execaVerbose('npm', ['run', 'lint', '--', '--fix'], { cwd: repoDir, allowFail: true });
+        await this.github.execaVerbose('yarn', ['lint', '--fix'], { cwd: repoDir, allowFail: true });
       } catch (e) {}
     }
 

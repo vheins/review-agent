@@ -10,7 +10,7 @@
 
 # Atau manual:
 yarn install
-npm rebuild better-sqlite3
+yarn rebuild better-sqlite3
 cp .env.example .env
 ```
 
@@ -73,7 +73,7 @@ API_PORT=3000              # Port backend server
 ### Error: Native Module
 
 ```bash
-npm rebuild better-sqlite3
+yarn rebuild better-sqlite3
 ```
 
 ### Backend Tidak Start

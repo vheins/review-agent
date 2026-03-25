@@ -11,7 +11,7 @@
 **Solution**:
 ```bash
 # Rebuild the native module
-npm rebuild better-sqlite3
+yarn rebuild better-sqlite3
 
 # Then start the app
 yarn app:dev
@@ -248,7 +248,7 @@ yarn app:dev
 
 | Error Message | Cause | Solution |
 |--------------|-------|----------|
-| `Could not locate the bindings file` | Native module not compiled | `npm rebuild better-sqlite3` |
+| `Could not locate the bindings file` | Native module not compiled | `yarn rebuild better-sqlite3` |
 | `ERR_CONNECTION_REFUSED` | Backend not running | `yarn server` |
 | `Cannot read properties of null` | Database not initialized | Delete `data/history.db` and restart |
 | `EADDRINUSE` | Port already in use | Change port or kill process |

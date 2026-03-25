@@ -29,7 +29,7 @@ The backend server was never being started, so:
 
 **Solution**: Rebuild the native module for the current Node.js version
 ```bash
-npm rebuild better-sqlite3
+yarn rebuild better-sqlite3
 ```
 
 ### 1. Created Backend Server Startup Script
@@ -94,7 +94,7 @@ Added new scripts:
 
 # Option 2: Manual setup
 yarn install
-npm rebuild better-sqlite3
+yarn rebuild better-sqlite3
 cp .env.example .env
 yarn ui:build
 ```
@@ -161,7 +161,7 @@ To verify the fix works:
 ./setup.sh
 
 # Or manually:
-npm rebuild better-sqlite3
+yarn rebuild better-sqlite3
 
 # Then start
 yarn app:dev

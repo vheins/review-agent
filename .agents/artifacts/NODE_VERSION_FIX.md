@@ -59,13 +59,13 @@ Solution: Explicitly use system Node.js from PATH
 
 ```bash
 # For system Node.js (backend server)
-npm rebuild better-sqlite3
+yarn rebuild better-sqlite3
 
 # For Electron (if needed in future)
 npx electron-rebuild -f -w better-sqlite3
 ```
 
-**Current setup**: Backend server uses system Node.js, so we only need `npm rebuild`.
+**Current setup**: Backend server uses system Node.js, so we only need `yarn rebuild`.
 
 ## Testing
 
