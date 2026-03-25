@@ -108,9 +108,12 @@ export abstract class BaseAiExecutor implements AiExecutor {
       const parts = String(execaOpts.cwd).split(path.sep);
       // Usually we want "workspace/repo-name"
       const shortCwd = parts.length >= 2 ? parts.slice(-2).join('/') : parts[0];
-      cwdDisplay = ` [${shortCwd}]`;
+      cwdDisplay = `[${shortCwd}]`;
     }
-    const logPrefix = `[${cmdName}]${cwdDisplay}`;
+    const logPrefix = cwdDisplay ? `${cwdDisplay}` : '';
+    
+    // Log the command start once
+    this.logger.warn(`${logPrefix ? logPrefix + ' ' : ''}▶ ${cmdName} ${args.join(' ')}`);
 
     const flushLines = (buf: string, isStderr = false): string => {
       const parts = buf.split('\n');
@@ -119,13 +122,9 @@ export abstract class BaseAiExecutor implements AiExecutor {
 
       for (const part of parts) {
         if (part.trim()) {
+          // Output the raw line to console with the pipe indicator
           process.stdout.write('  │ ' + part + '\n');
           lines.push(part);
-          if (isStderr) {
-            this.logger.warn(`${logPrefix} ${part}`);
-          } else {
-            this.logger.debug(`${logPrefix} ${part}`);
-          }
         }
       }
       return remaining;
@@ -142,7 +141,7 @@ export abstract class BaseAiExecutor implements AiExecutor {
       proc.stderr.on('data', (chunk: Buffer) => {
         stderrBuf += chunk.toString();
         stderrBuf = flushLines(stderrBuf, true);
-        process.stderr.write(chunk);
+        // Removed process.stderr.write to avoid raw duplication
       });
     }
 
@@ -151,12 +150,11 @@ export abstract class BaseAiExecutor implements AiExecutor {
     if (stdoutBuf.trim()) {
       process.stdout.write('  │ ' + stdoutBuf + '\n');
       stdoutLines.push(stdoutBuf);
-      this.logger.debug(`${logPrefix} ${stdoutBuf}`);
     }
 
     if (stderrBuf.trim()) {
+      process.stdout.write('  │ ' + stderrBuf + '\n');
       stderrLines.push(stderrBuf);
-      this.logger.warn(`${logPrefix} stderr: ${stderrBuf}`);
     }
 
     if (result.exitCode !== 0 && !allowFail) {
