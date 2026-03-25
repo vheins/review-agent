@@ -2,7 +2,9 @@ import { BaseAiExecutor } from './index.js';
 import { PullRequest } from '../../github/github.service.js';
 
 export class KiroExecutor extends BaseAiExecutor {
-  constructor() { super('kiro'); }
+  constructor() {
+    super('kiro');
+  }
 
   async review(pr: PullRequest, changedFiles: string[], repoDir: string): Promise<string> {
     this.logger.log(`Kiro reviewing PR #${pr.number}...`);
@@ -15,7 +17,9 @@ export class KiroExecutor extends BaseAiExecutor {
 }
 
 export class ClaudeExecutor extends BaseAiExecutor {
-  constructor() { super('claude'); }
+  constructor() {
+    super('claude');
+  }
 
   async review(pr: PullRequest, changedFiles: string[], repoDir: string): Promise<string> {
     const model = process.env.CLAUDE_MODEL || 'sonnet';
@@ -26,25 +30,22 @@ export class ClaudeExecutor extends BaseAiExecutor {
 
     const prompt = this.buildReviewPrompt(pr, changedFiles);
     const args = [
-      '--print',
+      '-p',
+      prompt,
       '--model',
       model,
       '--output-format',
       'text',
       '--add-dir',
       repoDir,
-      '--permission-mode',
-      'bypassPermissions',
-      '-p',
-      '__PROMPT_FILE__',
+      '--dangerously-skip-permissions'
     ];
     if (agent) args.push('--agent', agent);
-    args.push('--dangerously-skip-permissions');
 
     this.logger.debug(`🔧 Claude args: ${args.join(' ')}`);
-    this.logger.log(`⏳ Executing claude --print command...`);
+    this.logger.log(`⏳ Executing claude -p command...`);
 
-    const result = await this.execCliWithPromptFile('claude', args, prompt, { cwd: repoDir });
+    const result = await this.execCli('claude', args, { cwd: repoDir });
 
     this.logger.log(`✨ Claude output received (${result.length} chars)`);
     return result;
@@ -52,7 +53,9 @@ export class ClaudeExecutor extends BaseAiExecutor {
 }
 
 export class CodexExecutor extends BaseAiExecutor {
-  constructor() { super('codex'); }
+  constructor() {
+    super('codex');
+  }
 
   async review(pr: PullRequest, changedFiles: string[], repoDir: string): Promise<string> {
     this.logger.log(`Codex reviewing PR #${pr.number}...`);
@@ -71,17 +74,32 @@ export class CodexExecutor extends BaseAiExecutor {
 }
 
 export class OpenCodeExecutor extends BaseAiExecutor {
-  constructor() { super('opencode'); }
+  constructor() {
+    super('opencode');
+  }
 
   async review(pr: PullRequest, changedFiles: string[], repoDir: string): Promise<string> {
     this.logger.log(`OpenCode reviewing PR #${pr.number}...`);
     const model = process.env.OPENCODE_MODEL || 'auto';
-    const agent = process.env.OPENCODE_AGENT || '';
+    const agent = process.env.OPENCODE_AGENT || 'build';
     const prompt = this.buildReviewPrompt(pr, changedFiles);
-    const args = ['run', '--dir', repoDir];
+
+    const opencodeBin = process.env.OPENCODE_BIN || '/home/vheins/.opencode/bin/opencode';
+
+    const args = ['run'];
     if (model !== 'auto') args.push('--model', model);
     if (agent) args.push('--agent', agent);
     args.push(prompt);
-    return this.execCli('opencode', args, { cwd: repoDir });
+
+    this.logger.debug(`🔧 OpenCode args: ${JSON.stringify(args)}`);
+    this.logger.debug(
+      `🔧 Prompt length: ${prompt.length}, first 200 chars: ${prompt.substring(0, 200).replace(/\n/g, '\\n')}`,
+    );
+    this.logger.log(`⏳ Executing opencode run command...`);
+
+    const result = await this.execCli(opencodeBin, args, { cwd: repoDir, allowFail: true });
+
+    this.logger.log(`✨ OpenCode output received (${result.length} chars)`);
+    return result;
   }
 }

@@ -20,7 +20,7 @@ export class AiFixGeneratorService {
   /**
    * Generate a complex fix for a review comment
    */
-  async generateComplexFix(comment: AiReviewComment, fileContent: string, filePath: string): Promise<string | null> {
+  async generateComplexFix(comment: AiReviewComment, fileContent: string, filePath: string, repoDir: string): Promise<string | null> {
     this.logger.log(`Generating AI fix for: ${comment.message} in ${filePath}`);
     
     try {
@@ -46,7 +46,7 @@ Hanya kembalikan isi file, jangan ada penjelasan atau markdown blocks.
 
       // Use actual AI executor
       const repoConfig = await this.config.getRepositoryConfig('');
-      const fixedContent = await this.aiExecutor.executePrompt(repoConfig.executor, prompt);
+      const fixedContent = await this.aiExecutor.executePrompt(repoConfig.executor, prompt, repoDir);
       
       let cleanedContent = fixedContent.trim();
       if (cleanedContent.startsWith('```')) {
@@ -66,8 +66,8 @@ Hanya kembalikan isi file, jangan ada penjelasan atau markdown blocks.
   /**
    * Resolve merge conflicts in a file using the actual AI model
    */
-  async resolveConflicts(fileContent: string, filePath: string, prInfo?: { number: number, title: string, repository: string, headRefName: string }): Promise<string | null> {
-    this.logger.log(`AI resolving merge conflicts in: ${filePath}`);
+  async resolveConflicts(fileContent: string, filePath: string, repoDir: string, prInfo?: { number: number, title: string, repository: string, headRefName: string }): Promise<string | null> {
+    this.logger.log(`AI resolving merge conflicts in: ${filePath} (workspace: ${repoDir})`);
     
     try {
       const fixPromptContent = await fs.readFile(path.resolve(process.cwd(), '../../context/fix-prompt.md'), 'utf8');
@@ -88,7 +88,7 @@ PENTING: Jangan tambahkan penjelasan, jangan gunakan markdown wrapper. Hanya kod
 `;
 
       const repoConfig = await this.config.getRepositoryConfig(prInfo?.repository || '');
-      const resolvedCode = await this.aiExecutor.executePrompt(repoConfig.executor, prompt);
+      const resolvedCode = await this.aiExecutor.executePrompt(repoConfig.executor, prompt, repoDir);
       
       let cleanedCode = resolvedCode.trim();
       if (cleanedCode.startsWith('```')) {

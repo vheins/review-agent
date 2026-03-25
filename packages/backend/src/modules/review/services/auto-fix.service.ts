@@ -131,7 +131,7 @@ export class AutoFixService {
           const fullPath = path.join(repoDir, relativePath);
           const content = await fs.readFile(fullPath, 'utf8');
           
-          const resolvedContent = await this.aiFixGen.resolveConflicts(content, relativePath, prInfo);
+          const resolvedContent = await this.aiFixGen.resolveConflicts(content, relativePath, repoDir, prInfo);
           
           if (resolvedContent) {
             await fs.writeFile(fullPath, resolvedContent);

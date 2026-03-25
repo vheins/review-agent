@@ -4,7 +4,10 @@ import { PullRequest } from '../github/github.service.js';
 import { AiExecutor, AiReviewComment, BaseAiExecutor } from './executors/index.js';
 import { GeminiExecutor } from './executors/gemini.executor.js';
 import { CopilotExecutor } from './executors/copilot.executor.js';
-import { KiroExecutor, ClaudeExecutor, CodexExecutor, OpenCodeExecutor } from './executors/others.executor.js';
+import { KiroExecutor } from './executors/kiro.executor.js';
+import { ClaudeExecutor } from './executors/claude.executor.js';
+import { CodexExecutor } from './executors/codex.executor.js';
+import { OpenCodeExecutor } from './executors/opencode.executor.js';
 import { CommentParserService } from '../../common/parser/comment-parser.service.js';
 
 /**
@@ -101,8 +104,24 @@ export class AiExecutorService {
     const executor = this.executors.get(executorName.toLowerCase()) || this.executors.get('gemini')!;
     this.logger.log(`Executing custom prompt using ${executor.name}`);
     if (executor instanceof BaseAiExecutor) {
-      // Use the internal execCli of the executor
-      return (executor as any).execCli(executor.name, ['--yolo'], { cwd: repoDir || process.cwd(), input: prompt });
+      const cwd = repoDir || process.cwd();
+      const anyExec = executor as any;
+      
+      switch (executor.name) {
+        case 'opencode':
+          return anyExec.execCli('opencode', ['run', prompt], { cwd, allowFail: true });
+        case 'kiro':
+          return anyExec.execCli('kiro-cli', ['chat', '--no-interactive', '--trust-all-tools'], { cwd, input: prompt });
+        case 'claude':
+          return anyExec.execCli('claude', ['-p', prompt, '--output-format', 'text', '--dangerously-skip-permissions'], { cwd });
+        case 'codex':
+          return anyExec.execCli('codex', ['exec', '-', '--dangerously-bypass-approvals-and-sandbox'], { cwd, input: prompt });
+        case 'copilot':
+          return anyExec.execCli('copilot', ['--yolo', '--allow-all-tools'], { cwd, input: prompt });
+        case 'gemini':
+        default:
+          return anyExec.execCli(executor.name, ['--yolo'], { cwd, input: prompt });
+      }
     }
     throw new Error(`Executor ${executorName} does not support raw prompts`);
   }
