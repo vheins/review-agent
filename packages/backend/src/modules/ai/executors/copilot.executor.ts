@@ -11,6 +11,6 @@ export class CopilotExecutor extends BaseAiExecutor {
     this.logger.log(`Copilot reviewing PR #${pr.number}...`);
     const model = process.env.COPILOT_MODEL || 'claude-haiku-4.5';
     const prompt = this.buildReviewPrompt(pr, changedFiles);
-    return this.execCli('copilot', ['--yolo', '--allow-all-tools', '--silent', '--model', model], { cwd: repoDir, input: prompt });
+    return this.execCli('copilot', ['--yolo', '--allow-all-tools', '--model', model], { cwd: repoDir, input: prompt });
   }
 }
