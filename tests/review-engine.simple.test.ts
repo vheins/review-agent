@@ -185,7 +185,8 @@ describe('ReviewEngineService Simplified', () => {
     expect(result).toBe(true);
     expect(repoManager.prepareRepository).toHaveBeenCalled();
     expect(aiService.executeRaw).toHaveBeenCalled();
-    expect(githubService.addReview).toHaveBeenCalled();
+    expect(githubService.addReview).not.toHaveBeenCalled();
+    expect(githubService.mergePR).not.toHaveBeenCalled();
     expect(securityScanner.scanFiles).toHaveBeenCalled();
     expect(dependencyScanner.scanDependencies).toHaveBeenCalled();
     expect(checklistService.attachChecklistsToReview).toHaveBeenCalled();

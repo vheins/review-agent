@@ -86,7 +86,6 @@ export class ReviewEngineService {
       
       this.gateway.broadcastReviewStarted(pr.number, pr.repository.nameWithOwner);
 
-      const reviewConfig = this.config.getReviewConfig();
       const repoConfig = await this.config.getRepositoryConfig(pr.repository.nameWithOwner);
 
       // 1. Prepare repository
@@ -120,41 +119,12 @@ export class ReviewEngineService {
         }
       }
 
-      // 1.5 Pre-Review Conflict Resolution
-      let currentMergeableState = deepPR?.mergeable_state || pr.mergeable_state;
+      // 1.5 Read mergeability for agent context/telemetry only.
+      // The CLI agent owns conflict handling, review submission, rejection, and merge.
+      const currentMergeableState = deepPR?.mergeable_state || pr.mergeable_state;
       if (!currentMergeableState || currentMergeableState === 'unknown') {
         const detail = await this.github.getPRDetail(pr.repository.nameWithOwner, pr.number);
-        currentMergeableState = detail.mergeable_state;
         deepPR = { ...deepPR, ...detail };
-      }
-
-      let conflictsResolvedBeforeReview = false;
-      if (currentMergeableState === 'dirty') {
-        this.logger.log(`PR #${pr.number} has conflicts (state: ${currentMergeableState}) — attempting pre-review auto-resolution.`);
-        this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 15, 'Resolving merge conflicts before review...');
-        
-        const resolved = await this.autoFix.fixConflicts(repoDir, pr.baseRefName || deepPR.baseRefName, {
-          number: pr.number,
-          title: pr.title,
-          repository: pr.repository.nameWithOwner,
-          headRefName: pr.headRefName || deepPR.headRefName
-        });
-        
-        if (resolved) {
-          this.logger.log(`Successfully resolved conflicts for PR #${pr.number} before review.`);
-          currentMergeableState = 'clean';
-          conflictsResolvedBeforeReview = true;
-          // Update tracking SHA since we pushed a merge commit
-          try {
-            const { stdout } = await this.github.execaVerbose('git', ['rev-parse', 'HEAD'], { cwd: repoDir });
-            deepPR.headSha = stdout.trim();
-            pr.headSha = deepPR.headSha;
-          } catch (e) {
-            this.logger.warn(`Failed to update HEAD SHA after conflict resolution: ${e.message}`);
-          }
-        } else {
-          this.logger.warn(`Failed to resolve conflicts automatically for PR #${pr.number}. Continuing review on existing branch state.`);
-        }
       }
       
       // 2. Get changed files
@@ -168,94 +138,47 @@ export class ReviewEngineService {
         return false;
       }
 
-      // Check if already approved at this HEAD to bypass AI analysis and go straight to auto-fix/merge
-      let isAlreadyApproved = false;
-      let existingFixableComments: any[] = [];
-      try {
-        const reviews = await this.github.listReviews(pr.repository.nameWithOwner, pr.number);
-        // Get the absolute latest review state
-        const lastSubmittedReview = reviews.filter((r: any) => r.state === 'APPROVED' || r.state === 'CHANGES_REQUESTED').pop();
-        
-        if (lastSubmittedReview && lastSubmittedReview.state === 'APPROVED' && lastSubmittedReview.commit_id === deepPR.headSha) {
-          this.logger.log(`PR #${pr.number} is already APPROVED at current HEAD (${deepPR.headSha.slice(0, 7)}). Checking for pending fixes...`);
-          isAlreadyApproved = true;
-          
-          // Fetch existing review comments to see if there are fixable suggestions
-          const comments = await this.github.listReviewComments(pr.repository.nameWithOwner, pr.number);
-          existingFixableComments = comments.filter((c: any) => this.autoFix.isFixable(c));
-        }
-      } catch (e) {
-        this.logger.warn(`Could not check existing approval status: ${e.message}`);
-      }
-
       let allSecurityFindings: any[] = [];
       let depFindings: any[] = [];
       let aiComments: any[] = [];
       let summaryMessage = '';
-      let decision: 'APPROVE' | 'REQUEST_CHANGES' = 'APPROVE';
+      let agentDecision: 'APPROVE' | 'REQUEST_CHANGES' | 'UNKNOWN' = 'UNKNOWN';
       let healthScore = 100;
       let qualityScore = 100;
 
-      if (isAlreadyApproved) {
-        this.logger.log(`Bypassing AI review for already approved PR #${pr.number}`);
-        aiComments = existingFixableComments;
-        decision = 'APPROVE';
-        // When already approved, reuse existing scores if possible, or stay at 100
-        healthScore = 100; 
-        qualityScore = 100;
-      } else {
-        // 3. Run Security Scans
-        this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 30, 'Running security scans...');
-        const staticFindings = await this.securityScanner.scanFiles(pr.repository.nameWithOwner, pr.number, changedFiles);
-        depFindings = await this.dependencyScanner.scanDependencies(repoDir, pr.repository.nameWithOwner, pr.number);
-        allSecurityFindings = [...staticFindings, ...depFindings];
+      // 3. Run Security Scans
+      this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 30, 'Running security scans...');
+      const staticFindings = await this.securityScanner.scanFiles(pr.repository.nameWithOwner, pr.number, changedFiles);
+      depFindings = await this.dependencyScanner.scanDependencies(repoDir, pr.repository.nameWithOwner, pr.number);
+      allSecurityFindings = [...staticFindings, ...depFindings];
 
-        // 4. AI Review
-        this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 50, 'Executing AI review...');
-        const rawAiOutput = await this.ai.executeRaw(pr, changedFiles.map((file) => file.path), repoDir);
-        aiComments = Array.isArray(this.ai.parseOutput(rawAiOutput)) ? this.ai.parseOutput(rawAiOutput) : [];
+      // 4. AI Review. The selected CLI agent is responsible for GitHub comments,
+      // review submission, rejection, and merge according to context/review-prompt.md.
+      this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 50, 'Executing AI review agent...');
+      const rawAiOutput = await this.ai.executeRaw(deepPR, changedFiles.map((file) => file.path), repoDir);
+      const parsedComments = this.ai.parseOutput(rawAiOutput);
+      aiComments = Array.isArray(parsedComments) ? parsedComments : [];
 
-        // Parse structured output from AI (DECISION, SEVERITY_SCORE, MESSAGE)
-        const severityScoreMatch = rawAiOutput.match(/\*?\*?SEVERITY[_\s]SCORE\*?\*?:\s*(\d+)/i);
-        const severityBreakdownMatch = rawAiOutput.match(/\*?\*?SEVERITY[_\s]BREAKDOWN\*?\*?:\s*([^\n]+)/i);
-        const decisionMatch = rawAiOutput.match(/\*?\*?DECISION\*?\*?:\s*(APPROVE|REQUEST[_\s]CHANGES)/i);
-        const messageMatch = rawAiOutput.match(/\*?\*?MESSAGE\*?\*?:\s*([\s\S]+)/i);
+      const decisionMatch = rawAiOutput.match(/\*?\*?DECISION\*?\*?:\s*(APPROVE|REQUEST[_\s]CHANGES)/i);
+      const messageMatch = rawAiOutput.match(/\*?\*?MESSAGE\*?\*?:\s*([\s\S]+)/i);
+      const parsedDecision = decisionMatch ? decisionMatch[1].toUpperCase().replace(/[\s_]+/, '_') : null;
+      summaryMessage = messageMatch ? messageMatch[1].trim() : '';
+      
+      // 5. Calculate metrics. The CLI agent owns the GitHub review decision.
+      this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 70, 'Calculating scores...');
+      
+      const tempComments = aiComments.map(c => ({
+        severity: c.severity,
+        category: c.issue_type,
+        suggestion: c.suggested_fix,
+      } as any));
 
-        const severityBreakdown = severityBreakdownMatch ? severityBreakdownMatch[1].trim() : 'N/A';
-        let severityScore = severityScoreMatch ? parseInt(severityScoreMatch[1], 10) : 0;
-        let parsedDecision = decisionMatch ? decisionMatch[1].toUpperCase().replace(/[\s_]+/, '_') : null;
-        summaryMessage = messageMatch ? messageMatch[1].trim() : '';
+      healthScore = this.metricsService.calculateHealthScore(allSecurityFindings, tempComments);
+      qualityScore = this.metricsService.calculateQualityScore(tempComments);
 
-        // Override APPROVE → REQUEST_CHANGES if critical/high found in breakdown
-        if (parsedDecision === 'APPROVE' && severityBreakdownMatch) {
-          const criticalCount = parseInt(severityBreakdown.match(/Critical:\s*(\d+)/i)?.[1] || '0', 10);
-          const highCount = parseInt(severityBreakdown.match(/High:\s*(\d+)/i)?.[1] || '0', 10);
-          if (criticalCount > 0 || highCount > 0) {
-            this.logger.warn(`Overriding APPROVE → REQUEST_CHANGES due to Critical/High findings`);
-            parsedDecision = 'REQUEST_CHANGES';
-          }
-        }
-        
-        // 5. Calculate metrics and decision
-        this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 70, 'Calculating scores...');
-        
-        const tempComments = aiComments.map(c => ({
-          severity: c.severity,
-          category: c.issue_type,
-          suggestion: c.suggested_fix,
-        } as any));
-
-        healthScore = this.metricsService.calculateHealthScore(allSecurityFindings, tempComments);
-        qualityScore = this.metricsService.calculateQualityScore(tempComments);
-
-        // Use parsed decision from AI output, fallback to score-based
-        decision = (parsedDecision as any)
-          || ((healthScore < (100 - reviewConfig.severityThreshold)) ? 'REQUEST_CHANGES' : 'APPROVE');
-
-        if ((allSecurityFindings.length > 0 || aiComments.some(c => c.severity === 'error')) && decision === 'APPROVE') {
-          decision = 'REQUEST_CHANGES';
-        }
-      }
+      agentDecision = parsedDecision === 'APPROVE' || parsedDecision === 'REQUEST_CHANGES'
+        ? parsedDecision
+        : 'UNKNOWN';
 
       // 6. Save/Update PR Entity
       this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 80, 'Saving to database...');
@@ -332,145 +255,39 @@ export class ReviewEngineService {
       // 10. Attach Checklists
       await this.checklistService.attachChecklistsToReview(savedReview.id, pr.repository.nameWithOwner);
 
-      // 11. Apply Auto-Fixes if enabled or if PR is approved with comments/conflicts
-      let fixesApplied = false;
-      const fixableComments = aiComments.filter(c => this.autoFix.isFixable(c));
-      
-      // Auto-fix ONLY if approved AND (has fixable suggestions)
-      // Conflicts are already resolved in step 1.5
-      const shouldAutoFix = decision === 'APPROVE' && (fixableComments.length > 0);
-      
-      if (shouldAutoFix) {
-        if (appConfig.dryRun) {
-          this.logger.log(`[DryRun] Skipping auto-fixes for PR #${pr.number}`);
-          fixesApplied = true;
-        } else {
-          this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 85, 'Applying fixes...');
-          
-          // Apply AI suggestions
-          if (fixableComments.length > 0) {
-            await this.autoFix.applyFixes(repoDir, fixableComments);
-            await this.autoFix.runProjectFixers(repoDir);
-            
-            const verified = await this.autoFix.verifyFixes(repoDir);
-            if (verified) {
-              // commitAndPushFixes already does git push
-              const pushed = await this.autoFix.commitAndPushFixes(repoDir, pr.headRefName);
-              if (pushed) fixesApplied = true;
-            } else {
-              this.logger.warn(`Auto-fixes failed verification for PR #${pr.number}, rolling back changes.`);
-              await this.github.execaVerbose('git', ['reset', '--hard', 'HEAD'], { cwd: repoDir });
-            }
-          }
-        }
-      } else if (conflictsResolvedBeforeReview && decision === 'APPROVE' && repoConfig.autoMerge) {
-        // If we ONLY resolved conflicts in step 1.5 and didn't apply any other auto-fixes, 
-        // the commit was already pushed.
-      }
-
-      // 12. Audit Log
+      // 11. Audit Log. No GitHub write action is performed here; the CLI agent owns it.
       await this.auditLogger.logAction(
         'review_completed',
         'ai-agent',
         'pull_request',
         `${pr.repository.nameWithOwner}#${pr.number}`,
-        { decision, healthScore, qualityScore, mode: repoConfig.reviewMode, fixesApplied }
+        { agentDecision, healthScore, qualityScore, mode: repoConfig.reviewMode }
       );
 
-      // 13. Post comments to GitHub
-      this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 90, 'Posting to GitHub...');
-      const finalMessage = summaryMessage || this.buildSummaryMessage(aiComments, allSecurityFindings, decision, healthScore, repoConfig.reviewMode, fixesApplied);
-      
+      // 12. Agent output has already handled GitHub review/comment/merge actions.
+      this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 90, 'Agent GitHub actions completed.');
+
       if (appConfig.dryRun) {
-        this.logger.log(`[DryRun] Skipping GitHub review for PR #${pr.number}`);
-        console.log(`[DryRun] Summary for PR #${pr.number}:`, finalMessage);
+        this.logger.log(`[DryRun] CLI agent ran in dry-run mode for PR #${pr.number}`);
+        console.log(`[DryRun] Agent summary for PR #${pr.number}:`, summaryMessage || '(no summary emitted)');
         if (depFindings.length > 0) {
           console.log(`[DryRun] Dependency findings (${depFindings.length}):`, depFindings.map(f => f.title));
         }
-      } else {
-        // Check if AI already posted a review (pending or submitted)
-        let alreadyReviewed = false;
-        try {
-          const reviews = await this.github.listReviews(pr.repository.nameWithOwner, pr.number);
-          const pendingReview = reviews.find((r: any) => r.state === 'PENDING');
-          const submittedReviews = reviews.filter((r: any) => r.state !== 'PENDING');
-
-          if (pendingReview) {
-            // Post dependency findings as inline comments on the pending review
-            if (depFindings.length > 0) {
-              await this.postDepFindingsAsComments(pr.repository.nameWithOwner, pr.number, depFindings);
-            }
-            this.logger.log(`Found pending review id=${pendingReview.id} — submitting as ${decision}`);
-            await this.github.submitPendingReview(pr.repository.nameWithOwner, pr.number, pendingReview.id, decision, finalMessage);
-            alreadyReviewed = true;
-          } else if (submittedReviews.length > 0) {
-            this.logger.log(`AI already submitted ${submittedReviews.length} review(s) — skipping fallback`);
-            alreadyReviewed = true;
-          }
-        } catch (e) {
-          this.logger.warn(`Could not check existing reviews: ${e.message}`);
-        }
-
-        if (!alreadyReviewed) {
-          // Create pending review, post dep findings, then submit
-          if (depFindings.length > 0) {
-            try {
-              await this.github.createPendingReview(pr.repository.nameWithOwner, pr.number);
-              await this.postDepFindingsAsComments(pr.repository.nameWithOwner, pr.number, depFindings);
-              const reviews = await this.github.listReviews(pr.repository.nameWithOwner, pr.number);
-              const pendingReview = reviews.find((r: any) => r.state === 'PENDING');
-              if (pendingReview) {
-                await this.github.submitPendingReview(pr.repository.nameWithOwner, pr.number, pendingReview.id, decision, finalMessage);
-                alreadyReviewed = true;
-              }
-            } catch (e) {
-              this.logger.warn(`Failed to post dep findings as inline comments: ${e.message}`);
-            }
-          }
-
-          if (!alreadyReviewed) {
-            this.logger.log(`No pending review found — posting fallback summary review`);
-            await this.github.addReview(pr.repository.nameWithOwner, pr.number, finalMessage, decision);
-          }
-        }
-
-        // Open PR in browser
-        try {
-          await this.github.execaVerbose('gh', ['pr', 'view', String(pr.number), '--repo', pr.repository.nameWithOwner, '--web'], { allowFail: true });
-        } catch (_) {}
       }
 
-      // 14. Commit transaction
+      // 13. Commit transaction
       await queryRunner.commitTransaction();
 
-      // 15. Real-time updates
+      // 14. Real-time updates
       this.gateway.broadcastMetricsUpdate(pr.number, pr.repository.nameWithOwner, { healthScore, qualityScore });
 
-      // 16. Gamification
-      if (decision === 'APPROVE') {
+      // 15. Gamification
+      if (agentDecision === 'APPROVE') {
         await this.gamification.awardPoints(prEntity.author, 10, 'PR Approved by AI');
       }
 
-      // 17. Auto-merge
-      // Logic: Merge if decision is APPROVE AND autoMerge is enabled in repo config
-      // AND current state is not dirty (conflicts resolved)
-      const shouldAutoMerge = decision === 'APPROVE' && repoConfig.autoMerge && currentMergeableState !== 'dirty';
-      
-      if (shouldAutoMerge) {
-        if (appConfig.dryRun) {
-          this.logger.log(`[DryRun] Skipping auto-merge for PR #${pr.number}`);
-        } else {
-          this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 95, 'Auto-merging PR...');
-          const merged = await this.github.mergePR(pr.repository.nameWithOwner, pr.number, 'merge');
-          if (!merged) {
-             this.logger.error(`GitHub CLI merge failed for PR #${pr.number}.`);
-             // We can proceed, but log it as an error
-          }
-        }
-      }
-
       this.logger.log(`Successfully completed review for PR #${pr.number}`);
-      this.gateway.broadcastReviewCompleted(pr.number, pr.repository.nameWithOwner, { decision, healthScore });
+      this.gateway.broadcastReviewCompleted(pr.number, pr.repository.nameWithOwner, { decision: agentDecision, healthScore });
       return true;
     } catch (error) {
       this.logger.error(`Failed to review PR #${pr.number}: ${error.message}`, error.stack);
@@ -482,49 +299,13 @@ export class ReviewEngineService {
     }
   }
 
-  private async postDepFindingsAsComments(repoName: string, prNumber: number, findings: any[]): Promise<void> {
-    for (const f of findings) {
-      const severity = f.severity?.toUpperCase() || 'MEDIUM';
-      const body = `[${severity}] **${f.title}**\n\n${f.description}`;
-      try {
-        await this.github.addFileComment(repoName, prNumber, f.filePath, body);
-      } catch (e) {
-        this.logger.warn(`Failed to post dep finding comment for ${f.filePath}: ${e.message}`);
-      }
-    }
-  }
-
-  private buildSummaryMessage(aiComments: any[], securityFindings: any[], decision: string, healthScore: number, mode: string, fixesApplied: boolean): string {
-    let msg = `### AI Review Summary (${mode} mode)\n\n`;
-    msg += `**Decision:** ${decision}\n`;
-    msg += `**Health Score:** ${healthScore}/100\n\n`;
-    
-    if (securityFindings.length > 0) {
-      msg += `⚠️ **Found ${securityFindings.length} security vulnerabilities!**\n`;
-    }
-    
-    if (mode === 'auto-fix' && fixesApplied) {
-      msg += `✅ **Auto-fixes have been applied, verified, and pushed to your branch.**\n\n`;
-    } else if (mode === 'auto-fix' && !fixesApplied && aiComments.some(c => this.autoFix.isFixable(c))) {
-      msg += `❌ **Auto-fixes were attempted but failed verification tests. Manual intervention required.**\n\n`;
-    }
-    
-    if (aiComments.length > 0) {
-      msg += `Found ${aiComments.length} potential issues. Please check inline comments for details.`;
-    } else if (securityFindings.length === 0) {
-      msg += `LGTM! No significant issues found.`;
-    }
-    
-    return msg;
-  }
-
   /**
    * Returns true if PR should be skipped (already reviewed at current HEAD).
    * Returns false if PR needs review:
    *   - No submitted review yet, OR
    *   - Has new commits since last review (re-review needed), OR
    *   - review-requested is set (team asked for re-review), OR
-   *   - PR is approved but has pending comments/conflicts that need auto-fixing
+   *   - PR is approved but still needs the CLI agent to resolve/merge
    */
   private async shouldSkipPR(pr: any): Promise<boolean> {
     try {
@@ -574,11 +355,12 @@ export class ReviewEngineService {
             this.logger.warn(`Could not check for fixable comments on PR #${pr.number}: ${e.message}`);
           }
 
-          // If autoMerge is enabled, don't skip if the PR is still open!
+          // If autoMerge is enabled, don't skip if the PR is still open.
+          // The CLI agent, not this service, owns the merge action.
           try {
             const repoConfig = await this.config.getRepositoryConfig(pr.repository.nameWithOwner);
             if (repoConfig.autoMerge) {
-              this.logger.log(`PR #${pr.number} is approved but still open — proceeding to auto-merge/conflict resolution pipeline.`);
+              this.logger.log(`PR #${pr.number} is approved but still open — sending to CLI agent for merge handling.`);
               return false;
             }
           } catch (e) {

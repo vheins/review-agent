@@ -58,12 +58,15 @@ export abstract class BaseAiExecutor implements AiExecutor {
     const severityHigh = parseInt(process.env.SEVERITY_HIGH || '3', 10);
     const severityMedium = parseInt(process.env.SEVERITY_MEDIUM || '2', 10);
     const severityLow = parseInt(process.env.SEVERITY_LOW || '1', 10);
+    const dryRun = process.env.DRY_RUN === 'true' ? 'true' : 'false';
 
     if (template) {
       return template
         .replace(/\{\{repository\}\}/g, pr.repository.nameWithOwner)
         .replace(/\{\{pr\.number\}\}/g, String(pr.number))
         .replace(/\{\{pr\.title\}\}/g, pr.title)
+        .replace(/\{\{pr\.headSha\}\}/g, pr.headSha || '')
+        .replace(/\{\{dryRun\}\}/g, dryRun)
         .replace(/\{\{guidelines\}\}/g, guidelines)
         .replace(/\{\{severityThreshold\}\}/g, String(severityThreshold))
         .replace(/\{\{severityCritical\}\}/g, String(severityCritical))

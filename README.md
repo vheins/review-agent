@@ -225,8 +225,8 @@ This will show what prompts would be sent to Gemini without executing them.
      - Clones repository to `WORKSPACE_DIR/<repo-name>` if not exists
      - Checks out PR branch if repository already exists
      - Sends PR to selected AI executor (Gemini or Copilot) with review guidelines from `agents.md`
-     - AI performs review and posts comments
-     - Auto-merges if approved and `AUTO_MERGE=true` (comment mode only)
+     - CLI agent performs review and owns GitHub comments/review submission
+     - CLI agent performs merge when review passes and merge policy allows it
 
 ## Example Output
 
