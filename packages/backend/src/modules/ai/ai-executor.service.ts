@@ -109,7 +109,11 @@ export class AiExecutorService {
       
       switch (executor.name) {
         case 'opencode':
-          return anyExec.execCli('opencode', ['run', prompt], { cwd, allowFail: true });
+          return anyExec.execCli(
+            process.env.OPENCODE_BIN || 'opencode',
+            ['run', '--dir', cwd, '--dangerously-skip-permissions', prompt],
+            { cwd, allowFail: true },
+          );
         case 'kiro':
           return anyExec.execCli('kiro-cli', ['chat', '--no-interactive', '--trust-all-tools'], { cwd, input: prompt });
         case 'claude':

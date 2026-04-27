@@ -12,9 +12,9 @@ export class OpenCodeExecutor extends BaseAiExecutor {
     const agent = process.env.OPENCODE_AGENT || 'build';
     const prompt = this.buildReviewPrompt(pr, changedFiles);
 
-    const opencodeBin = process.env.OPENCODE_BIN || '/home/vheins/.opencode/bin/opencode';
+    const opencodeBin = process.env.OPENCODE_BIN || 'opencode';
 
-    const args = ['run'];
+    const args = ['run', '--dir', repoDir, '--dangerously-skip-permissions'];
     if (model !== 'auto') args.push('--model', model);
     if (agent) args.push('--agent', agent);
     args.push(prompt);
