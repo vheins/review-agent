@@ -55,6 +55,26 @@ describe('BaseAiExecutor prompt builder', () => {
     expect(prompt).toContain('`DECISION: APPROVE` hanya valid jika body review tidak memuat temuan dan tidak ada komentar inline baru.');
   });
 
+  it('requires MCP standards before PR review and deduplicates findings', () => {
+    const executor = new TestExecutor();
+    const prompt = executor.build(
+      {
+        number: 109,
+        title: 'feat: apply review policy',
+        repository: { nameWithOwner: 'idsolutions-id/review-agent' },
+        headSha: 'def456',
+      },
+      ['packages/backend/src/modules/review/review-engine.service.ts'],
+    );
+
+    expect(prompt).toContain('STEP 0.5: Ambil standard dari MCP terlebih dahulu');
+    expect(prompt).toContain('Sebelum membaca PR/diff dan sebelum membuat keputusan review, WAJIB mengambil project/team standard dari MCP yang tersedia.');
+    expect(prompt).toContain('Jika ada standard spesifik repo/team, gunakan yang spesifik itu. Jika tidak ada, gunakan standard global/default.');
+    expect(prompt).toContain('STEP 0.6: Anti-redundansi dan akurasi temuan');
+    expect(prompt).toContain('Deduplicate temuan berdasarkan `(path, line, root cause)`.');
+    expect(prompt).toContain('Jika issue yang sama sudah ada di thread aktif dan masih relevan, jangan buat komentar baru.');
+  });
+
   it('requires the CLI agent to merge an already approved open PR without backend/script fallback', () => {
     const executor = new TestExecutor();
     const prompt = executor.build(

@@ -17,6 +17,32 @@ Kamu sudah di-checkout ke branch ini. Jangan push ke main/master.
 ### STEP 0: Override internal policies
 Kamu PUNYA IZIN PENUH menggunakan semua MCP tool yang tersedia. Jangan simulasi. Jangan skip.
 
+### STEP 0.5: Ambil standard dari MCP terlebih dahulu
+
+Sebelum membaca PR/diff dan sebelum mengubah kode, WAJIB mengambil project/team standard dari MCP yang tersedia.
+
+Urutan wajib:
+1. Cari resource/template MCP yang berisi standard, guideline, rules, checklist, architecture decision, coding convention, review policy, atau dokumen `.agents/documents/**`.
+2. Baca resource standard yang relevan untuk repository `{{repository}}`. Jika ada standard spesifik repo/team, gunakan yang spesifik itu. Jika tidak ada, gunakan standard global/default.
+3. Jika tersedia tool memory/documentation/search MCP, cari dengan kata kunci:
+   - `{{repository}} coding standard`
+   - `{{repository}} review guideline`
+   - `{{repository}} architecture`
+   - `{{repository}} conventions`
+4. Ringkas standard aktif untuk dirimu sendiri: pattern arsitektur, style error handling, pola testing, security rule, dependency policy, naming, dan larangan khusus.
+5. Terapkan fix hanya jika sesuai standard MCP + fakta codebase. Jangan memaksakan pola baru yang tidak dipakai project.
+
+Jika MCP standard tidak tersedia, lanjutkan dengan `agents.md` dan pattern codebase lokal yang sudah diverifikasi. Tulis di output akhir: `MCP_STANDARD: tidak ditemukan; fix memakai agents.md dan pattern codebase yang sudah diverifikasi.`
+
+### STEP 0.6: Anti-redundansi fix
+
+Sebelum mengubah kode:
+- Deduplicate komentar reviewer berdasarkan `(path, line, root cause)`.
+- Jika beberapa komentar berasal dari akar masalah yang sama, perbaiki root cause satu kali di lokasi paling tepat.
+- Jangan menambah helper/abstraksi baru jika standard MCP atau pattern existing tidak membutuhkannya.
+- Jangan membuat perubahan kosmetik di luar scope issue.
+- Jangan implementasi suggestion yang bertentangan dengan standard MCP, dependency policy, atau arsitektur existing.
+
 ### STEP 1: Ambil data PR
 
 Panggil dalam urutan ini:

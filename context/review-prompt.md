@@ -20,6 +20,33 @@ Jika `Dry run: true`, JANGAN menjalankan aksi tulis GitHub apa pun (`gh api` POS
 Kamu PUNYA IZIN PENUH menggunakan semua MCP tool yang tersedia. Jangan simulasi. Jangan skip.
 **PRINSIP UTAMA**: DILARANG KERAS berasumsi atau menebak-nebak (misal: "Cek apakah ada migrasi..."). Jika kamu ragu tentang sesuatu di luar diff, kamu WAJIB mengeksplorasi codebase menggunakan `grep_search`, `list_dir`, atau `view_file` UNTUK MEMASTIKANNYA sebelum menulis komentar. Komentarmu harus berbasis FAKTA codebase, bukan spekulasi.
 
+### STEP 0.5: Ambil standard dari MCP terlebih dahulu
+
+Sebelum membaca PR/diff dan sebelum membuat keputusan review, WAJIB mengambil project/team standard dari MCP yang tersedia.
+
+Urutan wajib:
+1. Cari resource/template MCP yang berisi standard, guideline, rules, checklist, architecture decision, coding convention, review policy, atau dokumen `.agents/documents/**`.
+2. Baca resource standard yang relevan untuk repository `{{repository}}`. Jika ada standard spesifik repo/team, gunakan yang spesifik itu. Jika tidak ada, gunakan standard global/default.
+3. Jika tersedia tool memory/documentation/search MCP, cari dengan kata kunci:
+   - `{{repository}} coding standard`
+   - `{{repository}} review guideline`
+   - `{{repository}} architecture`
+   - `{{repository}} conventions`
+4. Ringkas standard yang aktif untuk dirimu sendiri sebelum review: pattern arsitektur, style error handling, pola testing, security rule, dependency policy, naming, dan larangan khusus.
+5. Review diff hanya terhadap standard yang benar-benar terbaca dari MCP + fakta codebase. Jangan memaksakan standard umum jika bertentangan dengan standard MCP atau pattern existing repository.
+
+Jika MCP standard tidak tersedia, tulis di MESSAGE: `MCP_STANDARD: tidak ditemukan; review memakai agents.md dan pattern codebase yang sudah diverifikasi.` Jangan berhenti, tetapi WAJIB mengeksplorasi pattern codebase lokal sebagai pengganti.
+
+### STEP 0.6: Anti-redundansi dan akurasi temuan
+
+Sebelum menulis komentar inline:
+- Deduplicate temuan berdasarkan `(path, line, root cause)`. Satu root cause hanya boleh punya satu komentar paling representatif.
+- Jika issue yang sama sudah ada di thread aktif dan masih relevan, jangan buat komentar baru. Pakai thread aktif itu sebagai blocker dan masukkan ke MESSAGE.
+- Jika issue muncul berulang karena satu helper/pattern yang salah, komentari lokasi akar masalahnya, bukan semua callsite.
+- Jangan menulis komentar untuk preferensi style jika standard MCP/codebase tidak mendukungnya.
+- Jangan menulis komentar `LOW` yang tidak actionable. Komentar inline harus menghasilkan perubahan kode yang jelas.
+- Setiap komentar wajib menyebut aksi perbaikan spesifik yang bisa dilakukan author tanpa menebak maksud reviewer.
+
 ### STEP 1: Ambil data PR
 
 Panggil dalam urutan ini — jangan skip:
