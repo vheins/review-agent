@@ -2,29 +2,35 @@ import { Injectable, Logger } from '@nestjs/common';
 import { execa } from 'execa';
 import chalk from 'chalk';
 import stripAnsi from 'strip-ansi';
+import { formatRateLimitWait } from '../../../common/utils/rate-limit-wait-format.util.js';
 
 @Injectable()
 export class GithubCliService {
   private readonly logger = new Logger(GithubCliService.name);
+  private readonly rateLimitWaitBufferMs = 5000;
 
   /**
    * Execute a command with verbose logging
    */
   async execaVerbose(cmd: string, args: string[], opts: any = {}): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+    const rateLimitAttempts = opts.rateLimitAttempts ?? 0;
+    const sanitizedOpts = { ...opts };
+    delete sanitizedOpts.rateLimitAttempts;
+
     const label = chalk.magenta(`[exec]`) + ' ' + chalk.white(`${cmd} ${args.join(' ')}`);
     this.logger.log(`▶ ${label}`);
     const start = Date.now();
 
     // Use execa's built-in buffering for data integrity
     const proc = execa(cmd, args, {
-      ...opts,
+      ...sanitizedOpts,
       all: true, // Combine stdout and stderr
       reject: false,
     });
 
     // For verbose logging without corrupting the return value, 
     // we pipe to a logger but return the raw buffer result.
-    if (proc.stdout && !opts.silent) {
+    if (proc.stdout && !sanitizedOpts.silent) {
       let lineCount = 0;
       proc.stdout.on('data', (chunk) => {
         if (lineCount > 100) return; // Limit console noise for huge outputs
@@ -50,9 +56,23 @@ export class GithubCliService {
     const stderr = stripAnsi(result.stderr || '');
 
     if (result.exitCode !== 0) {
-      if (!opts.allowFail) {
+      const errorOutput = [stdout, stderr, stripAnsi((result as any).all || '')].filter(Boolean).join('\n');
+      if (
+        cmd === 'gh' &&
+        !sanitizedOpts.allowFail &&
+        rateLimitAttempts < 1 &&
+        this.isRateLimitExceeded(errorOutput)
+      ) {
+        await this.waitForGitHubRateLimitReset(errorOutput);
+        return this.execaVerbose(cmd, args, {
+          ...sanitizedOpts,
+          rateLimitAttempts: rateLimitAttempts + 1,
+        });
+      }
+
+      if (!sanitizedOpts.allowFail) {
         this.logger.error(`[CLI] ✖ ${cmd} failed in ${duration}ms with code ${result.exitCode}`);
-        const err = new Error(stderr || `${cmd} failed with exit code ${result.exitCode}`) as any;
+        const err = new Error(errorOutput.trim() || `${cmd} failed with exit code ${result.exitCode}`) as any;
         err.exitCode = result.exitCode;
         throw err;
       }
@@ -66,6 +86,49 @@ export class GithubCliService {
       stderr: stderr.trim(),
       exitCode: result.exitCode || 0,
     };
+  }
+
+  private isRateLimitExceeded(output: string): boolean {
+    const msg = output.toLowerCase();
+    return msg.includes('rate limit') && (
+      msg.includes('exceeded') ||
+      msg.includes('secondary rate limit') ||
+      msg.includes('api rate limit')
+    );
+  }
+
+  private async waitForGitHubRateLimitReset(errorOutput: string): Promise<void> {
+    const resetMs = await this.getGitHubRateLimitResetMs(errorOutput);
+    const waitMs = Math.max(resetMs - Date.now() + this.rateLimitWaitBufferMs, 1000);
+    const waitDescription = formatRateLimitWait(waitMs);
+
+    this.logger.warn(`[CLI] GitHub API rate limit exceeded. Waiting ${waitDescription} before retrying...`);
+    await new Promise(resolve => setTimeout(resolve, waitMs));
+  }
+
+  private async getGitHubRateLimitResetMs(errorOutput: string): Promise<number> {
+    try {
+      const result = await execa('gh', ['api', 'rate_limit'], {
+        all: true,
+        reject: false,
+      });
+      if (result.exitCode === 0) {
+        const limits = JSON.parse(result.stdout || (result as any).all || '{}');
+        const resourceName = errorOutput.toLowerCase().includes('graphql') ? 'graphql' : 'core';
+        const resetSeconds =
+          limits?.resources?.[resourceName]?.reset ??
+          limits?.resources?.core?.reset ??
+          limits?.rate?.reset;
+
+        if (typeof resetSeconds === 'number' && resetSeconds > 0) {
+          return resetSeconds * 1000;
+        }
+      }
+    } catch (e) {
+      this.logger.warn(`[CLI] Could not read GitHub rate limit reset time: ${e.message}`);
+    }
+
+    return Date.now() + 60_000;
   }
 
   async searchPRs(query: string): Promise<any[]> {

@@ -309,6 +309,40 @@ export class ReviewEngineService {
    */
   private async shouldSkipPR(pr: any): Promise<boolean> {
     try {
+      const incomingUpdatedAt = pr.updatedAt ? new Date(pr.updatedAt) : null;
+      if (incomingUpdatedAt && !Number.isNaN(incomingUpdatedAt.getTime())) {
+        const localPr = await this.prRepository.findOne({
+          where: { number: pr.number, repository: pr.repository.nameWithOwner },
+        });
+
+        if (
+          localPr?.head_sha &&
+          (pr.headSha ? localPr.head_sha === pr.headSha : true) &&
+          localPr.updatedAt.getTime() >= incomingUpdatedAt.getTime() &&
+          localPr.mergeable_state !== 'dirty'
+        ) {
+          const latestCompletedReview = await this.reviewRepository.findOne({
+            where: {
+              prNumber: pr.number,
+              repository: pr.repository.nameWithOwner,
+              status: 'completed',
+            },
+            order: { completedAt: 'DESC' },
+          });
+
+          if (
+            latestCompletedReview?.completedAt &&
+            latestCompletedReview.completedAt.getTime() >= incomingUpdatedAt.getTime()
+          ) {
+            const repoConfig = await this.config.getRepositoryConfig(pr.repository.nameWithOwner);
+            if (!repoConfig.autoMerge) {
+              this.logger.log(`PR #${pr.number} unchanged since last completed local review — skipping GitHub status checks.`);
+              return true;
+            }
+          }
+        }
+      }
+
       const reviews = await this.github.listReviews(pr.repository.nameWithOwner, pr.number);
       const submitted = reviews.filter((r: any) => r.state === 'APPROVED' || r.state === 'CHANGES_REQUESTED');
       

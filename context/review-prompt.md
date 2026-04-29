@@ -45,6 +45,17 @@ e) Cek komentar existing & Auto-Resolve Outdated:
    - `pull_request_read(method="get_review_comments", owner, repo, pullNumber)`
    - Periksa properti `isOutdated` pada tiap thread/komentar dari hasil pemanggilan di atas.
    - Jika ada komentar/thread yang `isOutdated: true` dan belum di-resolve, LANGSUNG resolve comment tersebut (kamu bisa menggunakan `gh api graphql` dengan mutation `resolveReviewThread` atau memanggil endpoint API GitHub yang sesuai). Jangan biarkan komentar outdated menggantung.
+   - Setelah outdated thread dibereskan, cek ulang thread yang masih aktif (unresolved + not outdated). Jika ada thread aktif yang masih membahas bug, security, dependency, correctness, role/access control, data integrity, atau diberi marker `[CRITICAL]`, `[HIGH]`, atau `[MEDIUM]`, PR BELUM BOLEH `APPROVE`. Masukkan ringkasan thread aktif tersebut ke MESSAGE dan submit `REQUEST_CHANGES`.
+   - `APPROVE` hanya boleh dilakukan jika tidak ada thread aktif yang actionable. Thread aktif `[LOW]` juga tidak boleh diabaikan jika kamu membuat komentar baru untuk hal yang sama; konsolidasikan menjadi `REQUEST_CHANGES` atau jangan kirim komentar baru.
+
+f) Cek status review/merge terbaru dari GitHub:
+```bash
+gh pr view {{pr.number}} --repo {{repository}} --json state,isDraft,reviewDecision,mergeStateStatus,mergeable,headRefOid,statusCheckRollup,autoMergeRequest
+```
+   - Jika `state` masih `OPEN`, `reviewDecision` adalah `APPROVED`, `mergeStateStatus` adalah `CLEAN`/`HAS_HOOKS` atau `mergeable` adalah `MERGEABLE`, tidak ada required check yang gagal/pending, dan tidak ada thread aktif actionable, PR SUDAH LULUS. Jangan submit `APPROVE` ulang. Langsung merge dengan merge commit.
+   - Jika `reviewDecision` adalah `APPROVED` tapi `mergeStateStatus` `BLOCKED`/`BEHIND`/`UNKNOWN` atau ada check pending, update branch/cek status sesuai kebutuhan lalu merge setelah GitHub menyatakan mergeable. Jangan berhenti di output `DECISION: APPROVE` selama PR masih open dan auto-merge menjadi tujuan.
+   - Jika `reviewDecision` adalah `CHANGES_REQUESTED`, lanjutkan review normal dan hanya merge jika semua blocking review sudah terselesaikan atau dismissed secara valid oleh reviewer yang berwenang.
+   - Semua aksi di poin ini HARUS kamu jalankan sendiri via `gh` CLI di dalam sesi agent. Jangan mengandalkan runtime, service backend, script auto-merge, cron, webhook, atau fallback lain untuk melakukan merge/comment setelah kamu selesai.
 
 ### STEP 2: Security scan
 - `scan_vulnerable_dependencies` dari osvScanner
@@ -138,14 +149,20 @@ gh api repos/{{repository}}/pulls/{{pr.number}}/reviews/<review_id>/events \
   -f event=REQUEST_CHANGES \
   -f body="ringkasan pendek"
 ```
-   - `event`: `"REQUEST_CHANGES"` atau `"APPROVE"`
+   - `event`: WAJIB `"REQUEST_CHANGES"`. Jika ada komentar inline baru, review tidak boleh berakhir sebagai `APPROVE`.
    - `body`: Ringkasan pendek (opsional, max 2-3 kalimat)
 
 **Skenario B — JIKA PR PERFECT / TIDAK ADA TEMUAN SAMA SEKALI:**
-- Gunakan `gh pr review`:
+- Syarat wajib: tidak ada temuan baru, tidak ada dependency/security finding yang actionable, dan tidak ada thread aktif yang unresolved + not outdated.
+- Jika PR belum punya approval pada HEAD terbaru, gunakan `gh pr review`:
 ```bash
 gh pr review {{pr.number}} --repo {{repository}} --approve --body "LGTM. Tidak ada temuan."
 ```
+- Setelah approval ada, PR masih `OPEN`, dan status mergeable/checks lulus, WAJIB merge:
+```bash
+gh pr merge {{pr.number}} --repo {{repository}} --merge --delete-branch
+```
+- Jika PR sudah `APPROVED` sebelum review ini berjalan, jangan kirim approval duplikat. Verifikasi status mergeable/checks, lalu jalankan `gh pr merge` langsung.
 
 **FALLBACK — jika `gh` CLI gagal:**
 ```bash
@@ -169,12 +186,26 @@ Scoring per issue:
 
 Decision rules:
 1. Ada CRITICAL atau HIGH → selalu `REQUEST_CHANGES`
-2. Tidak ada CRITICAL/HIGH (lulus threshold {{severityThreshold}}) → **WAJIB lakukan AUTO-MERGE**:
+2. Ada temuan yang kamu kirim sebagai komentar inline, severity apa pun (`[CRITICAL]`, `[HIGH]`, `[MEDIUM]`, atau `[LOW]`) → selalu `REQUEST_CHANGES`. Komentar inline berarti ada tindakan yang harus diselesaikan author; jangan submit `APPROVE` dengan alasan komentar tersebut opsional.
+3. Ada thread aktif yang unresolved + not outdated dan actionable → selalu `REQUEST_CHANGES`, walaupun temuan itu berasal dari review sebelumnya.
+4. PR sudah `APPROVED`, masih `OPEN`, mergeable/checks lulus, dan tidak ada thread aktif actionable → **WAJIB merge langsung tanpa approval ulang**:
+   - Gunakan `gh pr merge {{pr.number}} --repo {{repository}} --merge --delete-branch`.
+   - OUTPUT tetap `DECISION: APPROVE` hanya setelah merge command berhasil atau PR sudah berubah menjadi merged.
+5. Tidak ada temuan baru, tidak ada dependency/security finding actionable, dan tidak ada thread aktif actionable (total score 0) → **WAJIB lakukan AUTO-MERGE**:
    - Gunakan metode **MERGE COMMIT** (jangan squash, jangan rebase).
    - Jika ada konflik merge, kamu WAJIB menyelesaikannya terlebih dahulu.
    - Selesaikan konflik dengan perbaikan yang benar (tetap mengikuti best practice, jangan asal tindih).
    - Setelah konflik beres dan review lulus, selesaikan dengan merge ke base branch.
-3. Jika total score melebihi threshold → `REQUEST_CHANGES` atau evaluasi ulang poin-poin MEDIUM/LOW yang ada.
+6. Threshold {{severityThreshold}} hanya dipakai untuk prioritas/telemetry, bukan untuk mengubah temuan inline menjadi approval. `APPROVE` hanya valid saat score 0 dan semua thread aktif sudah clear.
+
+### FINAL CONSISTENCY GUARD
+
+Sebelum submit event dan sebelum menulis OUTPUT WAJIB:
+- Jika kamu sudah membuat atau berencana membuat inline comment, `DECISION` harus `REQUEST_CHANGES`.
+- Jika MESSAGE menyebut ada isu, follow-up, dependency drift, security finding, atau thread aktif, `DECISION` harus `REQUEST_CHANGES`.
+- Jika ada review thread aktif unresolved + not outdated yang actionable, `DECISION` harus `REQUEST_CHANGES`.
+- Jika PR sudah `APPROVED`, masih `OPEN`, dan mergeable/checks lulus, kamu belum selesai sampai `gh pr merge` berhasil atau GitHub melaporkan PR sudah merged.
+- `DECISION: APPROVE` hanya valid jika body review tidak memuat temuan dan tidak ada komentar inline baru.
 
 ### STEP 7: Simpan ke memory
 - `memory-store` untuk pattern penting atau issue berulang

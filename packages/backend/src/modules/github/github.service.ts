@@ -107,22 +107,26 @@ export class GitHubClientService {
     this.logger.log(`► Starting targeted bulk PR sync for ${username}...`);
     
     const allPRs: PullRequest[] = [];
-    const scopeActions = [
+    const configuredScopes = new Set(appConfig.prScope || []);
+    const availableScopeActions = [
       { scope: 'authored',         query: `author:${username}`,           label: `authored by ${username}` },
       { scope: 'assigned',         query: `assignee:${username}`,         label: `assigned to ${username}` },
       { scope: 'review-requested', query: `review-requested:${username}`, label: `review-requested ${username}` },
       { scope: 'mentions',         query: `mentions:${username}`,         label: `mentions ${username}` },
       { scope: 'involves',         query: `involves:${username}`,         label: `involves ${username}` },
     ];
+    const scopeActions = configuredScopes.has('all')
+      ? availableScopeActions.filter(({ scope }) => scope === 'involves')
+      : availableScopeActions.filter(({ scope }) => configuredScopes.has(scope));
+
+    if (scopeActions.length === 0) {
+      scopeActions.push({ scope: 'involves', query: `involves:${username}`, label: `involves ${username}` });
+    }
 
     try {
-      this.logger.debug('[CLI] Performing targeted search for all states via gh search prs');
+      this.logger.debug('[CLI] Performing targeted search for open PRs via gh search prs');
       for (const { scope, query } of scopeActions) {
-        // If scope is not in config and it's not the default involves fallback, skip
-        if (!appConfig.prScope.includes(scope) && scope !== 'involves') continue;
-        
-        // Search all states, no archived filter to include historical data
-        const items = await this.cli.searchPRs(`${query}`);
+        const items = await this.cli.searchPRs(`is:pr is:open archived:false ${query}`);
         
         // Normalize CLI results
         const normalizedItems = items.map(item => ({
@@ -132,7 +136,7 @@ export class GitHubClientService {
           node_id: item.id,
           title: item.title,
           body: item.body || '',
-          state: item.state,
+          state: String(item.state || '').toLowerCase(),
           locked: item.isLocked || false,
           draft: item.isDraft || false,
           repository: { nameWithOwner: item.repository?.nameWithOwner || item.repository },
@@ -149,35 +153,8 @@ export class GitHubClientService {
         allPRs.push(...(normalizedItems as any[] as PullRequest[]));
       }
 
-      // If absolutely nothing found in specific scopes, try targeted involves
-      if (allPRs.length === 0) {
-          this.logger.debug('[CLI] No specific scope matches, trying involves filter (all states)');
-          const items = await this.cli.searchPRs(`involves:${username}`);
-          const normalizedItems = items.map(item => ({
-            id: item.id,
-            github_id: null,
-            number: item.number,
-            node_id: item.id,
-            title: item.title,
-            body: item.body || '',
-            state: item.state,
-            locked: item.isLocked || false,
-            draft: item.isDraft || false,
-            repository: { nameWithOwner: item.repository?.nameWithOwner || item.repository },
-            url: item.url,
-            updatedAt: item.updatedAt,
-            createdAt: item.createdAt || item.updatedAt,
-            closedAt: item.closedAt || null,
-            author: { login: item.author?.login || item.author },
-            labels: (item.labels || []).map(l => typeof l === 'string' ? l : l.name)
-          }));
-          allPRs.push(...(normalizedItems as any[] as PullRequest[]));
-      }
-
-      if (allPRs.length > 0) {
-        this.logger.log(`► Targeted sync found ${allPRs.length} relevant PRs in ${Date.now() - start}ms`);
-        return this.processPRs(allPRs);
-      }
+      this.logger.log(`► Targeted sync found ${allPRs.length} relevant PRs in ${Date.now() - start}ms`);
+      return this.processPRs(allPRs);
     } catch (cliError) {
       this.logger.warn(`[CLI] Targeted search failed: ${cliError.message}`);
     }
@@ -189,9 +166,11 @@ export class GitHubClientService {
         if (appConfig.prScope.includes('authored')) filters.push(`author:${username}`);
         if (appConfig.prScope.includes('assigned')) filters.push(`assignee:${username}`);
         if (appConfig.prScope.includes('review-requested')) filters.push(`review-requested:${username}`);
+        if (appConfig.prScope.includes('mentions')) filters.push(`mentions:${username}`);
+        if (appConfig.prScope.includes('involves') || appConfig.prScope.includes('all')) filters.push(`involves:${username}`);
         
         const filterStr = filters.length > 0 ? `(${filters.join(' OR ')})` : `involves:${username}`;
-        const query = `is:pr archived:false ${filterStr}`; 
+        const query = `is:pr is:open archived:false ${filterStr}`; 
         
         let prs: PullRequest[] = [];
         try {
@@ -216,7 +195,7 @@ export class GitHubClientService {
             labels: (item.labels || []).map(l => typeof l === 'string' ? l : l.name)
           }));
         } catch (e) {
-          const simpleResult = await this.api.searchPRs(`is:pr archived:false involves:${username}`);
+          const simpleResult = await this.api.searchPRs(`is:pr is:open archived:false involves:${username}`);
           prs = simpleResult.items.map(item => ({
             id: item.node_id,
             github_id: item.id,

@@ -192,4 +192,41 @@ describe('ReviewEngineService Simplified', () => {
     expect(checklistService.attachChecklistsToReview).toHaveBeenCalled();
     expect(auditLogger.logAction).toHaveBeenCalled();
   });
+
+  it('skips unchanged PRs from local review state without GitHub status calls', async () => {
+    const updatedAt = new Date('2026-04-27T00:00:00Z');
+    githubService.fetchOpenPRs.mockResolvedValue([
+      {
+        number: 123,
+        title: 'Fix bug',
+        repository: { nameWithOwner: 'owner/repo' },
+        url: 'https://github.com/owner/repo/pull/123',
+        updatedAt: updatedAt.toISOString(),
+        state: 'open',
+        draft: false,
+      },
+    ]);
+    prRepo.findOne.mockResolvedValue({
+      number: 123,
+      repository: 'owner/repo',
+      head_sha: 'abc123',
+      updatedAt,
+      mergeable_state: 'clean',
+    });
+    reviewRepo.findOne.mockResolvedValue({
+      status: 'completed',
+      completedAt: new Date('2026-04-27T00:01:00Z'),
+    });
+    configService.getRepositoryConfig.mockResolvedValue({
+      executor: 'gemini',
+      reviewMode: 'comment',
+      autoMerge: false,
+    });
+
+    await service.runAll();
+
+    expect(githubService.listReviews).not.toHaveBeenCalled();
+    expect(githubService.getPRDetail).not.toHaveBeenCalled();
+    expect(repoManager.prepareRepository).not.toHaveBeenCalled();
+  });
 });

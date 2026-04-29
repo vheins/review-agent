@@ -1,10 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AppConfigService } from '../../../config/app-config.service.js';
+import { formatRateLimitWait } from '../../../common/utils/rate-limit-wait-format.util.js';
 
 @Injectable()
 export class GithubApiService {
   private readonly logger = new Logger(GithubApiService.name);
+  private readonly rateLimitWaitBufferMs = 5000;
 
   constructor(
     private readonly config: AppConfigService,
@@ -15,6 +17,10 @@ export class GithubApiService {
    * Helper for GitHub API requests
    */
   async fetchApi(endpoint: string, options: any = {}) {
+    const rateLimitAttempts = options.rateLimitAttempts ?? 0;
+    const sanitizedOptions = { ...options };
+    delete sanitizedOptions.rateLimitAttempts;
+
     const token = this.configService.get<string>('GITHUB_TOKEN');
     if (!token) {
       throw new Error('GITHUB_TOKEN is not configured');
@@ -24,13 +30,13 @@ export class GithubApiService {
     const start = Date.now();
 
     const response = await fetch(`https://api.github.com${endpoint}`, {
-      ...options,
+      ...sanitizedOptions,
       headers: {
         'Authorization': `token ${token}`,
         'Accept': 'application/vnd.github+json',
         'X-GitHub-Api-Version': '2022-11-28',
         'User-Agent': 'PR-Review-Agent',
-        ...options.headers,
+        ...sanitizedOptions.headers,
       },
     });
 
@@ -46,12 +52,37 @@ export class GithubApiService {
       } catch (e) {
         message = errorText || message;
       }
+      if (rateLimitAttempts < 1 && this.isRateLimitExceeded(status, message)) {
+        await this.waitForGitHubRateLimitReset(response);
+        return this.fetchApi(endpoint, {
+          ...sanitizedOptions,
+          rateLimitAttempts: rateLimitAttempts + 1,
+        });
+      }
+
       this.logger.error(`[API] ✖ Error [${status}] after ${duration}ms: ${message}`);
       throw new Error(`GitHub API Error [${status}]: ${message}`);
     }
 
     this.logger.debug(`[API] ✔ Completed in ${duration}ms`);
     return await response.json();
+  }
+
+  private isRateLimitExceeded(status: number, message: string): boolean {
+    const msg = message.toLowerCase();
+    return (status === 403 || status === 429) && msg.includes('rate limit');
+  }
+
+  private async waitForGitHubRateLimitReset(response: Response): Promise<void> {
+    const resetSeconds = Number(response.headers.get('x-ratelimit-reset'));
+    const resetMs = Number.isFinite(resetSeconds) && resetSeconds > 0
+      ? resetSeconds * 1000
+      : Date.now() + 60_000;
+    const waitMs = Math.max(resetMs - Date.now() + this.rateLimitWaitBufferMs, 1000);
+    const waitDescription = formatRateLimitWait(waitMs);
+
+    this.logger.warn(`[API] GitHub API rate limit exceeded. Waiting ${waitDescription} before retrying...`);
+    await new Promise(resolve => setTimeout(resolve, waitMs));
   }
 
   async searchPRs(query: string): Promise<any> {
