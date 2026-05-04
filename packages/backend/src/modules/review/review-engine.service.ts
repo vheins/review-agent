@@ -15,11 +15,10 @@ import { SecurityScannerService } from '../security/security-scanner.service.js'
 import { DependencyScannerService } from '../security/dependency-scanner.service.js';
 import { ChecklistService } from './checklist.service.js';
 import { AutoFixService } from './services/auto-fix.service.js';
+import { DocumentationReviewService } from './services/documentation-review.service.js';
 import { AuditLoggerService } from '../../common/audit/audit-logger.service.js';
 import { GamificationService } from '../team/services/gamification.service.js';
 import { MetricsService } from '../metrics/metrics.service.js';
-import fs from 'fs-extra';
-import * as path from 'path';
 
 /**
  * ReviewEngineService - Core service for orchestrating PR reviews
@@ -39,6 +38,7 @@ export class ReviewEngineService {
     private readonly dataSource: DataSource,
     private readonly securityScanner: SecurityScannerService,
     private readonly dependencyScanner: DependencyScannerService,
+    private readonly documentationReview: DocumentationReviewService,
     private readonly checklistService: ChecklistService,
     private readonly auditLogger: AuditLoggerService,
     private readonly gamification: GamificationService,
@@ -157,7 +157,11 @@ export class ReviewEngineService {
       this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 50, 'Executing AI review agent...');
       const rawAiOutput = await this.ai.executeRaw(deepPR, changedFiles.map((file) => file.path), repoDir);
       const parsedComments = this.ai.parseOutput(rawAiOutput);
-      aiComments = Array.isArray(parsedComments) ? parsedComments : [];
+      const documentationComments = await this.documentationReview.analyzeChangedFiles(changedFiles, repoDir);
+      aiComments = [
+        ...(Array.isArray(parsedComments) ? parsedComments : []),
+        ...documentationComments,
+      ];
 
       const decisionMatch = rawAiOutput.match(/\*?\*?DECISION\*?\*?:\s*(APPROVE|REQUEST[_\s]CHANGES)/i);
       const messageMatch = rawAiOutput.match(/\*?\*?MESSAGE\*?\*?:\s*([\s\S]+)/i);

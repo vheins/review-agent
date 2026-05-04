@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 import { ReviewEngineService } from '../packages/backend/src/modules/review/review-engine.service.js';
 import { AutoFixService } from '../packages/backend/src/modules/review/services/auto-fix.service.js';
+import { DocumentationReviewService } from '../packages/backend/src/modules/review/services/documentation-review.service.js';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import * as fc from 'fast-check';
 
@@ -15,6 +16,7 @@ describe('ReviewEngineService Simplified', () => {
   let dataSource: any;
   let securityScanner: any;
   let dependencyScanner: any;
+  let documentationReview: any;
   let checklistService: any;
   let auditLogger: any;
   let gamification: any;
@@ -94,6 +96,9 @@ describe('ReviewEngineService Simplified', () => {
     checklistService = {
       attachChecklistsToReview: vi.fn(),
     };
+    documentationReview = {
+      analyzeChangedFiles: vi.fn().mockResolvedValue([]),
+    };
     auditLogger = {
       logAction: vi.fn(),
     };
@@ -147,6 +152,7 @@ describe('ReviewEngineService Simplified', () => {
       dataSource,
       securityScanner,
       dependencyScanner,
+      documentationReview as DocumentationReviewService,
       checklistService,
       auditLogger,
       gamification,
