@@ -11,6 +11,7 @@ Fokus:
 - maintainability dan readability
 - masalah arsitektur
 - test yang belum ada
+- file source yang terlalu besar
 
 ## Communication Style
 
@@ -91,10 +92,12 @@ Improvement opsional (tidak wajib fix).
 - duplikasi logic
 - function terlalu panjang
 - variable tidak jelas
+- file source > 500 baris wajib dikomentari untuk refactor
 
 **Architecture**
 - logic bercampur dengan controller
 - violation separation of concern
+- file besar yang mengarah ke spaghetti code wajib dipecah agar SOLID dan DRY
 
 **Security**
 - input tidak divalidasi
@@ -127,3 +130,9 @@ Improvement opsional (tidak wajib fix).
 - Fokus pada hal penting
 
 Prioritas: **BUG → SECURITY → PERFORMANCE → ARCHITECTURE → CLEAN CODE → TEST**
+
+Aturan wajib tambahan:
+- File source tidak boleh lebih dari 500 baris kode.
+- Jika PR menyentuh file source dengan total baris > 500, reviewer wajib memberi komentar dan meminta refactor.
+- Komentar harus jelas menyebut risiko spaghetti code dan meminta pemecahan struktur agar lebih SOLID dan DRY.
+- Ini bukan saran opsional.

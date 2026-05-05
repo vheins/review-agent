@@ -32,7 +32,8 @@ describe('BaseAiExecutor prompt builder', () => {
 
     expect(prompt).toContain('Repository: idsolutions-id/human-resource-dashboard');
     expect(prompt).toContain('Pull Request: #106 feat: dashboard improvements');
-    expect(prompt).toContain('commit_id="abc123"');
+    expect(prompt).toContain('gh pr view 106 --repo idsolutions-id/human-resource-dashboard --json state,isDraft,reviewDecision,mergeStateStatus,mergeable,headRefOid,statusCheckRollup,autoMergeRequest');
+    expect(prompt).toContain('Dry run: false');
     expect(prompt).not.toContain('{{repository}}');
     expect(prompt).not.toContain('{{pr.number}}');
   });
@@ -49,10 +50,10 @@ describe('BaseAiExecutor prompt builder', () => {
       ['src/modules/dashboard/pages/index.vue'],
     );
 
-    expect(prompt).toContain('Jika ada komentar inline baru, review tidak boleh berakhir sebagai `APPROVE`.');
-    expect(prompt).toContain('Ada thread aktif yang unresolved + not outdated dan actionable');
-    expect(prompt).toContain('Jika kamu sudah membuat atau berencana membuat inline comment, `DECISION` harus `REQUEST_CHANGES`.');
-    expect(prompt).toContain('`DECISION: APPROVE` hanya valid jika body review tidak memuat temuan dan tidak ada komentar inline baru.');
+    expect(prompt).toContain('Jika masih ada thread aktif actionable, PR tidak boleh `APPROVE`.');
+    expect(prompt).toContain('Ada temuan inline baru dengan severity apa pun → `REQUEST_CHANGES`');
+    expect(prompt).toContain('kalau kamu membuat atau berencana membuat inline comment, `DECISION` harus `REQUEST_CHANGES`');
+    expect(prompt).toContain('`APPROVE` hanya valid jika score 0, tidak ada komentar inline baru, dan semua thread aktif sudah clear');
   });
 
   it('requires MCP standards before PR review and deduplicates findings', () => {
@@ -67,15 +68,32 @@ describe('BaseAiExecutor prompt builder', () => {
       ['packages/backend/src/modules/review/review-engine.service.ts'],
     );
 
-    expect(prompt).toContain('STEP 0.5: Ambil standard dari MCP terlebih dahulu');
-    expect(prompt).toContain('Sebelum membaca PR/diff dan sebelum membuat keputusan review, WAJIB mengambil project/team standard dari MCP yang tersedia.');
-    expect(prompt).toContain('Jika ada standard spesifik repo/team, gunakan yang spesifik itu. Jika tidak ada, gunakan standard global/default.');
-    expect(prompt).toContain('STEP 0.6: Anti-redundansi dan akurasi temuan');
-    expect(prompt).toContain('Deduplicate temuan berdasarkan `(path, line, root cause)`.');
-    expect(prompt).toContain('Jika issue yang sama sudah ada di thread aktif dan masih relevan, jangan buat komentar baru.');
+    expect(prompt).toContain('Ambil standard repo/team dari MCP yang relevan.');
+    expect(prompt).toContain('Review harus berbasis standard MCP yang berhasil dibaca + pattern codebase yang benar-benar kamu lihat.');
+    expect(prompt).toContain('Jika standard MCP tidak ada, tulis di `MESSAGE`: `MCP_STANDARD: tidak ditemukan; review memakai agents.md dan pattern codebase yang sudah diverifikasi.`');
+    expect(prompt).toContain('Deduplicate temuan berdasarkan root cause.');
+    expect(prompt).toContain('Jika thread aktif yang sama sudah ada dan masih relevan, jangan buat komentar duplikat.');
   });
 
-  it('requires the CLI agent to merge an already approved open PR without backend/script fallback', () => {
+  it('requires a mandatory refactor finding for source files larger than 500 lines', () => {
+    const executor = new TestExecutor();
+    const prompt = executor.build(
+      {
+        number: 110,
+        title: 'refactor: extend review policy',
+        repository: { nameWithOwner: 'idsolutions-id/review-agent' },
+        headSha: 'ghi789',
+      },
+      ['packages/backend/src/modules/review/review-engine.service.ts'],
+    );
+
+    expect(prompt).toContain('File source tidak boleh lebih dari 500 baris kode.');
+    expect(prompt).toContain('Jika PR menyentuh file source yang totalnya >500 baris, WAJIB beri komentar review yang meminta refactor.');
+    expect(prompt).toContain('perlu dipecah agar lebih SOLID dan DRY');
+    expect(prompt).toContain('Ini blocker maintainability dan minimal severity `MEDIUM`.');
+  });
+
+  it('requires the CLI agent to merge an already approved open PR without duplicate approval', () => {
     const executor = new TestExecutor();
     const prompt = executor.build(
       {
@@ -87,10 +105,10 @@ describe('BaseAiExecutor prompt builder', () => {
       ['src/modules/dashboard/pages/index.vue'],
     );
 
-    expect(prompt).toContain('PR SUDAH LULUS. Jangan submit `APPROVE` ulang. Langsung merge dengan merge commit.');
-    expect(prompt).toContain('Jika PR sudah `APPROVED` sebelum review ini berjalan, jangan kirim approval duplikat.');
-    expect(prompt).toContain('Semua aksi di poin ini HARUS kamu jalankan sendiri via `gh` CLI di dalam sesi agent.');
-    expect(prompt).toContain('Jangan mengandalkan runtime, service backend, script auto-merge, cron, webhook, atau fallback lain');
-    expect(prompt).toContain('gh pr merge 102 --repo idsolutions-id/field-operation-qc-web --merge --delete-branch');
+    expect(prompt).toContain('Untuk write action review, gunakan `gh` CLI, bukan MCP GitHub write action.');
+    expect(prompt).toContain('Jika PR sudah approved, masih open, mergeable, checks lulus, dan tidak ada blocker, langsung merge tanpa approval ulang');
+    expect(prompt).toContain('Gunakan merge commit, bukan squash atau rebase.');
+    expect(prompt).toContain('kalau PR sudah approved dan mergeable, kamu belum selesai sampai merge berhasil atau PR sudah merged');
+    expect(prompt).toContain('gh api repos/idsolutions-id/field-operation-qc-web/pulls/102/reviews -f body=\"\"');
   });
 });

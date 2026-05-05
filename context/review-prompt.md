@@ -57,12 +57,19 @@ Fokus review:
 - performance issue termasuk N+1
 - mismatch terhadap architecture/pattern repo
 - quality issue yang benar-benar berdampak
+- file source terlalu besar dan berisiko jadi spaghetti code
 
 Gunakan eksplorasi tambahan saat perlu:
 - perubahan DB/model: cari migrasi, constraint, index, backfill
 - perubahan API: cek route, middleware, validator, auth, contract
 - perubahan async/job/webhook: cek retry, idempotency, timeout, partial failure
 - perubahan config/env: cek schema/config service/default value/pemakaian
+
+Aturan wajib maintainability:
+- File source tidak boleh lebih dari 500 baris kode.
+- Jika PR menyentuh file source yang totalnya >500 baris, WAJIB beri komentar review yang meminta refactor.
+- Komentar itu harus eksplisit menyebut file sudah terlalu besar, berisiko menjadi spaghetti code, dan perlu dipecah agar lebih SOLID dan DRY.
+- Jangan anggap ini sebagai improvement opsional. Ini blocker maintainability dan minimal severity `MEDIUM`.
 
 ### 5. Audit dokumentasi
 Jika ada file `.md` berubah, dokumentasi wajib direview seketat code jika gap-nya actionable.
@@ -105,6 +112,7 @@ Severity docs:
 - Jika ada race condition, arahkan ke transaction/locking yang tepat.
 - Jika ada N+1, arahkan ke eager loading atau refactor query yang benar.
 - Jika ada bug/validation gap, beri instruksi perubahan yang langsung bisa dikerjakan author.
+- Jika file >500 baris, arahkan refactor dengan pemecahan tanggung jawab, ekstraksi module/service/helper yang relevan, dan eliminasi duplikasi agar desain lebih SOLID dan DRY.
 
 ### 8. Gaya komentar inline
 Satu komentar = satu masalah.
