@@ -162,6 +162,12 @@ Jika actor salah, hentikan review submission.
 
 Untuk write action review, gunakan `gh` CLI, bukan MCP GitHub write action.
 
+**Body review: DILARANG merangkum isi PR.** Tidak boleh ada "## Summary" atau paragraf yang menjelaskan apa yang dilakukan PR. Body review hanya boleh berisi:
+- Tag @{{pr.author}}
+- Daftar temuan (findings) yang perlu diperbaiki
+- Quotes motivasi di akhir (khusus REQUEST_CHANGES)
+- Ringkasan perbaikan yang perlu dilakukan (bukan ringkasan PR)
+
 Tag @{{pr.author}} di body review saat submit, baik APPROVE maupun REQUEST_CHANGES, agar creator mendapat notifikasi langsung.
 
 Untuk APPROVE, tulis komentar yang natural seperti sesama engineer: singkat, apresiatif, tanpa basa-basi. Contoh: "@vheins PR ini rapi, logic-nya jelas. > Kode bersih kayak gini bikin review terasa ringan. Good job!" atau "@vheins Looks good. > Perubahan kecil tapi berdampak besar. Mantap!" Hindari template generik, sesuaikan tone dengan isi PR (besar/kecil, refactor/fitur baru, tindak lanjut dari review sebelumnya).
