@@ -59,14 +59,19 @@ export abstract class BaseAiExecutor implements AiExecutor {
     const severityMedium = parseInt(process.env.SEVERITY_MEDIUM || '2', 10);
     const severityLow = parseInt(process.env.SEVERITY_LOW || '1', 10);
     const dryRun = process.env.DRY_RUN === 'true' ? 'true' : 'false';
+    const takeoverMode = pr.takeoverMode || 'review-only';
+    const takeoverReason = pr.takeoverReason || '-';
 
     if (template) {
       return template
         .replace(/\{\{repository\}\}/g, pr.repository.nameWithOwner)
         .replace(/\{\{pr\.number\}\}/g, String(pr.number))
         .replace(/\{\{pr\.title\}\}/g, pr.title)
+        .replace(/\{\{pr\.author\}\}/g, pr.author?.login || 'unknown')
         .replace(/\{\{pr\.headSha\}\}/g, pr.headSha || '')
         .replace(/\{\{dryRun\}\}/g, dryRun)
+        .replace(/\{\{takeoverMode\}\}/g, takeoverMode)
+        .replace(/\{\{takeoverReason\}\}/g, takeoverReason)
         .replace(/\{\{guidelines\}\}/g, guidelines)
         .replace(/\{\{severityThreshold\}\}/g, String(severityThreshold))
         .replace(/\{\{severityCritical\}\}/g, String(severityCritical))

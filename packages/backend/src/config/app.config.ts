@@ -18,6 +18,7 @@ export interface AppConfig {
   prScope: string[];
   autoMerge: boolean;
   dryRun: boolean;
+  staleInvolvesReviewDays: number;
 }
 
 export default registerAs('app', (): AppConfig => ({
@@ -31,7 +32,8 @@ export default registerAs('app', (): AppConfig => ({
     : [],
   prScope: process.env.PR_SCOPE
     ? process.env.PR_SCOPE.split(',').map(s => s.trim())
-    : ['authored', 'assigned', 'review-requested'],
+    : ['authored', 'assigned', 'review-requested', 'involves'],
   autoMerge: process.env.AUTO_MERGE === 'true',
   dryRun: process.env.DRY_RUN === 'true',
+  staleInvolvesReviewDays: parseInt(process.env.STALE_INVOLVES_REVIEW_DAYS || '3', 10),
 }));

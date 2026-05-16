@@ -26,6 +26,14 @@ import { MetricsService } from '../metrics/metrics.service.js';
 @Injectable()
 export class ReviewEngineService {
   private readonly logger = new Logger(ReviewEngineService.name);
+  private readonly blockingCheckConclusions = new Set([
+    'action_required',
+    'cancelled',
+    'failure',
+    'startup_failure',
+    'stale',
+    'timed_out',
+  ]);
 
   constructor(
     private readonly github: GitHubClientService,
@@ -52,6 +60,59 @@ export class ReviewEngineService {
     @InjectRepository(ReviewMetrics)
     private readonly metricsRepository: Repository<ReviewMetrics>,
   ) {}
+
+  private getStaleTakeoverPolicy(pr: PullRequest): {
+    enabled: boolean;
+    reason: string | null;
+  } {
+    const appConfig = this.config.getAppConfig();
+    const staleDays = appConfig.staleInvolvesReviewDays || 3;
+    const matchedScopes = new Set(pr.matchedScopes || []);
+    const updatedAt = pr.updatedAt ? new Date(pr.updatedAt) : null;
+    const staleThresholdMs = staleDays * 24 * 60 * 60 * 1000;
+
+    if (pr.draft || pr.state !== 'open' || !matchedScopes.has('involves') || !updatedAt) {
+      return { enabled: false, reason: null };
+    }
+
+    const ageMs = Date.now() - updatedAt.getTime();
+    if (Number.isNaN(ageMs) || ageMs < staleThresholdMs) {
+      return { enabled: false, reason: null };
+    }
+
+    return {
+      enabled: true,
+      reason: `PR stale lebih dari ${staleDays} hari dan masuk scope involves me.`,
+    };
+  }
+
+  private getEffectiveRepoConfig<T extends { reviewMode?: string; autoMerge?: boolean; executor?: string }>(
+    pr: PullRequest,
+    repoConfig: T,
+  ): T {
+    const takeover = this.getStaleTakeoverPolicy(pr);
+    if (!takeover.enabled) return repoConfig;
+
+    return {
+      ...repoConfig,
+      reviewMode: 'auto-fix',
+      autoMerge: true,
+    };
+  }
+
+  private sortReviewCandidates(prs: PullRequest[]): PullRequest[] {
+    return [...prs].sort((a, b) => {
+      const aTakeover = this.getStaleTakeoverPolicy(a).enabled ? 1 : 0;
+      const bTakeover = this.getStaleTakeoverPolicy(b).enabled ? 1 : 0;
+      if (aTakeover !== bTakeover) return bTakeover - aTakeover;
+
+      const aUpdatedAt = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+      const bUpdatedAt = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+      if (aUpdatedAt !== bUpdatedAt) return aUpdatedAt - bUpdatedAt;
+
+      return a.number - b.number;
+    });
+  }
 
   async reviewPullRequest(pr: PullRequest): Promise<boolean> {
     const queryRunner = this.dataSource.createQueryRunner();
@@ -87,6 +148,12 @@ export class ReviewEngineService {
       this.gateway.broadcastReviewStarted(pr.number, pr.repository.nameWithOwner);
 
       const repoConfig = await this.config.getRepositoryConfig(pr.repository.nameWithOwner);
+      const effectiveRepoConfig = this.getEffectiveRepoConfig(pr, repoConfig);
+      const takeover = this.getStaleTakeoverPolicy(pr);
+      deepPR.takeoverMode = takeover.enabled ? 'direct-fix' : 'review-only';
+      deepPR.takeoverReason = takeover.reason;
+      pr.takeoverMode = deepPR.takeoverMode;
+      pr.takeoverReason = deepPR.takeoverReason;
 
       // 1. Prepare repository
       this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 10, 'Preparing repository...');
@@ -119,12 +186,28 @@ export class ReviewEngineService {
         }
       }
 
-      // 1.5 Read mergeability for agent context/telemetry only.
-      // The CLI agent owns conflict handling, review submission, rejection, and merge.
+      // 1.5 Read mergeability
       const currentMergeableState = deepPR?.mergeable_state || pr.mergeable_state;
       if (!currentMergeableState || currentMergeableState === 'unknown') {
         const detail = await this.github.getPRDetail(pr.repository.nameWithOwner, pr.number);
         deepPR = { ...deepPR, ...detail };
+      }
+
+      // 1.6 Reject PR if merge conflicts exist (before sending to AI agent)
+      const mergeState = (deepPR.mergeable_state || '').toLowerCase();
+      if (mergeState === 'dirty' || deepPR.mergeable === false) {
+        this.logger.log(`PR #${pr.number} has merge conflicts (mergeable_state: ${mergeState}) — rejecting with instructions.`);
+        const creatorLogin = deepPR.author?.login || pr.author?.login || 'unknown';
+        const reviewBody = `Konflik terdeteksi di PR ini. @${creatorLogin} tolong selesaikan konflik dengan base branch terlebih dahulu sebelum review dapat dilanjutkan.`;
+        try {
+          await this.github.addReview(pr.repository.nameWithOwner, pr.number, reviewBody, 'REQUEST_CHANGES');
+          this.logger.log(`Successfully submitted conflict rejection for PR #${pr.number}`);
+        } catch (reviewError) {
+          this.logger.warn(`Failed to submit conflict rejection review for PR #${pr.number}: ${reviewError.message}`);
+        }
+        this.gateway.broadcastReviewCompleted(pr.number, pr.repository.nameWithOwner, { status: 'rejected', reason: 'merge_conflict' });
+        await queryRunner.rollbackTransaction();
+        return false;
       }
       
       // 2. Get changed files
@@ -215,8 +298,8 @@ export class ReviewEngineService {
         prNumber: pr.number,
         repository: pr.repository.nameWithOwner,
         status: 'completed',
-        mode: repoConfig.reviewMode,
-        executor: repoConfig.executor,
+        mode: effectiveRepoConfig.reviewMode,
+        executor: effectiveRepoConfig.executor,
         startedAt: new Date(startTime),
         completedAt: new Date(),
         pullRequest: prEntity,
@@ -265,11 +348,14 @@ export class ReviewEngineService {
         'ai-agent',
         'pull_request',
         `${pr.repository.nameWithOwner}#${pr.number}`,
-        { agentDecision, healthScore, qualityScore, mode: repoConfig.reviewMode }
+        { agentDecision, healthScore, qualityScore, mode: effectiveRepoConfig.reviewMode }
       );
 
       // 12. Agent output has already handled GitHub review/comment/merge actions.
       this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 90, 'Agent GitHub actions completed.');
+
+      // Safety net: if the agent approved but left the PR open, merge it deterministically here.
+      await this.ensureApprovedPrMerged(deepPR, effectiveRepoConfig, agentDecision);
 
       if (appConfig.dryRun) {
         this.logger.log(`[DryRun] CLI agent ran in dry-run mode for PR #${pr.number}`);
@@ -309,10 +395,12 @@ export class ReviewEngineService {
    *   - No submitted review yet, OR
    *   - Has new commits since last review (re-review needed), OR
    *   - review-requested is set (team asked for re-review), OR
+   *   - PR has pending requested reviewers despite CHANGES_REQUESTED (race condition), OR
    *   - PR is approved but still needs the CLI agent to resolve/merge
    */
   private async shouldSkipPR(pr: any): Promise<boolean> {
     try {
+      const takeover = this.getStaleTakeoverPolicy(pr);
       const incomingUpdatedAt = pr.updatedAt ? new Date(pr.updatedAt) : null;
       if (incomingUpdatedAt && !Number.isNaN(incomingUpdatedAt.getTime())) {
         const localPr = await this.prRepository.findOne({
@@ -339,7 +427,8 @@ export class ReviewEngineService {
             latestCompletedReview.completedAt.getTime() >= incomingUpdatedAt.getTime()
           ) {
             const repoConfig = await this.config.getRepositoryConfig(pr.repository.nameWithOwner);
-            if (!repoConfig.autoMerge) {
+            const effectiveRepoConfig = this.getEffectiveRepoConfig(pr, repoConfig);
+            if (!effectiveRepoConfig.autoMerge && !takeover.enabled) {
               this.logger.log(`PR #${pr.number} unchanged since last completed local review — skipping GitHub status checks.`);
               return true;
             }
@@ -370,6 +459,22 @@ export class ReviewEngineService {
 
       if (isProcessedAtHead) {
         if (lastReview.state === 'CHANGES_REQUESTED') {
+          if (takeover.enabled) {
+            this.logger.log(`PR #${pr.number} stale pada HEAD ${headSha.slice(0, 7)} — takeover aktif untuk direct fix.`);
+            return false;
+          }
+
+          // Jangan skip jika ada pending review request (race condition: author re-request review tanpa push commit)
+          try {
+            const prDetail = await this.github.getPRDetail(pr.repository.nameWithOwner, pr.number);
+            if (prDetail.requested_reviewers?.length > 0) {
+              this.logger.log(`PR #${pr.number} has pending review requests (${prDetail.requested_reviewers.join(', ')}) — re-reviewing despite CHANGES_REQUESTED at HEAD.`);
+              return false;
+            }
+          } catch (e) {
+            this.logger.warn(`Could not check requested reviewers for PR #${pr.number}: ${e.message}`);
+          }
+
           this.logger.log(`PR #${pr.number} is already rejected at HEAD ${headSha.slice(0, 7)} — skipping until author pushes changes.`);
           return true;
         }
@@ -397,7 +502,8 @@ export class ReviewEngineService {
           // The CLI agent, not this service, owns the merge action.
           try {
             const repoConfig = await this.config.getRepositoryConfig(pr.repository.nameWithOwner);
-            if (repoConfig.autoMerge) {
+            const effectiveRepoConfig = this.getEffectiveRepoConfig(pr, repoConfig);
+            if (effectiveRepoConfig.autoMerge || takeover.enabled) {
               this.logger.log(`PR #${pr.number} is approved but still open — sending to CLI agent for merge handling.`);
               return false;
             }
@@ -422,7 +528,7 @@ export class ReviewEngineService {
     this.logger.log('Starting Review Engine (Continuous Mode)...');
     let prs = await this.github.fetchOpenPRs();
     prs = prs.filter(pr => !pr.draft && pr.state === 'open');
-    prs.sort((a, b) => a.number - b.number);
+    prs = this.sortReviewCandidates(prs);
     this.logger.log(`Found ${prs.length} open (non-draft) PRs.`);
 
     let reviewed = 0;
@@ -439,7 +545,7 @@ export class ReviewEngineService {
     this.logger.log('Starting Review Engine (Once Mode)...');
     let prs = await this.github.fetchOpenPRs();
     prs = prs.filter(pr => !pr.draft && pr.state === 'open');
-    prs.sort((a, b) => a.number - b.number);
+    prs = this.sortReviewCandidates(prs);
     this.logger.log(`Found ${prs.length} open (non-draft) PRs to review.`);
 
     if (prs.length === 0) {
@@ -455,5 +561,84 @@ export class ReviewEngineService {
       this.logger.warn(`PR #${pr.number} was skipped, trying next...`);
     }
     this.logger.log('Review Engine (Once Mode) completed.');
+  }
+
+  private async ensureApprovedPrMerged(
+    pr: PullRequest,
+    repoConfig: { autoMerge?: boolean },
+    agentDecision: 'APPROVE' | 'REQUEST_CHANGES' | 'UNKNOWN',
+  ): Promise<void> {
+    if (!repoConfig.autoMerge) return;
+    if (this.config.getAppConfig().dryRun) return;
+
+    const repoName = pr.repository.nameWithOwner;
+    const detail = await this.github.getPRDetail(repoName, pr.number);
+    if (!detail) {
+      this.logger.warn(`Could not load fresh PR detail for merge fallback on PR #${pr.number}.`);
+      return;
+    }
+    if (detail.merged || detail.state !== 'open') return;
+
+    const reviews = await this.github.listReviews(repoName, pr.number);
+    const submittedReviews = reviews.filter((review: any) =>
+      review?.state === 'APPROVED' || review?.state === 'CHANGES_REQUESTED',
+    );
+    const lastReview = submittedReviews[submittedReviews.length - 1];
+    const headSha = detail.headSha || pr.headSha;
+    const mergeableState = detail.mergeable_state || pr.mergeable_state || '';
+    const approvedAtHead = Boolean(
+      lastReview &&
+      lastReview.state === 'APPROVED' &&
+      lastReview.commit_id &&
+      headSha &&
+      lastReview.commit_id === headSha,
+    );
+
+    if (!approvedAtHead && agentDecision !== 'APPROVE') {
+      return;
+    }
+
+    if (detail.mergeable === false || mergeableState === 'dirty' || mergeableState === 'blocked') {
+      this.logger.log(
+        `PR #${pr.number} remains open after review but is not mergeable (mergeable=${detail.mergeable}, state=${mergeableState || 'unknown'}).`,
+      );
+      return;
+    }
+
+    try {
+      const comments = await this.github.listReviewComments(repoName, pr.number);
+      const hasFixable = comments.some((comment: any) => this.autoFix.isFixable(comment));
+      if (hasFixable) {
+        this.logger.log(`PR #${pr.number} remains open after approval but still has fixable review comments.`);
+        return;
+      }
+    } catch (error) {
+      this.logger.warn(`Could not verify review comments before merge fallback for PR #${pr.number}: ${error.message}`);
+      return;
+    }
+
+    try {
+      const checks = await this.github.getPRChecks(repoName, pr.number);
+      const hasBlockingChecks = checks.some((check: any) => {
+        const status = String(check?.status || '').toLowerCase();
+        const conclusion = String(check?.conclusion || '').toLowerCase();
+        return status !== 'completed' || this.blockingCheckConclusions.has(conclusion);
+      });
+      if (hasBlockingChecks) {
+        this.logger.log(`PR #${pr.number} remains open after approval because status checks are not green yet.`);
+        return;
+      }
+    } catch (error) {
+      this.logger.warn(`Could not verify status checks before merge fallback for PR #${pr.number}: ${error.message}`);
+      return;
+    }
+
+    const merged = await this.github.mergePR(repoName, pr.number, 'merge');
+    if (merged) {
+      this.logger.log(`Merged PR #${pr.number} via backend safety net after agent approval.`);
+      return;
+    }
+
+    this.logger.warn(`Backend safety net could not merge approved PR #${pr.number}.`);
   }
 }

@@ -44,6 +44,9 @@ export interface PullRequest {
   mergeable_state?: string | null;
   merged?: boolean;
   mergedBy?: string | null;
+  matchedScopes?: string[];
+  takeoverMode?: 'review-only' | 'direct-fix';
+  takeoverReason?: string | null;
   stats?: {
     commits: number;
     additions: number;
@@ -147,7 +150,8 @@ export class GitHubClientService {
           headRefName: item.headRefName,
           baseRefName: item.baseRefName,
           author: { login: item.author?.login || item.author },
-          labels: (item.labels || []).map(l => typeof l === 'string' ? l : l.name)
+          labels: (item.labels || []).map(l => typeof l === 'string' ? l : l.name),
+          matchedScopes: [scope],
         }));
         
         allPRs.push(...(normalizedItems as any[] as PullRequest[]));
@@ -162,20 +166,10 @@ export class GitHubClientService {
     if (token) {
       try {
         this.logger.log('► Falling back to REST API discovery (targeted)...');
-        const filters = [];
-        if (appConfig.prScope.includes('authored')) filters.push(`author:${username}`);
-        if (appConfig.prScope.includes('assigned')) filters.push(`assignee:${username}`);
-        if (appConfig.prScope.includes('review-requested')) filters.push(`review-requested:${username}`);
-        if (appConfig.prScope.includes('mentions')) filters.push(`mentions:${username}`);
-        if (appConfig.prScope.includes('involves') || appConfig.prScope.includes('all')) filters.push(`involves:${username}`);
-        
-        const filterStr = filters.length > 0 ? `(${filters.join(' OR ')})` : `involves:${username}`;
-        const query = `is:pr is:open archived:false ${filterStr}`; 
-        
-        let prs: PullRequest[] = [];
-        try {
-          const result = await this.api.searchPRs(query);
-          prs = result.items.map(item => ({
+        const prs: PullRequest[] = [];
+        for (const { scope, query } of scopeActions) {
+          const result = await this.api.searchPRs(`is:pr is:open archived:false ${query}`);
+          prs.push(...result.items.map(item => ({
             id: item.node_id,
             github_id: item.id,
             number: item.number,
@@ -192,29 +186,9 @@ export class GitHubClientService {
             headRefName: (item as any).head?.ref,
             baseRefName: (item as any).base?.ref,
             author: { login: item.user?.login || 'unknown', id: item.user?.id },
-            labels: (item.labels || []).map(l => typeof l === 'string' ? l : l.name)
-          }));
-        } catch (e) {
-          const simpleResult = await this.api.searchPRs(`is:pr is:open archived:false involves:${username}`);
-          prs = simpleResult.items.map(item => ({
-            id: item.node_id,
-            github_id: item.id,
-            number: item.number,
-            node_id: item.node_id,
-            title: item.title,
-            body: item.body,
-            state: item.state,
-            locked: item.locked,
-            draft: item.draft || false,
-            repository: { nameWithOwner: item.repository_url.split('repos/')[1] },
-            url: item.html_url,
-            updatedAt: item.updated_at,
-            createdAt: item.created_at,
-            headRefName: (item as any).head?.ref,
-            baseRefName: (item as any).base?.ref,
-            author: { login: item.user?.login || 'unknown', id: item.user?.id },
-            labels: (item.labels || []).map(l => typeof l === 'string' ? l : l.name)
-          }));
+            labels: (item.labels || []).map(l => typeof l === 'string' ? l : l.name),
+            matchedScopes: [scope],
+          })));
         }
         this.logger.log(`► API discovery found ${prs.length} PRs in ${Date.now() - start}ms`);
         return this.processPRs(prs);
@@ -273,7 +247,24 @@ export class GitHubClientService {
    */
   private async processPRs(prs: PullRequest[]): Promise<PullRequest[]> {
     const appConfig = this.config.getAppConfig();
-    const uniquePRs = Array.from(new Map(prs.map(pr => [pr.url, pr])).values());
+    const prMap = new Map<string, PullRequest>();
+    for (const pr of prs) {
+      const existing = prMap.get(pr.url);
+      if (!existing) {
+        prMap.set(pr.url, {
+          ...pr,
+          matchedScopes: [...new Set(pr.matchedScopes || [])],
+        });
+        continue;
+      }
+
+      prMap.set(pr.url, {
+        ...existing,
+        ...pr,
+        matchedScopes: [...new Set([...(existing.matchedScopes || []), ...(pr.matchedScopes || [])])],
+      });
+    }
+    const uniquePRs = Array.from(prMap.values());
     
     this.logger.log(`► Processing ${uniquePRs.length} unique PRs...`);
     this.logger.debug(`[Sync] Filter criteria - Excluded owners: ${JSON.stringify(appConfig.excludeRepoOwners || [])}`);

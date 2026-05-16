@@ -21,8 +21,9 @@ export const validationSchema = Joi.object({
     .default('info'),
   WORKSPACE_DIR: Joi.string().default(resolveWorkspaceDir()),
   EXCLUDE_REPO_OWNERS: Joi.string().allow('').default(''),
-  PR_SCOPE: Joi.string().default('authored,assigned,review-requested'),
+  PR_SCOPE: Joi.string().default('authored,assigned,review-requested,involves'),
   AUTO_MERGE: Joi.boolean().default(false),
+  STALE_INVOLVES_REVIEW_DAYS: Joi.number().min(1).default(3),
 
   // Review
   DELEGATE: Joi.boolean().default(false),

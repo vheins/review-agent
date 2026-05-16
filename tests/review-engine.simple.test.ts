@@ -37,6 +37,8 @@ describe('ReviewEngineService Simplified', () => {
       fetchOpenPRs: vi.fn(),
       getChangedFiles: vi.fn().mockResolvedValue([{ path: 'src/app.ts', content: 'code' }]),
       listReviews: vi.fn().mockResolvedValue([]),
+      listReviewComments: vi.fn().mockResolvedValue([]),
+      getPRChecks: vi.fn().mockResolvedValue([]),
     };
 
     aiService = {
@@ -63,6 +65,7 @@ describe('ReviewEngineService Simplified', () => {
         severityThreshold: 50,
         autoMerge: true,
         reviewMode: 'comment',
+        staleInvolvesReviewDays: 3,
       }),
       getRepositoryConfig: vi.fn().mockResolvedValue({
         executor: 'gemini',
@@ -199,6 +202,77 @@ describe('ReviewEngineService Simplified', () => {
     expect(auditLogger.logAction).toHaveBeenCalled();
   });
 
+  it('merges an approved PR when the agent leaves it open', async () => {
+    const mockPR = {
+      number: 124,
+      title: 'Ship feature',
+      repository: { nameWithOwner: 'owner/repo' },
+      url: 'https://github.com/owner/repo/pull/124',
+      headRefName: 'feature',
+      baseRefName: 'main',
+      headSha: 'abcdef123456',
+      baseSha: '0987654',
+      mergeable_state: 'clean',
+      state: 'open',
+    };
+
+    aiService.executeRaw.mockResolvedValue('DECISION: APPROVE\nSEVERITY_SCORE: 0\nMESSAGE:\nTidak ada blocker.');
+    githubService.getPRDetail.mockResolvedValue({
+      ...mockPR,
+      merged: false,
+      mergeable: true,
+      mergeable_state: 'clean',
+      state: 'open',
+      headSha: 'abcdef123456',
+    });
+    githubService.listReviews.mockResolvedValue([
+      { state: 'APPROVED', commit_id: 'abcdef123456' },
+    ]);
+    githubService.listReviewComments.mockResolvedValue([]);
+    githubService.getPRChecks.mockResolvedValue([
+      { name: 'build', status: 'completed', conclusion: 'success' },
+    ]);
+    githubService.mergePR.mockResolvedValue(true);
+
+    const result = await service.reviewPullRequest(mockPR as any);
+
+    expect(result).toBe(true);
+    expect(githubService.mergePR).toHaveBeenCalledWith('owner/repo', 124, 'merge');
+  });
+
+  it('forces stale involves PRs into direct-fix mode', async () => {
+    const staleDate = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString();
+    const mockPR = {
+      number: 125,
+      title: 'Unblock stale PR',
+      repository: { nameWithOwner: 'owner/repo' },
+      url: 'https://github.com/owner/repo/pull/125',
+      updatedAt: staleDate,
+      headRefName: 'feature',
+      baseRefName: 'main',
+      headSha: 'stale123',
+      baseSha: 'base123',
+      mergeable_state: 'clean',
+      state: 'open',
+      draft: false,
+      matchedScopes: ['involves'],
+    };
+
+    const result = await service.reviewPullRequest(mockPR as any);
+
+    expect(result).toBe(true);
+    expect(reviewRepo.create).toHaveBeenCalledWith(expect.objectContaining({
+      mode: 'auto-fix',
+    }));
+    expect(aiService.executeRaw).toHaveBeenCalledWith(
+      expect.objectContaining({
+        takeoverMode: 'direct-fix',
+      }),
+      expect.any(Array),
+      '/tmp/repo'
+    );
+  });
+
   it('skips unchanged PRs from local review state without GitHub status calls', async () => {
     const updatedAt = new Date('2026-04-27T00:00:00Z');
     githubService.fetchOpenPRs.mockResolvedValue([
@@ -234,5 +308,55 @@ describe('ReviewEngineService Simplified', () => {
     expect(githubService.listReviews).not.toHaveBeenCalled();
     expect(githubService.getPRDetail).not.toHaveBeenCalled();
     expect(repoManager.prepareRepository).not.toHaveBeenCalled();
+  });
+
+  it('prioritizes stale involves PRs and does not skip same-head changes-requested takeover candidates', async () => {
+    const staleDate = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString();
+    const freshDate = new Date().toISOString();
+    const stalePr = {
+      number: 200,
+      title: 'Stale takeover',
+      repository: { nameWithOwner: 'owner/repo' },
+      url: 'https://github.com/owner/repo/pull/200',
+      updatedAt: staleDate,
+      state: 'open',
+      draft: false,
+      matchedScopes: ['involves'],
+      headSha: 'same-head',
+    };
+    const freshPr = {
+      number: 100,
+      title: 'Fresh PR',
+      repository: { nameWithOwner: 'owner/repo' },
+      url: 'https://github.com/owner/repo/pull/100',
+      updatedAt: freshDate,
+      state: 'open',
+      draft: false,
+      matchedScopes: ['assigned'],
+      headSha: 'fresh-head',
+    };
+
+    githubService.fetchOpenPRs.mockResolvedValue([freshPr, stalePr]);
+    prRepo.findOne.mockResolvedValue({
+      number: 200,
+      repository: 'owner/repo',
+      head_sha: 'same-head',
+      updatedAt: new Date(staleDate),
+      mergeable_state: 'clean',
+    });
+    reviewRepo.findOne
+      .mockResolvedValueOnce({
+        completedAt: new Date(staleDate),
+      })
+      .mockResolvedValueOnce(null);
+    githubService.listReviews.mockResolvedValue([
+      { state: 'CHANGES_REQUESTED', commit_id: 'same-head' },
+    ]);
+
+    const reviewSpy = vi.spyOn(service, 'reviewPullRequest').mockResolvedValue(true);
+
+    await service.runOnce();
+
+    expect(reviewSpy).toHaveBeenCalledWith(expect.objectContaining({ number: 200 }));
   });
 });
