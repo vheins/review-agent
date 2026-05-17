@@ -44,6 +44,6 @@ describe('RejectionCategorizer Property Tests', () => {
     const reasons = categorizer.categorizeReview(comments);
     expect(reasons).toContain('security');
     expect(reasons).toContain('testing');
-    expect(reasons).not.toContain('other'); // "info" severity is excluded in `categorizeReview`
+    expect(reasons).not.toContain('other'); // info severity is excluded in `categorizeReview`
   });
 });

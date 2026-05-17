@@ -57,7 +57,7 @@ export class StuckTaskDetectorService implements OnModuleInit {
   private async recoverTask(session: MissionSession) {
     const maxRetries = 3;
     const activeStep = await this.stepRepository.findOne({
-      where: { sessionId: session.id, status: 'running' } // 'in_progress' changed to 'running'
+      where: { sessionId: session.id, status: 'running' } // in_progress changed to running
     });
 
     const attemptCount = activeStep?.attemptCount || 0;

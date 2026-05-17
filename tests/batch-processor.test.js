@@ -37,6 +37,6 @@ describe('BatchProcessor Property Tests', () => {
     const pr1 = { title: 'Update dependencies for security', target_branch: 'main' };
     const pr2 = { title: 'Security fix for login', target_branch: 'develop' };
     
-    expect(processor.isRelated(pr1, pr2)).toBe(true); // 'security' overlaps
+    expect(processor.isRelated(pr1, pr2)).toBe(true); // security overlaps
   });
 });
