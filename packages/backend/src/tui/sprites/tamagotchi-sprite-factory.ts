@@ -90,6 +90,10 @@ function ensureTwinEyes(base: PixelBitmap): PixelBitmap {
 
   setPixel(matrix, leftEyeX, eyeY, '.');
   setPixel(matrix, rightEyeX, eyeY, '.');
+  // Keep a solid bridge between sockets so wide face cutouts read as two eyes, not one visor.
+  if (rightEyeX - leftEyeX >= 2) {
+    setPixel(matrix, centerX, eyeY, '#');
+  }
 
   return fromMatrix(matrix);
 }
