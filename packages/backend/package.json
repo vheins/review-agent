@@ -1,15 +1,15 @@
 {
   "name": "@review-agent/backend",
   "version": "1.0.0",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "nest start --watch",
     "build": "nest build",
-    "start": "node ./dist/main.js",
-    "start:continuous": "node --loader ts-node/esm ./src/start.ts",
+    "start": "NODE_NO_WARNINGS=1 node --no-warnings --loader ts-node/esm ./src/start.ts",
+    "start:continuous": "NODE_NO_WARNINGS=1 node --no-warnings --loader ts-node/esm ./src/start.ts",
     "debug": "nest start --debug --watch",
-    "once": "node --loader ts-node/esm ./src/once.ts",
-    "start": "node --loader ts-node/esm ./src/start.ts",
+    "once": "NODE_NO_WARNINGS=1 node --no-warnings --loader ts-node/esm ./src/once.ts",
     "validate-migration": "node --loader ts-node/esm ./src/migration/migration-validator.cli.ts validate"
   },
   "dependencies": {
@@ -23,6 +23,7 @@
     "@nestjs/typeorm": "^11.0.0",
     "@nestjs/websockets": "^11.1.16",
     "@types/nodemailer": "^7.0.11",
+    "blessed": "^0.1.81",
     "chalk": "^5.6.2",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
@@ -47,6 +48,7 @@
     "@nestjs/cli": "^11.0.0",
     "@nestjs/schematics": "^11.0.0",
     "@nestjs/testing": "^11.1.16",
+    "@types/blessed": "^0.1.27",
     "@types/compression": "^1.7.5",
     "@types/express": "^5.0.0",
     "@types/fs-extra": "^11.0.4",

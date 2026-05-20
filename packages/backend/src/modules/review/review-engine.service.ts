@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { GitHubClientService, PullRequest } from '../github/github.service.js';
@@ -19,6 +19,8 @@ import { DocumentationReviewService } from './services/documentation-review.serv
 import { AuditLoggerService } from '../../common/audit/audit-logger.service.js';
 import { GamificationService } from '../team/services/gamification.service.js';
 import { MetricsService } from '../metrics/metrics.service.js';
+import { TuiService } from '../../tui/tui.service.js';
+import { PrInfo } from '../../tui/tui.service.js';
 
 /**
  * ReviewEngineService - Core service for orchestrating PR reviews
@@ -59,7 +61,27 @@ export class ReviewEngineService {
     private readonly commentRepository: Repository<Comment>,
     @InjectRepository(ReviewMetrics)
     private readonly metricsRepository: Repository<ReviewMetrics>,
+    @Optional() private readonly tuiService?: TuiService,
   ) {}
+
+  private toPrInfo(pr: PullRequest): PrInfo {
+    const repo = pr.repository.nameWithOwner;
+    return {
+      number: pr.number,
+      repo,
+      title: pr.title,
+      key: `${repo}#${pr.number}`,
+      author: pr.author?.login || 'unknown',
+    };
+  }
+
+  private updateReviewStep(
+    pr: PullRequest,
+    status: 'idle' | 'processing' | 'completed' | 'failed',
+    step: string,
+  ): void {
+    this.tuiService?.setCurrentReview(this.toPrInfo(pr), status, step);
+  }
 
   private getStaleTakeoverPolicy(pr: PullRequest): {
     enabled: boolean;
@@ -123,6 +145,8 @@ export class ReviewEngineService {
     const appConfig = this.config.getAppConfig();
 
     try {
+      this.tuiService?.setPrState({ repo: pr.repository.nameWithOwner, number: pr.number }, 'processing');
+      this.updateReviewStep(pr, 'processing', 'Preparing review context');
       this.logger.log(`Starting review for PR #${pr.number}: ${pr.title}`);
 
       // 0. Check if already merged
@@ -157,6 +181,7 @@ export class ReviewEngineService {
 
       // 1. Prepare repository
       this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 10, 'Preparing repository...');
+      this.updateReviewStep(pr, 'processing', 'Preparing repository');
       const repoDir = await this.repoManager.prepareRepository(
         pr.repository.nameWithOwner,
         pr.headRefName || 'unknown',
@@ -212,6 +237,7 @@ export class ReviewEngineService {
       
       // 2. Get changed files
       this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 20, 'Analyzing changed files...');
+      this.updateReviewStep(pr, 'processing', 'Analyzing changed files');
       const changedFiles = await this.github.getChangedFiles(repoDir, deepPR);
 
       if (changedFiles.length === 0) {
@@ -231,6 +257,7 @@ export class ReviewEngineService {
 
       // 3. Run Security Scans
       this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 30, 'Running security scans...');
+      this.updateReviewStep(pr, 'processing', 'Running security scans');
       const staticFindings = await this.securityScanner.scanFiles(pr.repository.nameWithOwner, pr.number, changedFiles);
       depFindings = await this.dependencyScanner.scanDependencies(repoDir, pr.repository.nameWithOwner, pr.number);
       allSecurityFindings = [...staticFindings, ...depFindings];
@@ -238,6 +265,7 @@ export class ReviewEngineService {
       // 4. AI Review. The selected CLI agent is responsible for GitHub comments,
       // review submission, rejection, and merge according to context/review-prompt.md.
       this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 50, 'Executing AI review agent...');
+      this.updateReviewStep(pr, 'processing', 'Executing AI review agent');
       const rawAiOutput = await this.ai.executeRaw(deepPR, changedFiles.map((file) => file.path), repoDir);
       const parsedComments = this.ai.parseOutput(rawAiOutput);
       const documentationComments = await this.documentationReview.analyzeChangedFiles(changedFiles, repoDir);
@@ -253,6 +281,7 @@ export class ReviewEngineService {
       
       // 5. Calculate metrics. The CLI agent owns the GitHub review decision.
       this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 70, 'Calculating scores...');
+      this.updateReviewStep(pr, 'processing', 'Calculating scores');
       
       const tempComments = aiComments.map(c => ({
         severity: c.severity,
@@ -269,6 +298,7 @@ export class ReviewEngineService {
 
       // 6. Save/Update PR Entity
       this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 80, 'Saving to database...');
+      this.updateReviewStep(pr, 'processing', 'Saving review to database');
       let prEntity = await this.prRepository.findOne({ where: { number: pr.number, repository: pr.repository.nameWithOwner } });
       
       if (!prEntity) {
@@ -353,6 +383,7 @@ export class ReviewEngineService {
 
       // 12. Agent output has already handled GitHub review/comment/merge actions.
       this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 90, 'Agent GitHub actions completed.');
+      this.updateReviewStep(pr, 'processing', 'Finalizing GitHub actions');
 
       // Safety net: if the agent approved but left the PR open, merge it deterministically here.
       await this.ensureApprovedPrMerged(deepPR, effectiveRepoConfig, agentDecision);
@@ -377,10 +408,26 @@ export class ReviewEngineService {
       }
 
       this.logger.log(`Successfully completed review for PR #${pr.number}`);
+      this.tuiService?.setLastReview({
+        pr: this.toPrInfo(pr),
+        decision: agentDecision === 'REQUEST_CHANGES' ? 'REQUEST_CHANGES' : 'APPROVE',
+        finishedAt: Date.now(),
+        durationMs: Date.now() - startTime,
+      });
+      this.tuiService?.setPrState({ repo: pr.repository.nameWithOwner, number: pr.number }, 'completed');
+      this.updateReviewStep(pr, 'completed', 'Review completed');
       this.gateway.broadcastReviewCompleted(pr.number, pr.repository.nameWithOwner, { decision: agentDecision, healthScore });
       return true;
     } catch (error) {
       this.logger.error(`Failed to review PR #${pr.number}: ${error.message}`, error.stack);
+      this.tuiService?.setLastReview({
+        pr: this.toPrInfo(pr),
+        decision: 'FAILED',
+        finishedAt: Date.now(),
+        durationMs: Date.now() - startTime,
+      });
+      this.tuiService?.setPrState({ repo: pr.repository.nameWithOwner, number: pr.number }, 'failed');
+      this.updateReviewStep(pr, 'failed', error.message || 'Review failed');
       this.gateway.broadcastReviewFailed(pr.number, pr.repository.nameWithOwner, error.message);
       await queryRunner.rollbackTransaction();
       return false;
@@ -531,11 +578,41 @@ export class ReviewEngineService {
     prs = this.sortReviewCandidates(prs);
     this.logger.log(`Found ${prs.length} open (non-draft) PRs.`);
 
+    if (this.tuiService) {
+      const prInfos: PrInfo[] = prs.map(pr => this.toPrInfo(pr));
+      this.tuiService.setPrs(prInfos);
+    }
+
+    let stats = { total: prs.length, success: 0, failed: 0, skipped: 0 };
+    this.tuiService?.setStats(stats);
+    if (prs.length === 0) {
+      this.tuiService?.setCurrentReview(null, 'idle', '');
+    }
     let reviewed = 0;
-    for (const pr of prs) {
-      if (await this.shouldSkipPR(pr)) continue;
-      const success = await this.reviewPullRequest(pr);
-      if (success) reviewed++;
+    try {
+      for (const pr of prs) {
+        const tuiPr = { repo: pr.repository.nameWithOwner, number: pr.number };
+        this.tuiService?.setPrState(tuiPr, 'processing');
+        this.updateReviewStep(pr, 'processing', 'Evaluating skip rules');
+        if (await this.shouldSkipPR(pr)) {
+          this.tuiService?.setPrState(tuiPr, 'skipped');
+          this.updateReviewStep(pr, 'completed', 'Skipped: already reviewed or not actionable');
+          stats.skipped++;
+          this.tuiService?.setStats(stats);
+          continue;
+        }
+        const success = await this.reviewPullRequest(pr);
+        if (success) {
+          reviewed++;
+          stats.success++;
+        } else {
+          stats.failed++;
+        }
+        this.tuiService?.setStats(stats);
+      }
+    } finally {
+      this.tuiService?.setCurrentReview(null, 'idle', '');
+      this.tuiService?.setPrs([]);
     }
 
     this.logger.log(`Review Engine (Continuous Mode) completed. Reviewed ${reviewed} PR(s).`);

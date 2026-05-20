@@ -48,7 +48,7 @@ let reviewProcess = null;
 let backendServerProcess = null;
 
 // Function to check if server is running
-async function isServerRunning(port = 3000) {
+async function isServerRunning(port = 30001) {
     return new Promise((resolve) => {
         const http = require('http');
         const req = http.get(`http://127.0.0.1:${port}/api/health`, (res) => {
@@ -64,28 +64,29 @@ async function isServerRunning(port = 3000) {
 
 // Function to start backend server
 async function startBackendServer() {
-    const port = process.env.API_PORT || 3000;
+    const port = process.env.API_PORT || 30001;
 
-    // In development, the backend might be started by the root runner (concurrently)
-    // We wait a bit longer to see if it pops up before trying to start it ourselves
-    const maxRetries = isDev ? 5 : 1;
-    for (let i = 0; i < maxRetries; i++) {
-        if (await isServerRunning(port)) {
-            console.log(`✓ Backend server already running on port ${port}`);
-            return true;
+    if (isDev) {
+        // In development, backend is started by concurrently — just wait for it
+        console.log(`⏳ Waiting for backend server on port ${port}...`);
+        for (let i = 0; i < 60; i++) {
+            if (await isServerRunning(port)) {
+                console.log(`✓ Backend server ready on port ${port}`);
+                return true;
+            }
+            await new Promise(r => setTimeout(r, 1000));
         }
-        if (isDev) await new Promise(r => setTimeout(r, 1000));
+        console.error('⚠ Backend server failed to start within 45 seconds');
+        return false;
     }
 
+    // Production: start backend ourselves
     console.log('🚀 Starting NestJS backend server...');
 
     const projectRoot = path.join(__dirname, '..', '..');
-    const command = 'yarn';
-    const args = isDev
-        ? ['workspace', '@review-agent/backend', 'dev']
-        : ['workspace', '@review-agent/backend', 'start'];
+    const args = ['workspace', '@review-agent/backend', 'start'];
 
-    backendServerProcess = spawn(command, args, {
+    backendServerProcess = spawn('yarn', args, {
         cwd: projectRoot,
         env: {
             ...process.env,
@@ -146,7 +147,7 @@ async function startBackendServer() {
 }
 
 function createWindow() {
-    const rendererEntryDev = process.env.VITE_DEV_SERVER_URL || 'http://127.0.0.1:5173';
+    const rendererEntryDev = process.env.VITE_DEV_SERVER_URL || 'http://127.0.0.1:30002';
     const rendererEntryProd = path.join(__dirname, '..', '..', 'ui', 'dist', 'index.html');
 
     const preloadPath = path.join(__dirname, 'preload.cjs');
@@ -180,8 +181,11 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
-    await startBackendServer();
     createWindow();
+    const backendReady = await startBackendServer();
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('backend-status', { ready: backendReady });
+    }
 });
 
 app.on('window-all-closed', () => {
@@ -196,7 +200,7 @@ app.on('activate', () => {
 });
 
 ipcMain.handle('get-runtime-config', async () => {
-    const port = process.env.API_PORT || '3000';
+    const port = process.env.API_PORT || '30001';
     return {
         success: true,
         config: {
@@ -210,7 +214,7 @@ ipcMain.handle('get-runtime-config', async () => {
 
 // Helper for backend requests
 async function backendRequest(endpoint, method = 'GET', body = null) {
-    const port = process.env.API_PORT || '3000';
+    const port = process.env.API_PORT || '30001';
     const http = require('http');
     
     return new Promise((resolve) => {

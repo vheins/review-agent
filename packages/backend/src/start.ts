@@ -1,105 +1,76 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
 import { ReviewEngineService } from './modules/review/review-engine.service.js';
+import { TuiService } from './tui/tui.service.js';
 import 'reflect-metadata';
 
 const REVIEW_INTERVAL = parseInt(process.env.REVIEW_INTERVAL || '600', 10);
-let countdownVisible = false;
+let tui: TuiService | null = null;
 
-function clearStatusLine(): void {
-  if (!countdownVisible || !process.stdout.isTTY) return;
-  process.stdout.write('\r\x1b[2K');
-  countdownVisible = false;
+function updateHeader(cycleCount: number, status: string): void {
+  if (!tui) return;
+
+  const now = new Date().toLocaleTimeString('en-GB', { hour12: false });
+  tui.updateHeader(
+    ` {cyan-fg}{bold}PR Review Agent{/}  {yellow-fg}Cycle ${cycleCount}{/}  ${status}  {gray-fg}Interval ${REVIEW_INTERVAL}s{/}  {gray-fg}${now}{/}  {gray-fg}q / Ctrl+C to exit{/}`,
+  );
 }
 
-function installConsoleLineGuard(): void {
-  const rawLog = console.log.bind(console);
-  const rawWarn = console.warn.bind(console);
-  const rawError = console.error.bind(console);
-  const rawInfo = console.info.bind(console);
-
-  console.log = (...args: Parameters<typeof console.log>) => {
-    clearStatusLine();
-    rawLog(...args);
-  };
-
-  console.warn = (...args: Parameters<typeof console.warn>) => {
-    clearStatusLine();
-    rawWarn(...args);
-  };
-
-  console.error = (...args: Parameters<typeof console.error>) => {
-    clearStatusLine();
-    rawError(...args);
-  };
-
-  console.info = (...args: Parameters<typeof console.info>) => {
-    clearStatusLine();
-    rawInfo(...args);
-  };
-}
-
-const BANNER = `
-╔══════════════════════════════════════════════════════════════════╗
-║  ██████╗ ██╗   ██╗████████╗██╗   ██╗██╗  ██╗                     ║
-║  ██╔══██╗██║   ██║╚══██╔══╝██║   ██║██║  ██║                     ║
-║  ██████╔╝██║   ██║   ██║   ██║   ██║███████║                     ║
-║  ██╔══██╗██║   ██║   ██║   ██║   ██║██╔══██║                     ║
-║  ██████╔╝╚██████╔╝   ██║   ╚██████╔╝██║  ██║                     ║
-║  ╚═════╝  ╚═════╝    ╚═╝    ╚═════╝ ╚═╝  ╚═╝                     ║
-║                                                                  ║
-║      ██╗      █████╗ ██╗    ██╗ █████╗ ███╗   ██╗               ║
-║      ██║     ██╔══██╗██║    ██║██╔══██╗████╗  ██║               ║
-║      ██║     ███████║██║ █╗ ██║███████║██╔██╗ ██║               ║
-║      ██║     ██╔══██║██║███╗██║██╔══██║██║╚██╗██║               ║
-║      ███████╗██║  ██║╚███╔███╔╝██║  ██║██║ ╚████║               ║
-║      ╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝  ╚═══╝               ║
-╚══════════════════════════════════════════════════════════════════╝
-`;
-
-async function countdown(seconds: number): Promise<void> {
-  for (let i = seconds; i > 0; i--) {
-    countdownVisible = true;
-    process.stdout.write(`\r⏳ Next review in ${i}s... (Ctrl+C to stop)`);
-    await new Promise(resolve => setTimeout(resolve, 1000));
+async function countdown(cycleCount: number, seconds: number): Promise<void> {
+  if (tui) {
+    for (let i = seconds; i > 0; i--) {
+      tui.setCountdown(i);
+      updateHeader(cycleCount, `{yellow-fg}Waiting for next cycle{/}`);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    tui.clearCountdown();
+    tui.addLog('Starting next review run...');
   }
-  clearStatusLine();
-  console.log(BANNER);
-  process.stdout.write('\r✔ Starting next review run...                    \n');
 }
 
 async function bootstrap() {
-  installConsoleLineGuard();
-  console.log('[NestJS] Initializing application for continuous review mode...');
-
   const app = await NestFactory.createApplicationContext(AppModule, {
-    logger: ['error', 'warn', 'log'],
+    logger: ['error', 'warn'],
   });
 
   const reviewEngine = app.get(ReviewEngineService);
+  tui = app.get(TuiService);
+  await tui.init();
+
+  tui.addLog('Application initialized in continuous review mode.');
+  updateHeader(0, `{green-fg}Booted{/}`);
 
   process.on('SIGINT', async () => {
-    console.log('\n[NestJS] Shutting down...');
+    tui?.addLog('Shutting down...');
+    tui?.destroy();
     await app.close();
     process.exit(0);
   });
 
   process.on('SIGTERM', async () => {
+    tui?.destroy();
     await app.close();
     process.exit(0);
   });
 
+  let cycleCount = 0;
   while (true) {
+    cycleCount++;
     try {
+      updateHeader(cycleCount, `{green-fg}Running review cycle{/}`);
+      tui?.addLog(`── Cycle #${cycleCount} ──`);
       await reviewEngine.runAll();
     } catch (error) {
-      console.error('[NestJS] Error during review run:', error.message);
+      const msg = `[NestJS] Error during review run: ${error.message}`;
+      tui?.addLog(msg);
+      updateHeader(cycleCount, `{red-fg}Cycle failed{/}`);
     }
-    await countdown(REVIEW_INTERVAL);
+    await countdown(cycleCount, REVIEW_INTERVAL);
   }
 }
 
 bootstrap().catch((error) => {
+  tui?.destroy();
   console.error('[NestJS] Failed to bootstrap:', error);
   process.exit(1);
 });
