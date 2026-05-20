@@ -292,8 +292,8 @@ class BlessedBackend implements DashboardBackend {
 
       const headerH = 2;
       const availH = (process.stdout.rows || 24) - headerH;
-      const topH = Math.floor(availH * 0.30);
-      const midH = Math.floor(availH * 0.38);
+      const topH = Math.floor(availH * 0.42);
+      const midH = Math.floor(availH * 0.30);
       const botH = availH - topH - midH;
 
       this.headerBox = blessed.text({
