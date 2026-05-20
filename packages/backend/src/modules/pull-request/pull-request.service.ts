@@ -271,7 +271,8 @@ export class PullRequestService {
       throw new NotFoundException(`PR #${number} not found in open PRs for ${repoName}`);
     }
 
-    return this.reviewEngine.reviewPullRequest(pr);
+    const result = await this.reviewEngine.reviewPullRequest(pr);
+    return result.success;
   }
 
   async calculateHealth(repoNameOrId: string | number, number?: number) {

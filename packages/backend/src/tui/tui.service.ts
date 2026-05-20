@@ -53,6 +53,7 @@ interface PrEntry {
 interface ConsoleLogEntry {
   channel: LogChannel;
   message: string;
+  timestamp: number;
 }
 
 function stripAnsi(s: string): string {
@@ -291,10 +292,25 @@ class BlessedBackend implements DashboardBackend {
       });
 
       const headerH = 2;
-      const availH = (process.stdout.rows || 24) - headerH;
-      const topH = Math.floor(availH * 0.42);
-      const midH = Math.floor(availH * 0.30);
-      const botH = availH - topH - midH;
+      const availH = Math.max(16, (process.stdout.rows || 24) - headerH);
+      const resultH = availH >= 24 ? 8 : availH >= 18 ? 7 : 6;
+      const minQueueH = availH >= 22 ? 10 : availH >= 18 ? 9 : 7;
+      const minBackendLogH = 3;
+      const minAgentLogH = 3;
+      const maxTopH = Math.max(resultH + minQueueH, availH - minBackendLogH - minAgentLogH);
+      const topH = Math.min(
+        maxTopH,
+        Math.max(resultH + minQueueH, Math.round(availH * 0.66)),
+      );
+      let remainingH = Math.max(minBackendLogH + minAgentLogH, availH - topH);
+      let midH = Math.max(minBackendLogH, Math.floor(remainingH * 0.45));
+      let botH = remainingH - midH;
+      if (botH < minAgentLogH) {
+        const deficit = minAgentLogH - botH;
+        midH = Math.max(minBackendLogH, midH - deficit);
+        botH = remainingH - midH;
+      }
+      const queueH = Math.max(minQueueH, topH - resultH);
 
       this.headerBox = blessed.text({
         parent: this.screen, top: 0, left: 0, width: '100%', height: headerH,
@@ -310,7 +326,7 @@ class BlessedBackend implements DashboardBackend {
       } as any);
 
       this.lastReviewBox = blessed.box({
-        parent: this.screen, top: headerH, left: '34%' as any, width: '66%' as any, height: 8,
+        parent: this.screen, top: headerH, left: '34%' as any, width: '66%' as any, height: resultH,
         label: ' Review Result ',
         border: { type: 'line', fg: theme.resultIdle } as any,
         style: { fg: 'white', bg: 'black', border: { fg: theme.resultIdle } },
@@ -318,7 +334,7 @@ class BlessedBackend implements DashboardBackend {
       } as any);
 
       this.queueBox = blessed.box({
-        parent: this.screen, top: headerH + 8, left: '34%' as any, width: '66%' as any, height: topH - 8,
+        parent: this.screen, top: headerH + resultH, left: '34%' as any, width: '66%' as any, height: queueH,
         label: ' Review Queue ',
         border: { type: 'line', fg: theme.queue } as any,
         style: { fg: 'white', bg: 'black', border: { fg: theme.queue } },
@@ -861,7 +877,13 @@ class ConsoleBackend implements DashboardBackend {
   private isRendering = false;
   private animationTick = 0;
   private animationTimer: NodeJS.Timeout | null = null;
+  private renderTimer: NodeJS.Timeout | null = null;
+  private lastRenderAt = 0;
+  private renderQueued = false;
+  private lastInteractiveLayoutKey = '';
+  private readonly lastInteractivePanels = new Map<string, string>();
   private currentReviewStartedAt: number | null = null;
+  private currentReviewStepUpdatedAt: number | null = null;
 
   async init(): Promise<boolean> {
     if (this.isInteractive) {
@@ -1032,7 +1054,9 @@ class ConsoleBackend implements DashboardBackend {
     if (this.animationTimer) return;
     this.animationTimer = setInterval(() => {
       if (this.isDestroyed) return;
-      this.animationTick = (this.animationTick + 1) % 1000000;
+      if (this.shouldAnimateSceneMotion()) {
+        this.animationTick = (this.animationTick + 1) % 1000000;
+      }
       this.renderInteractive();
     }, 120);
   }
@@ -1041,6 +1065,26 @@ class ConsoleBackend implements DashboardBackend {
     if (!this.animationTimer) return;
     clearInterval(this.animationTimer);
     this.animationTimer = null;
+    if (this.renderTimer) {
+      clearTimeout(this.renderTimer);
+      this.renderTimer = null;
+    }
+    this.renderQueued = false;
+    this.lastInteractiveLayoutKey = '';
+    this.lastInteractivePanels.clear();
+  }
+
+  private shouldAnimateSceneMotion(): boolean {
+    return this.currentReview.status === 'processing';
+  }
+
+  private getInteractiveRenderIntervalMs(): number {
+    if (this.currentReview.status !== 'processing') return 220;
+    const outputState = this.getCurrentReviewOutputState();
+    if (outputState.label.startsWith('Step stale')) return 260;
+    if (outputState.label.startsWith('No log')) return 220;
+    if (outputState.label.startsWith('Search')) return 180;
+    return 120;
   }
 
   private getSpinnerFrame(offset = 0): string {
@@ -1139,11 +1183,11 @@ class ConsoleBackend implements DashboardBackend {
       this.pushLog(detectLogChannel(line), `[${timeStr()}] ${line}`);
     }
 
-    this.renderInteractive();
+    this.renderInteractive(true);
   }
 
   private pushLog(channel: LogChannel, message: string): void {
-    const nextEntry = { channel, message };
+    const nextEntry = { channel, message, timestamp: Date.now() };
     if (this.logScrollOffset > 0 && this.matchesLogFocus(nextEntry)) {
       this.logScrollOffset = Math.min(this.getMaxLogScrollOffset() + 1, this.logScrollOffset + 1);
     }
@@ -1159,6 +1203,13 @@ class ConsoleBackend implements DashboardBackend {
     if (text.length <= width) return text;
     if (width <= 1) return text.slice(0, width);
     return `${text.slice(0, width - 1)}…`;
+  }
+
+  private truncateStart(text: string, width: number): string {
+    if (width <= 0) return '';
+    if (text.length <= width) return text;
+    if (width <= 1) return text.slice(text.length - width);
+    return `…${text.slice(-(width - 1))}`;
   }
 
   private pad(text: string, width: number): string {
@@ -1210,6 +1261,27 @@ class ConsoleBackend implements DashboardBackend {
       const idx = start + i;
       if (idx < 0 || idx >= chars.length) continue;
       if (chars[idx] !== ' ' || text[i] === ' ') continue;
+      chars[idx] = text[i]!;
+    }
+    return chars.join('');
+  }
+
+  private overlayIntoLine(base: string, start: number, text: string): string {
+    const chars = this.pad(base, Math.max(base.length, start + text.length)).split('');
+    for (let i = 0; i < text.length; i++) {
+      const idx = start + i;
+      if (idx < 0 || idx >= chars.length) continue;
+      if (text[i] === ' ') continue;
+      chars[idx] = text[i]!;
+    }
+    return chars.join('');
+  }
+
+  private overlayOpaqueLine(base: string, start: number, text: string): string {
+    const chars = this.pad(base, Math.max(base.length, start + text.length)).split('');
+    for (let i = 0; i < text.length; i++) {
+      const idx = start + i;
+      if (idx < 0 || idx >= chars.length) continue;
       chars[idx] = text[i]!;
     }
     return chars.join('');
@@ -1340,9 +1412,9 @@ class ConsoleBackend implements DashboardBackend {
     const statsTiny = `t${this.stats.total} ✓${this.stats.success} ✗${this.stats.failed}`;
     const countdown = this.countdownText ? `  ${this.countdownText}` : '';
     const theme = `  ${this.getThemeBadge()} t theme`;
-    const hintsFull = `  ↑↓/jk queue  J/K logs  H/L edge  a/b/g/e filter${theme}  q / Ctrl+C`;
-    const hintsCompact = `  jk queue  JK logs  H/L edge  a/b/g/e${theme}`;
-    const hintsTiny = `  jk q  JK l  a/b/g/e${theme}`;
+    const hintsFull = `  ↑↓/jk queue  J/K log hist  H/L edge  a/b/g/e filter${theme}  q / Ctrl+C`;
+    const hintsCompact = `  jk queue  JK log  H/L edge  a/b/g/e${theme}`;
+    const hintsTiny = `  jk q  JK log${theme}`;
 
     return Array.from(new Set([
       `OPS  ${stats}${countdown}${hintsFull}`,
@@ -1525,10 +1597,14 @@ class ConsoleBackend implements DashboardBackend {
     const history = this.lastReviewHistory
       .slice(0, 3)
       .map(item => {
-        const mark = item.decision === 'APPROVE' ? '✓' : item.decision === 'REQUEST_CHANGES' ? '!' : '×';
-        return `${mark}#${item.pr?.number ?? '?'}`;
+        const verdict = item.decision === 'APPROVE'
+          ? 'ok'
+          : item.decision === 'REQUEST_CHANGES'
+          ? 'fix'
+          : 'fail';
+        return `#${item.pr?.number ?? '?'} ${verdict}`;
       })
-      .join('  ');
+      .join('  |  ');
     return this.truncate(`Recent ${history}`, width);
   }
 
@@ -1604,6 +1680,462 @@ class ConsoleBackend implements DashboardBackend {
 
     const bottom = `└${'─'.repeat(innerWidth)}┘`;
     return [top, ...lines, bottom];
+  }
+
+  private buildCurrentReviewLogLines(width: number, maxLines: number): string[] {
+    if (width <= 0 || maxLines <= 0) return [];
+    const filtered = this.getFilteredLogEntries();
+    if (filtered.length === 0) {
+      return ['Log: --'];
+    }
+
+    const viewport = Math.max(1, maxLines);
+    const maxOffset = Math.max(0, filtered.length - viewport);
+    if (this.logScrollOffset > maxOffset) {
+      this.logScrollOffset = maxOffset;
+    }
+
+    const end = Math.max(0, filtered.length - this.logScrollOffset);
+    const sourceEntries = filtered.slice(0, end);
+    const compacted: string[] = [];
+    let index = sourceEntries.length - 1;
+
+    while (index >= 0 && compacted.length < viewport) {
+      const entry = sourceEntries[index]!;
+      const match = entry.message.match(/^\[(\d{2}:\d{2}:\d{2})\]\s*(.*)$/);
+      const timestamp = match?.[1] ?? '--:--:--';
+      const body = match?.[2] ?? entry.message;
+      const source = entry.channel === 'agent' ? 'AG' : 'BE';
+      const actionMatch = body.match(/^(?:→\s+)?(Read|Open|Edit|Write|Update|Create|Delete)\s+(.+)$/i);
+
+      if (actionMatch) {
+        const action = actionMatch[1]!;
+        const latestTarget = actionMatch[2]!;
+        let count = 1;
+        let cursor = index - 1;
+        while (cursor >= 0) {
+          const prev = sourceEntries[cursor]!;
+          const prevMatch = prev.message.match(/^\[(\d{2}:\d{2}:\d{2})\]\s*(.*)$/);
+          const prevBody = prevMatch?.[2] ?? prev.message;
+          const prevAction = prevBody.match(/^(?:→\s+)?(Read|Open|Edit|Write|Update|Create|Delete)\s+(.+)$/i);
+          if (!prevAction || prevAction[1]!.toLowerCase() !== action.toLowerCase()) {
+            break;
+          }
+          count++;
+          cursor--;
+        }
+
+        const normalizedAction = action[0]!.toUpperCase() + action.slice(1).toLowerCase();
+        const tail = this.extractPathHint(latestTarget) ?? this.truncate(latestTarget, 24);
+        const summary = count > 1
+          ? `→ ${normalizedAction} ${count} files · ${tail}`
+          : `→ ${normalizedAction} ${latestTarget}`;
+        compacted.push(this.truncate(`[${source} ${timestamp}] ${summary}`, width));
+        index = cursor;
+        continue;
+      }
+
+      compacted.push(this.truncate(`[${source} ${timestamp}] ${body}`, width));
+      index--;
+    }
+
+    return compacted.reverse();
+  }
+
+  private extractLogBody(message: string): string {
+    return message.replace(/^\[\d{2}:\d{2}:\d{2}\]\s*/, '').trim();
+  }
+
+  private extractPathHint(text: string): string | null {
+    const candidates = [
+      text.match(/["'`]([^"'`\n]+(?:\/[^"'`\n]+)+)["'`]/)?.[1],
+      text.match(/\b([A-Za-z0-9_.*-]+(?:\/[A-Za-z0-9_.*-]+)+)\b/)?.[1],
+      text.match(/\b([A-Za-z0-9_.-]+\.[A-Za-z0-9_*.-]+)\b/)?.[1],
+    ].filter((candidate): candidate is string => Boolean(candidate));
+
+    const candidate = candidates.find(value => /[/.]/.test(value));
+    if (!candidate) return null;
+
+    const normalized = candidate.replace(/^\.\/+/, '').replace(/^"+|"+$/g, '');
+    const parts = normalized.split('/').filter(Boolean);
+
+    if (normalized.length <= 24) {
+      return normalized;
+    }
+
+    for (let size = Math.min(4, parts.length); size >= 2; size--) {
+      const tail = `…/${parts.slice(-size).join('/')}`;
+      if (tail.length <= 24) return tail;
+    }
+
+    if (parts.length > 0) {
+      const tail = `…/${parts[parts.length - 1]}`;
+      if (tail.length <= 24) return tail;
+    }
+
+    return this.truncateStart(normalized, 24);
+  }
+
+  private extractReviewTargetHint(text: string): string | null {
+    const prTarget = text.match(/\b(?:on|for)\s+([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+#\d+)\b/i)?.[1]
+      ?? text.match(/\bPR\s+([A-Za-z0-9_.-]+#\d+)\b/i)?.[1];
+    if (prTarget) {
+      return this.truncate(`PR ${prTarget}`, 24);
+    }
+
+    const reviewId = text.match(/\breview\s+(\d+)\b/i)?.[1];
+    if (reviewId) {
+      return this.truncate(`Review ${reviewId}`, 24);
+    }
+
+    return null;
+  }
+
+  private extractGithubPullRequestTargetHint(text: string): string | null {
+    const owner = text.match(/"owner":"([^"]+)"/i)?.[1];
+    const repo = text.match(/"repo":"([^"]+)"/i)?.[1];
+    const prNumber = text.match(/"(?:pullNumber|prNumber|number|pull_number|pr_number)":"?(\d+)"?/i)?.[1];
+
+    if (!owner || !repo) return null;
+    const repoTarget = `${owner}/${repo}${prNumber ? `#${prNumber}` : ''}`;
+    return this.truncate(repoTarget, 24);
+  }
+
+  private extractGithubPullRequestMethod(text: string): string | null {
+    return text.match(/"method":"([^"]+)"/i)?.[1]?.toLowerCase() ?? null;
+  }
+
+  private getLatestLogEntry(channel?: LogChannel): ConsoleLogEntry | null {
+    for (let index = this.logEntries.length - 1; index >= 0; index--) {
+      const entry = this.logEntries[index]!;
+      if (!channel || entry.channel === channel) return entry;
+    }
+    return null;
+  }
+
+  private getCurrentReviewOutputState(): {
+    ageMs: number | null;
+    label: string;
+    boardLabel: string;
+    isSearch: boolean;
+  } {
+    const latestAgentLog = this.getLatestLogEntry('agent');
+    if (!latestAgentLog) {
+      const staleMs = this.currentReviewStepUpdatedAt ? Math.max(0, Date.now() - this.currentReviewStepUpdatedAt) : null;
+      if (staleMs !== null && staleMs >= 30_000) {
+        return { ageMs: staleMs, label: `Step stale ${shortDuration(staleMs)}`, boardLabel: `STALE ${shortDuration(staleMs)}`, isSearch: false };
+      }
+      return { ageMs: null, label: 'No output', boardLabel: 'NO LOG', isSearch: false };
+    }
+
+    const ageMs = Math.max(0, Date.now() - latestAgentLog.timestamp);
+    const body = this.extractLogBody(latestAgentLog.message).toLowerCase();
+    const isSearch = /\b(glob|grep|search|find)\b/.test(body);
+    const stepAgeMs = this.currentReviewStepUpdatedAt ? Math.max(0, Date.now() - this.currentReviewStepUpdatedAt) : null;
+
+    if (stepAgeMs !== null && stepAgeMs >= 90_000 && ageMs >= 30_000) {
+      return {
+        ageMs,
+        label: `Step stale ${shortDuration(stepAgeMs)}`,
+        boardLabel: `STALE ${shortDuration(stepAgeMs)}`,
+        isSearch,
+      };
+    }
+
+    if (isSearch && ageMs >= 30_000) {
+      return {
+        ageMs,
+        label: `Search ${shortDuration(ageMs)}`,
+        boardLabel: `SEARCH ${shortDuration(ageMs)}`,
+        isSearch,
+      };
+    }
+
+    if (ageMs >= 15_000) {
+      return {
+        ageMs,
+        label: `No log ${shortDuration(ageMs)}`,
+        boardLabel: `NO LOG ${shortDuration(ageMs)}`,
+        isSearch,
+      };
+    }
+
+    return {
+      ageMs,
+      label: `Busy ${shortDuration(ageMs)}`,
+      boardLabel: `BUSY ${shortDuration(ageMs)}`,
+      isSearch,
+    };
+  }
+
+  private getCurrentReviewSpeechFromLogs(): string[] | null {
+    const outputState = this.getCurrentReviewOutputState();
+    if (outputState.label.startsWith('No log') || outputState.label.startsWith('Step stale')) {
+      return null;
+    }
+
+    const recentEntries = this.logEntries.slice(-30).reverse();
+
+    for (const entry of recentEntries) {
+      const ageMs = Math.max(0, Date.now() - entry.timestamp);
+      if (ageMs > 15_000) continue;
+      const body = this.extractLogBody(entry.message);
+      const lower = body.toLowerCase();
+      const pathHint = this.extractPathHint(body);
+      const reviewTarget = this.extractReviewTargetHint(body);
+      const githubTarget = this.extractGithubPullRequestTargetHint(body);
+      const githubMethod = this.extractGithubPullRequestMethod(body);
+
+      if (/github_pull_request_(read|write)/i.test(body) && githubMethod) {
+        if (/(get_review_comments|list_review_comments|get_comments)/.test(githubMethod)) {
+          return ['Checking feedback...', githubTarget ?? 'What did they say?'];
+        }
+        if (/(get_diff|list_files|get_files|get_pull_request)/.test(githubMethod)) {
+          return ['Reading the diff...', githubTarget ?? 'Looking closer.'];
+        }
+        if (/(create_review_comment|update_review_comment|reply_to_review_comment|add_comment)/.test(githubMethod)) {
+          return ['Leaving a note...', githubTarget ?? 'This needs context.'];
+        }
+        if (/approve/.test(githubMethod)) {
+          return ['Looks clean.', githubTarget ?? 'Ship it.'];
+        }
+        if (/(request_changes|changes_requested)/.test(githubMethod)) {
+          return ['Needs another pass.', githubTarget ?? 'Not ready yet.'];
+        }
+        if (/(submit_review|create_review)/.test(githubMethod)) {
+          return ['Sending verdict...', githubTarget ?? 'Here we go.'];
+        }
+      }
+
+      if (/\b(glob|grep|search|find)\b/i.test(body)) {
+        return ['Searching...', pathHint ?? 'Hunting for clues.'];
+      }
+      if (/\b(read|open)\b/i.test(body)) {
+        return ['Reading file...', pathHint ?? 'Inspecting code.'];
+      }
+      if (/\b(edit|write|update)\b/i.test(body)) {
+        return ['Editing file...', pathHint ?? 'Making a change.'];
+      }
+      if (/\b(create|delete)\b/i.test(body) && pathHint) {
+        return [/\bdelete\b/i.test(body) ? 'Removing file...' : 'Creating file...', pathHint];
+      }
+      if (/\b(comment|inline comment|review comment)\b/i.test(lower)) {
+        return ['Writing comment...', pathHint ?? reviewTarget ?? 'Leaving a note.'];
+      }
+      if (/\b(posting review|submit review|request_changes|approve|addreview)\b/i.test(lower)) {
+        return ['Posting review...', reviewTarget ?? 'Sending verdict.'];
+      }
+      if (/\b(executing .* command|running)\b/i.test(lower)) {
+        return ['Running command...', 'Working through it.'];
+      }
+    }
+
+    return null;
+  }
+
+  private getCurrentReviewSpeechLines(
+    status: CurrentReview['status'],
+    decision: LastReviewSummary['decision'],
+    step: string,
+    hasPr: boolean,
+  ): string[] {
+    if (!hasPr) {
+      return ['Waiting...', 'Need next PR.'];
+    }
+
+    if (decision === 'APPROVE') {
+      return ['Looks clean.', 'Ship it.'];
+    }
+    if (decision === 'REQUEST_CHANGES') {
+      return ['Needs changes.', 'Found an issue.'];
+    }
+    if (decision === 'FAILED' || status === 'failed') {
+      return ['System alert.', 'Something broke.'];
+    }
+
+    if (status === 'processing') {
+      const logDrivenSpeech = this.getCurrentReviewSpeechFromLogs();
+      if (logDrivenSpeech) return logDrivenSpeech;
+    }
+
+    const normalizedStep = step.toLowerCase();
+    const mappings: Array<{ patterns: string[]; lines: [string, string] }> = [
+      { patterns: ['executing ai review', 'starting raw', 'raw review'], lines: ['Reviewing...', 'Thinking hard.'] },
+      { patterns: ['scanning', 'scan'], lines: ['Scanning...', 'Looking for clues.'] },
+      { patterns: ['analyzing', 'analyse', 'analyze'], lines: ['Analyzing...', 'Patterns detected.'] },
+      { patterns: ['checking build', 'build'], lines: ['Checking build...', 'Hope it passes.'] },
+      { patterns: ['running tests', 'test'], lines: ['Running tests...', 'No flakes, please.'] },
+      { patterns: ['parsing comments', 'reading comments', 'comments'], lines: ['Reading notes...', 'Got some clues.'] },
+      { patterns: ['generating review', 'writing review'], lines: ['Writing review...', 'Be precise.'] },
+      { patterns: ['posting review', 'sending review'], lines: ['Sending it...', 'Ship the verdict.'] },
+      { patterns: ['applying fix', 'patch'], lines: ['Patching...', 'Let me fix that.'] },
+      { patterns: ['waiting', 'queued'], lines: ['On standby...', 'Queue moving.'] },
+    ];
+
+    for (const mapping of mappings) {
+      if (mapping.patterns.some(pattern => normalizedStep.includes(pattern))) {
+        return [...mapping.lines];
+      }
+    }
+
+    if (status === 'processing') {
+      return ['Reviewing...', 'Reading the diff.'];
+    }
+    if (status === 'completed') {
+      return ['Looks okay.', 'Review complete.'];
+    }
+
+    return ['Still here...', 'Watching closely.'];
+  }
+
+  private getCurrentReviewModeDetail(status: CurrentReview['status'], step: string): string {
+    if (status !== 'processing') return '';
+
+    const outputState = this.getCurrentReviewOutputState();
+    if (outputState.label.startsWith('No log')) {
+      return outputState.label;
+    }
+
+    const logDriven = this.getCurrentReviewSpeechFromLogs()?.[0];
+    if (logDriven) {
+      return logDriven.replace(/\.\.\.$/, '');
+    }
+
+    const normalizedStep = step.toLowerCase();
+    if (/executing ai review|starting raw|raw review/.test(normalizedStep)) return 'Active';
+    if (/scan/.test(normalizedStep)) return 'Scanning';
+    if (/analyz|analyse/.test(normalizedStep)) return 'Analyzing';
+    if (/test/.test(normalizedStep)) return 'Running tests';
+    if (/comment/.test(normalizedStep)) return 'Reviewing comments';
+    if (/review/.test(normalizedStep)) return 'Reviewing';
+    return 'Active';
+  }
+
+  private decorateSpeechBubble(
+    lines: string[],
+    width: number,
+    messageLines: string[],
+    anchor: { left: number; right: number; top: number; bottom: number; center: number },
+  ): string[] {
+    if (lines.length < 5 || width < 34 || messageLines.length === 0) {
+      return lines;
+    }
+
+    const decorated = [...lines];
+    const textWidth = Math.max(...messageLines.map(line => line.length));
+    const bubbleInnerWidth = Math.min(Math.max(12, textWidth + 2), Math.max(12, width - 10));
+    const bubbleWidth = bubbleInnerWidth + 2;
+    const bubbleHeight = messageLines.length + 2;
+    const placeRight = anchor.right + 3 + bubbleWidth < width;
+    const bubbleCol = placeRight
+      ? Math.max(1, Math.min(width - bubbleWidth - 1, anchor.right + 3))
+      : Math.max(1, Math.min(width - bubbleWidth - 1, anchor.left - bubbleWidth - 2));
+    const bubbleRow = Math.max(
+      0,
+      Math.min(lines.length - bubbleHeight - 1, anchor.top - Math.max(1, bubbleHeight - 2)),
+    );
+    const top = `╭${'─'.repeat(bubbleInnerWidth)}╮`;
+    const bottom = `╰${'─'.repeat(bubbleInnerWidth)}╯`;
+
+    decorated[bubbleRow] = this.overlayIntoLine(decorated[bubbleRow]!, bubbleCol, top);
+    for (let index = 0; index < messageLines.length; index++) {
+      const row = bubbleRow + 1 + index;
+      if (row >= decorated.length) break;
+      const body = `│${this.pad(messageLines[index]!, bubbleInnerWidth)}│`;
+      decorated[row] = this.overlayOpaqueLine(decorated[row]!, bubbleCol, body);
+    }
+    if (bubbleRow + bubbleHeight - 1 < decorated.length) {
+      decorated[bubbleRow + bubbleHeight - 1] = this.overlayIntoLine(
+        decorated[bubbleRow + bubbleHeight - 1]!,
+        bubbleCol,
+        bottom,
+      );
+    }
+
+    const tailRow = Math.min(decorated.length - 1, bubbleRow + bubbleHeight);
+    if (placeRight) {
+      const tailBaseCol = bubbleCol + Math.max(1, Math.floor(bubbleWidth * 0.2));
+      if (tailRow < decorated.length) {
+        decorated[tailRow] = this.overlayIntoLine(decorated[tailRow]!, tailBaseCol, '╲');
+      }
+      if (tailRow + 1 < decorated.length) {
+        const tailTipCol = Math.max(anchor.center, tailBaseCol - 1);
+        decorated[tailRow + 1] = this.overlayIntoLine(decorated[tailRow + 1]!, tailTipCol, '╱');
+      }
+    } else {
+      const tailBaseCol = bubbleCol + bubbleWidth - Math.max(2, Math.floor(bubbleWidth * 0.2));
+      if (tailRow < decorated.length) {
+        decorated[tailRow] = this.overlayIntoLine(decorated[tailRow]!, tailBaseCol, '╱');
+      }
+      if (tailRow + 1 < decorated.length) {
+        const tailTipCol = Math.min(anchor.center, tailBaseCol + 1);
+        decorated[tailRow + 1] = this.overlayIntoLine(decorated[tailRow + 1]!, tailTipCol, '╲');
+      }
+    }
+
+    return decorated;
+  }
+
+  private getSceneStatusBoardLines(
+    status: CurrentReview['status'],
+    prNumber?: number,
+  ): string[] {
+    if (status !== 'processing') return [];
+    const outputState = this.getCurrentReviewOutputState();
+    return [
+      `${this.getSpinnerFrame()} REVIEW LIVE`,
+      prNumber ? `AI CORE #${prNumber}` : 'AI CORE',
+      outputState.boardLabel,
+    ];
+  }
+
+  private decorateSceneStatusBoard(
+    lines: string[],
+    width: number,
+    boardLines: string[],
+  ): string[] {
+    if (boardLines.length === 0 || lines.length < 7 || width < 28) {
+      return lines;
+    }
+
+    const decorated = [...lines];
+    const boardInnerWidth = Math.max(14, ...boardLines.map(line => line.length + 2));
+    const boardWidth = boardInnerWidth + 2;
+    const boardCol = Math.max(1, Math.min(width - boardWidth - 1, Math.floor(width * 0.1)));
+    const boardHeight = boardLines.length + 4;
+    const boardRow = Math.max(1, Math.min(lines.length - boardHeight, Math.floor(lines.length * 0.56)));
+    const top = ` /${'-'.repeat(boardInnerWidth)}\\`;
+    const bottom = ` \\${'_'.repeat(boardInnerWidth)}/`;
+    const postOffset = Math.max(2, Math.floor(boardInnerWidth * 0.22));
+    const postGap = Math.max(4, boardInnerWidth - postOffset * 2);
+    const posts = `${' '.repeat(postOffset)}║${' '.repeat(postGap)}║`;
+    const base = `${' '.repeat(Math.max(0, postOffset - 1))}╵${' '.repeat(postGap)}╵`;
+
+    decorated[boardRow] = this.overlayOpaqueLine(decorated[boardRow]!, boardCol, top);
+    for (let index = 0; index < boardLines.length; index++) {
+      const body = `|${this.pad(boardLines[index]!, boardInnerWidth)}|`;
+      decorated[boardRow + 1 + index] = this.overlayOpaqueLine(
+        decorated[boardRow + 1 + index]!,
+        boardCol,
+        body,
+      );
+    }
+    decorated[boardRow + 1 + boardLines.length] = this.overlayOpaqueLine(
+      decorated[boardRow + 1 + boardLines.length]!,
+      boardCol,
+      bottom,
+    );
+    decorated[boardRow + 2 + boardLines.length] = this.overlayOpaqueLine(
+      decorated[boardRow + 2 + boardLines.length]!,
+      boardCol,
+      posts,
+    );
+    decorated[boardRow + 3 + boardLines.length] = this.overlayOpaqueLine(
+      decorated[boardRow + 3 + boardLines.length]!,
+      boardCol,
+      base,
+    );
+    return decorated;
   }
 
   private decorateReviewBackdrop(
@@ -1761,41 +2293,55 @@ class ConsoleBackend implements DashboardBackend {
   }
 
   private getLeftPanelHeights(bodyHeight: number): { lastReview: number; queue: number; logs: number } {
-    const lastTarget = bodyHeight >= 30 ? 10 : bodyHeight >= 24 ? 9 : bodyHeight >= 20 ? 8 : 7;
-    const sectionMin = bodyHeight >= 24 ? 8 : bodyHeight >= 18 ? 6 : 4;
-    const lastMin = bodyHeight >= 20 ? 7 : 4;
+    const lastTarget = bodyHeight >= 30 ? 10 : bodyHeight >= 24 ? 9 : bodyHeight >= 20 ? 8 : 6;
+    const lastMin = bodyHeight >= 20 ? 6 : 5;
+    const queueMin = bodyHeight >= 24 ? 11 : bodyHeight >= 18 ? 9 : 7;
 
-    let lastReview = Math.min(Math.max(lastMin, lastTarget), Math.max(lastMin, bodyHeight - sectionMin * 2));
-    if (bodyHeight - lastReview < sectionMin * 2) {
-      lastReview = Math.max(lastMin, bodyHeight - sectionMin * 2);
-    }
-
-    let remaining = Math.max(sectionMin * 2, bodyHeight - lastReview);
-    let queue = Math.round(
-      remaining * (bodyHeight >= 28 ? 0.3 : bodyHeight >= 22 ? 0.28 : bodyHeight >= 18 ? 0.26 : 0.24),
+    let lastReview = Math.min(
+      Math.max(lastMin, lastTarget),
+      Math.max(lastMin, bodyHeight - queueMin),
     );
-    queue = Math.max(sectionMin, Math.min(remaining - sectionMin, queue));
-    let logs = remaining - queue;
 
-    if (logs < sectionMin) {
-      const deficit = sectionMin - logs;
-      queue = Math.max(sectionMin, queue - deficit);
-      logs = remaining - queue;
-    }
+    let queue = bodyHeight - lastReview;
 
-    if (queue < sectionMin) {
-      const deficit = sectionMin - queue;
+    if (queue < queueMin) {
+      const deficit = queueMin - queue;
       lastReview = Math.max(lastMin, lastReview - deficit);
-      remaining = bodyHeight - lastReview;
-      queue = Math.max(sectionMin, Math.min(remaining - sectionMin, queue + deficit));
-      logs = remaining - queue;
+      queue = bodyHeight - lastReview;
     }
 
-    return { lastReview, queue, logs };
+    return { lastReview, queue, logs: 0 };
   }
 
-  private renderInteractive(): void {
-    if (this.isDestroyed) return;
+  private renderInteractive(force = false): void {
+    if (this.isDestroyed || !this.isInteractive) return;
+
+    const now = Date.now();
+    const intervalMs = this.getInteractiveRenderIntervalMs();
+    const waitMs = force ? 0 : Math.max(0, intervalMs - (now - this.lastRenderAt));
+
+    if (waitMs === 0 && !this.renderQueued) {
+      this.renderInteractiveNow();
+      return;
+    }
+
+    if (this.renderQueued && !force) return;
+
+    if (this.renderTimer) {
+      clearTimeout(this.renderTimer);
+      this.renderTimer = null;
+    }
+
+    this.renderQueued = true;
+    this.renderTimer = setTimeout(() => {
+      this.renderTimer = null;
+      this.renderQueued = false;
+      this.renderInteractiveNow();
+    }, waitMs);
+  }
+
+  private renderInteractiveNow(): void {
+    if (this.isDestroyed || !this.isInteractive) return;
 
     const cols = process.stdout.columns || 100;
     const rows = process.stdout.rows || 30;
@@ -1803,32 +2349,63 @@ class ConsoleBackend implements DashboardBackend {
     const bodyH = Math.max(8, rows - footerH);
     const leftW = Math.max(32, Math.floor(cols * 0.34));
     const rightW = Math.max(36, cols - leftW - 1);
-    const { lastReview: lastReviewH, queue: queueH, logs: logsH } = this.getLeftPanelHeights(bodyH);
-    this.lastLogsViewportHeight = Math.max(1, logsH - 2);
+    const { lastReview: lastReviewH, queue: queueH } = this.getLeftPanelHeights(bodyH);
+    this.lastLogsViewportHeight = 3;
 
     const reviewLines = this.buildCurrentReviewLines(rightW - 2, bodyH - 2);
     const lastReviewLines = this.buildLastReviewLines(leftW - 2, lastReviewH - 2);
     const queueLines = this.buildQueueLines(leftW - 2, queueH - 2);
-    const unifiedLogLines = this.buildUnifiedLogLines(leftW - 2, logsH - 2);
     const queueTitle = this.buildQueueTitle(leftW - 2, queueH - 2);
     const lastReviewVisual = this.getLastReviewVisual();
     const resultTitle = this.getLastReviewTitle(leftW - 2);
-    const reviewTitle = this.currentReview.status === 'processing'
-      ? `${this.getPanelTitle('current', rightW - 2)} ${this.getSpinnerFrame()}`
-      : this.getPanelTitle('current', rightW - 2);
-    const logsTitle = this.getLogsTitle(leftW - 2);
+    const reviewTitle = this.getPanelTitle('current', rightW - 2);
     const runtimeTitle = this.getPanelTitle('runtime', cols - 2);
     const theme = this.getThemePalette();
 
-    let out = '\x1b[?25l\x1b[H\x1b[2J';
-    out += this.drawBox(1, 1, leftW, lastReviewH, resultTitle, lastReviewLines, lastReviewVisual.color, lastReviewVisual.color);
-    out += this.drawBox(1, 1 + lastReviewH, leftW, queueH, queueTitle, queueLines, theme.queue);
-    out += this.drawBox(1, 1 + lastReviewH + queueH, leftW, logsH, logsTitle, unifiedLogLines, theme.logs);
-    out += this.drawBox(leftW + 1, 1, rightW, bodyH, reviewTitle, reviewLines, theme.current, theme.current);
-    out += this.drawBox(1, rows - footerH + 1, cols, footerH, runtimeTitle, [this.buildFooterBar(cols - 2)], theme.runtime);
+    const layoutKey = `${cols}x${rows}:${leftW}:${rightW}:${lastReviewH}:${queueH}`;
+    const forceFullRepaint = this.lastInteractiveLayoutKey !== layoutKey;
+    if (forceFullRepaint) {
+      this.lastInteractiveLayoutKey = layoutKey;
+      this.lastInteractivePanels.clear();
+    }
+
+    let out = forceFullRepaint ? '\x1b[?25l\x1b[H\x1b[2J' : '';
+    const panels = [
+      {
+        key: 'result',
+        output: this.drawBox(1, 1, leftW, lastReviewH, resultTitle, lastReviewLines, lastReviewVisual.color, lastReviewVisual.color),
+      },
+      {
+        key: 'queue',
+        output: this.drawBox(1, 1 + lastReviewH, leftW, queueH, queueTitle, queueLines, theme.queue),
+      },
+      {
+        key: 'current',
+        output: this.drawBox(leftW + 1, 1, rightW, bodyH, reviewTitle, reviewLines, theme.current, theme.current),
+      },
+      {
+        key: 'runtime',
+        output: this.drawBox(1, rows - footerH + 1, cols, footerH, runtimeTitle, [this.buildFooterBar(cols - 2)], theme.runtime),
+      },
+    ];
+
+    for (const panel of panels) {
+      const previous = this.lastInteractivePanels.get(panel.key);
+      if (forceFullRepaint || previous !== panel.output) {
+        out += panel.output;
+        this.lastInteractivePanels.set(panel.key, panel.output);
+      }
+    }
+
+    if (!out) {
+      this.lastRenderAt = Date.now();
+      return;
+    }
+
     this.isRendering = true;
     (this.originalStdoutWrite ?? process.stdout.write.bind(process.stdout))(out);
     this.isRendering = false;
+    this.lastRenderAt = Date.now();
   }
 
   private buildQueueTitle(width: number, height: number): string {
@@ -1900,6 +2477,17 @@ class ConsoleBackend implements DashboardBackend {
     decision: LastReviewSummary['decision'] = 'NONE',
   ): string[] {
     const isSleeping = status === 'idle' && !this.currentReview.pr;
+    const frame = this.getAvatarFrameData(width, height, status, isSleeping, decision);
+    return frame.lines.map(line => this.centerWithOffset(line, width, frame.swayOffset));
+  }
+
+  private getAvatarFrameData(
+    width: number,
+    height: number,
+    status: CurrentReview['status'],
+    isSleeping: boolean,
+    decision: LastReviewSummary['decision'] = 'NONE',
+  ): { lines: string[]; spriteWidth: number; spriteHeight: number; swayOffset: number } {
     const mood: SpriteMood = isSleeping
       ? 'sleeping'
       : decision === 'REQUEST_CHANGES' || decision === 'FAILED'
@@ -1910,7 +2498,7 @@ class ConsoleBackend implements DashboardBackend {
     const frames = this.activeSprite.bitmaps[mood];
     const frameHold = isSleeping ? 5 : mood === 'processing' ? 3 : 6;
     const frameIndex = Math.floor(this.animationTick / frameHold) % Math.max(1, frames.length);
-    const rawLines = renderBitmap(frames[frameIndex] ?? frames[0] ?? []);
+    const rawLines = renderBitmap(frames[frameIndex] ?? frames[0] ?? []).slice(0, height);
 
     const spriteWidth = rawLines.reduce((max, line) => Math.max(max, line.length), 0);
     const maxTravel = Math.max(2, Math.min(8, Math.floor((width - spriteWidth) / 2) - 1));
@@ -1934,9 +2522,36 @@ class ConsoleBackend implements DashboardBackend {
       : [-1, 0, 1, 0];
     const swayIndex = this.getAvatarMotionPhase(status, isSleeping);
     const swayOffset = swayFrames[swayIndex % swayFrames.length] ?? 0;
-    return rawLines
-      .slice(0, height)
-      .map(line => this.centerWithOffset(line, width, swayOffset));
+    return {
+      lines: rawLines,
+      spriteWidth,
+      spriteHeight: rawLines.length,
+      swayOffset,
+    };
+  }
+
+  private getAvatarAnchor(
+    width: number,
+    height: number,
+    topPadding: number,
+    status: CurrentReview['status'],
+    isSleeping: boolean,
+    decision: LastReviewSummary['decision'] = 'NONE',
+  ): { left: number; right: number; top: number; bottom: number; center: number } {
+    const frame = this.getAvatarFrameData(width, height, status, isSleeping, decision);
+    const centeredLeft = Math.floor(Math.max(0, width - frame.spriteWidth) / 2);
+    const maxLeft = Math.max(0, width - frame.spriteWidth);
+    const left = Math.min(Math.max(0, centeredLeft + frame.swayOffset), maxLeft);
+    const right = Math.min(width - 1, left + Math.max(0, frame.spriteWidth - 1));
+    const top = Math.max(0, topPadding);
+    const bottom = Math.min(top + Math.max(0, frame.spriteHeight - 1), topPadding + Math.max(0, height - 1));
+    return {
+      left,
+      right,
+      top,
+      bottom,
+      center: left + Math.floor(Math.max(0, frame.spriteWidth - 1) / 2),
+    };
   }
 
   private buildCurrentReviewLines(width: number, height: number): string[] {
@@ -1950,10 +2565,20 @@ class ConsoleBackend implements DashboardBackend {
       : this.currentReview.status;
     const visualDecision = reaction ? reactionDecision : this.getCurrentReviewDecision();
     const isSleeping = this.currentReview.status === 'idle' && !this.currentReview.pr && !reaction;
+    const sceneStatusBoardLines = this.getSceneStatusBoardLines(
+      this.currentReview.status,
+      this.currentReview.pr?.number ?? reaction?.pr?.number,
+    );
+    const speechLines = this.getCurrentReviewSpeechLines(
+      visualStatus,
+      visualDecision,
+      this.currentReview.step,
+      Boolean(this.currentReview.pr || reaction?.pr),
+    );
     const footerReserve = (!this.currentReview.pr && !reaction)
       ? 4
       : this.currentReview.step && !reaction
-      ? 9
+      ? 12
       : 8;
     const availableAvatarArea = Math.max(3, height - footerReserve);
     const avatarHeight = Math.min(
@@ -1963,6 +2588,14 @@ class ConsoleBackend implements DashboardBackend {
     const verticalPadding = this.getAvatarVerticalPadding(
       availableAvatarArea,
       avatarHeight,
+      visualStatus,
+      isSleeping,
+      visualDecision,
+    );
+    const avatarAnchor = this.getAvatarAnchor(
+      contentWidth,
+      avatarHeight,
+      verticalPadding.top,
       visualStatus,
       isSleeping,
       visualDecision,
@@ -1987,8 +2620,19 @@ class ConsoleBackend implements DashboardBackend {
       isSleeping,
       visualDecision,
     );
+    const sceneWithSpeech = this.decorateSpeechBubble(
+      sceneLines,
+      contentWidth,
+      speechLines,
+      avatarAnchor,
+    );
+    const sceneWithStatusBoard = this.decorateSceneStatusBoard(
+      sceneWithSpeech,
+      contentWidth,
+      sceneStatusBoardLines,
+    );
     lines.length = 0;
-    lines.push(...sceneLines);
+    lines.push(...sceneWithStatusBoard);
 
     if (!this.currentReview.pr && !reaction) {
       lines.push(
@@ -2007,20 +2651,10 @@ class ConsoleBackend implements DashboardBackend {
     }
 
     const pr = this.currentReview.pr ?? reaction?.pr!;
-    const status = visualDecision === 'APPROVE'
-      ? '✓ APPROVED'
-      : visualDecision === 'REQUEST_CHANGES'
-      ? '! REJECTED'
-      : visualDecision === 'FAILED'
-      ? '✗ FAILED'
-      : this.currentReview.status === 'processing'
-      ? `${this.getSpinnerFrame()} PROCESSING`
-      : this.currentReview.status.toUpperCase();
     const animatedDots = this.currentReview.status === 'processing'
       ? '.'.repeat((this.animationTick % 3) + 1)
       : '';
     const author = pr.author ? `@${pr.author}` : '@unknown';
-    const queuePosition = `Queue ${this.getCurrentReviewQueuePosition()}`;
     const elapsed = reaction
       ? `Elapsed ${shortDuration(reaction.durationMs)}`
       : `Elapsed ${this.getCurrentReviewElapsedText()}`;
@@ -2032,41 +2666,41 @@ class ConsoleBackend implements DashboardBackend {
       ? 'MODE ALERT'
       : 'MODE REVIEW';
     const compactTelemetry = contentWidth < 52;
-    const topRightLabel = visualDecision === 'APPROVE'
-      ? 'GOOD JOB'
-      : visualDecision === 'REQUEST_CHANGES'
-      ? 'TRY AGAIN'
-      : visualDecision === 'FAILED'
-      ? 'ERROR'
-      : 'AI CORE';
+    const outputState = this.getCurrentReviewOutputState();
     const telemetryLines = this.buildTelemetryTriplet(
       contentWidth,
       { label: compactTelemetry ? 'AUTH' : 'AUTHOR', value: author },
       { label: compactTelemetry ? 'POS' : 'POSITION', value: reaction ? 'LAST' : this.getCurrentReviewQueuePosition() },
       { label: compactTelemetry ? 'TIME' : 'ELAPSED', value: reaction ? shortDuration(reaction.durationMs) : this.getCurrentReviewElapsedText() },
     );
+    const modeDetail = this.getCurrentReviewModeDetail(this.currentReview.status, this.currentReview.step);
+    const modeStepLabel = this.currentReview.step && !reaction
+      ? `${modeLabel} · ${modeDetail || `Active${animatedDots}`}`
+      : modeLabel;
+    const currentReviewLogLines = this.currentReview.step && !reaction
+      ? this.buildCurrentReviewLogLines(contentWidth, 3)
+      : [];
     lines.push(
       ...this.buildReviewStatusBox(
         contentWidth,
-        status,
-        topRightLabel,
         pr.repo,
         `#${pr.number}`,
+        pr.title,
+        '',
         this.currentReview.step && !reaction
           ? [
-              pr.title,
               this.buildSectionDivider(contentWidth, 'TELEMETRY'),
               ...telemetryLines,
               this.buildSectionDivider(contentWidth, 'MODE'),
-              this.alignLeftRight(modeLabel, queuePosition, contentWidth),
-              `Step: ${this.currentReview.step}${animatedDots}`,
+              this.alignLeftRight(modeStepLabel, outputState.label, contentWidth),
+              this.buildSectionDivider(contentWidth, 'LOGS'),
+              ...currentReviewLogLines,
             ]
           : [
-              pr.title,
               this.buildSectionDivider(contentWidth, 'TELEMETRY'),
               ...telemetryLines,
               this.buildSectionDivider(contentWidth, 'MODE'),
-              this.alignLeftRight(modeLabel, reaction ? 'LAST REVIEW' : queuePosition, contentWidth),
+              this.alignLeftRight(modeLabel, reaction ? 'LAST REVIEW' : outputState.label, contentWidth),
             ],
       ),
     );
@@ -2080,6 +2714,7 @@ class ConsoleBackend implements DashboardBackend {
     const innerPadding = width >= 28 ? 2 : 1;
     const contentWidth = Math.max(1, width - innerPadding * 2);
     const lines: string[] = [];
+    const canFit = (count: number) => lines.length + count <= height;
     if (!this.lastReview.pr || this.lastReview.decision === 'NONE') {
       lines.push(this.center('No completed review yet', contentWidth));
       return lines
@@ -2096,21 +2731,23 @@ class ConsoleBackend implements DashboardBackend {
     const timing = `${shortTime(this.lastReview.finishedAt)}  ${shortDuration(this.lastReview.durationMs)}`;
     lines.push(this.buildSectionDivider(contentWidth, 'OUTCOME'));
     lines.push(this.center(badge, contentWidth));
-    if (lines.length < height) {
+    if (canFit(1)) {
       lines.push(this.center(this.getLastReviewSignal(this.lastReview.decision), contentWidth));
     }
-    if (lines.length < height) {
+    if (height >= 9 && canFit(1)) {
       lines.push(this.buildSectionDivider(contentWidth, 'META'));
     }
-    lines.push(this.alignLeftRight(`#${this.lastReview.pr.number} ${this.lastReview.pr.repo}`, author, contentWidth));
-    lines.push(this.truncate(this.lastReview.pr.title, contentWidth));
-    if (lines.length < height) {
+    if (canFit(1)) {
+      lines.push(this.alignLeftRight(`#${this.lastReview.pr.number} ${this.lastReview.pr.repo}`, author, contentWidth));
+    }
+    if (canFit(1)) {
+      lines.push(this.truncate(this.lastReview.pr.title, contentWidth));
+    }
+    if (canFit(1)) {
       lines.push(this.alignLeftRight(decision.toLowerCase(), timing, contentWidth));
     }
-    if (lines.length < height) {
+    if (canFit(2)) {
       lines.push(this.buildSectionDivider(contentWidth, 'RECENT'));
-    }
-    if (lines.length < height) {
       lines.push(this.formatLastReviewHistoryLine(contentWidth));
     }
     return lines
@@ -2186,10 +2823,13 @@ class ConsoleBackend implements DashboardBackend {
       return [this.pad(`${' '.repeat(innerPadding)}${this.center(emptyLabel, contentWidth)}`, width)];
     }
     return visible.map(entry => {
+      const match = entry.message.match(/^\[(\d{2}:\d{2}:\d{2})\]\s*(.*)$/);
+      const timestamp = match?.[1] ?? '--:--:--';
+      const body = match?.[2] ?? entry.message;
       const prefix = entry.channel === 'agent'
-        ? `[AG ${this.getSpinnerFrame(4)}] `
-        : '[BE] ';
-      const line = this.truncate(`${prefix}${entry.message}`, contentWidth);
+        ? `[AG ${timestamp}] `
+        : `[BE ${timestamp}] `;
+      const line = this.truncate(`${prefix}${body}`, contentWidth);
       return this.pad(`${' '.repeat(innerPadding)}${line}`, width);
     });
   }
@@ -2228,7 +2868,7 @@ class ConsoleBackend implements DashboardBackend {
     if (!cleaned || isInstanceLoader(cleaned)) return;
     if (this.isInteractive) {
       this.pushLog('backend', `[${timeStr()}] ${cleaned}`);
-      this.renderInteractive();
+      this.renderInteractive(true);
       return;
     }
     process.stdout.write(` \x1B[32m[${timeStr()}]\x1B[0m ${cleaned}\n`);
@@ -2240,7 +2880,7 @@ class ConsoleBackend implements DashboardBackend {
     if (!cleaned) return;
     if (this.isInteractive) {
       this.pushLog('agent', `[${timeStr()}] ${cleaned}`);
-      this.renderInteractive();
+      this.renderInteractive(true);
       return;
     }
     process.stdout.write(` \x1B[35m[${timeStr()}]\x1B[0m ${cleaned}\n`);
@@ -2315,6 +2955,11 @@ class ConsoleBackend implements DashboardBackend {
       this.currentReviewStartedAt = Date.now();
     } else if (!pr && status === 'idle') {
       this.currentReviewStartedAt = null;
+    }
+    if (!pr && status === 'idle') {
+      this.currentReviewStepUpdatedAt = null;
+    } else if (currentKey !== nextKey || this.currentReview.status !== status || this.currentReview.step !== step) {
+      this.currentReviewStepUpdatedAt = Date.now();
     }
     this.currentReview = { pr, status, step };
     if (this.isInteractive) {

@@ -22,6 +22,11 @@ import { MetricsService } from '../metrics/metrics.service.js';
 import { TuiService } from '../../tui/tui.service.js';
 import { PrInfo } from '../../tui/tui.service.js';
 
+export interface ReviewRunResult {
+  success: boolean;
+  outcome: 'completed' | 'failed' | 'skipped';
+}
+
 /**
  * ReviewEngineService - Core service for orchestrating PR reviews
  */
@@ -83,6 +88,12 @@ export class ReviewEngineService {
     this.tuiService?.setCurrentReview(this.toPrInfo(pr), status, step);
   }
 
+  private finalizeSkippedReview(pr: PullRequest, step: string): ReviewRunResult {
+    this.tuiService?.setPrState({ repo: pr.repository.nameWithOwner, number: pr.number }, 'skipped');
+    this.updateReviewStep(pr, 'completed', step);
+    return { success: false, outcome: 'skipped' };
+  }
+
   private getStaleTakeoverPolicy(pr: PullRequest): {
     enabled: boolean;
     reason: string | null;
@@ -136,7 +147,7 @@ export class ReviewEngineService {
     });
   }
 
-  async reviewPullRequest(pr: PullRequest): Promise<boolean> {
+  async reviewPullRequest(pr: PullRequest): Promise<ReviewRunResult> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -153,7 +164,7 @@ export class ReviewEngineService {
       if (pr.merged) {
         this.logger.log(`PR #${pr.number} is already merged — skipping.`);
         await queryRunner.rollbackTransaction();
-        return false;
+        return this.finalizeSkippedReview(pr, 'Skipped: PR already merged');
       }
       
       // Retroactive Enrichment: if branch info or OIDs are missing (common from bulk CLI search), fetch deep details
@@ -232,7 +243,7 @@ export class ReviewEngineService {
         }
         this.gateway.broadcastReviewCompleted(pr.number, pr.repository.nameWithOwner, { status: 'rejected', reason: 'merge_conflict' });
         await queryRunner.rollbackTransaction();
-        return false;
+        return this.finalizeSkippedReview(pr, 'Rejected: merge conflicts detected');
       }
       
       // 2. Get changed files
@@ -244,7 +255,7 @@ export class ReviewEngineService {
         this.logger.warn(`No changes found for PR #${pr.number}, skipping review.`);
         this.gateway.broadcastReviewCompleted(pr.number, pr.repository.nameWithOwner, { status: 'skipped', reason: 'no changes' });
         await queryRunner.rollbackTransaction();
-        return false;
+        return this.finalizeSkippedReview(pr, 'Skipped: no changed files');
       }
 
       let allSecurityFindings: any[] = [];
@@ -417,7 +428,7 @@ export class ReviewEngineService {
       this.tuiService?.setPrState({ repo: pr.repository.nameWithOwner, number: pr.number }, 'completed');
       this.updateReviewStep(pr, 'completed', 'Review completed');
       this.gateway.broadcastReviewCompleted(pr.number, pr.repository.nameWithOwner, { decision: agentDecision, healthScore });
-      return true;
+      return { success: true, outcome: 'completed' };
     } catch (error) {
       this.logger.error(`Failed to review PR #${pr.number}: ${error.message}`, error.stack);
       this.tuiService?.setLastReview({
@@ -430,7 +441,7 @@ export class ReviewEngineService {
       this.updateReviewStep(pr, 'failed', error.message || 'Review failed');
       this.gateway.broadcastReviewFailed(pr.number, pr.repository.nameWithOwner, error.message);
       await queryRunner.rollbackTransaction();
-      return false;
+      return { success: false, outcome: 'failed' };
     } finally {
       await queryRunner.release();
     }
@@ -601,10 +612,12 @@ export class ReviewEngineService {
           this.tuiService?.setStats(stats);
           continue;
         }
-        const success = await this.reviewPullRequest(pr);
-        if (success) {
+        const result = await this.reviewPullRequest(pr);
+        if (result.outcome === 'completed') {
           reviewed++;
           stats.success++;
+        } else if (result.outcome === 'skipped') {
+          stats.skipped++;
         } else {
           stats.failed++;
         }
@@ -633,9 +646,9 @@ export class ReviewEngineService {
     this.logger.log('Limiting to 1 PR for single-run execution.');
     for (const pr of prs) {
       if (await this.shouldSkipPR(pr)) continue;
-      const reviewed = await this.reviewPullRequest(pr);
-      if (reviewed) break;
-      this.logger.warn(`PR #${pr.number} was skipped, trying next...`);
+      const result = await this.reviewPullRequest(pr);
+      if (result.outcome === 'completed') break;
+      this.logger.warn(`PR #${pr.number} ended with outcome=${result.outcome}, trying next...`);
     }
     this.logger.log('Review Engine (Once Mode) completed.');
   }
