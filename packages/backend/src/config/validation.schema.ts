@@ -70,4 +70,11 @@ export const validationSchema = Joi.object({
   OPENCODE_MODEL: Joi.string().default('auto'),
   OPENCODE_AGENT: Joi.string().allow('').default(''),
   OPENCODE_YOLO: Joi.boolean().default(true),
+
+  // Discord Bot
+  DISCORD_BOT_ENABLED: Joi.boolean().default(false),
+  DISCORD_BOT_TOKEN: Joi.string().allow('').default(''),
+  DISCORD_GUILD_ID: Joi.string().allow('').default(''),
+  DISCORD_VOICE_CHANNEL_ID: Joi.string().allow('').default(''),
+  DISCORD_SOUNDS_DIR: Joi.string().allow('').optional(),
 });

@@ -206,6 +206,12 @@ yarn start
 
 Runs continuously, checking for PRs every `REVIEW_INTERVAL` seconds.
 
+To disable Discord sound notifications for that run:
+
+```bash
+yarn start --no-sound
+```
+
 ### Dry Run Mode
 
 Test delegation without cloning repositories or calling Gemini:

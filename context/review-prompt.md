@@ -29,7 +29,11 @@ Review guidelines:
 
 ### 3. Ambil konteks sebelum review
 Lakukan urutan ini:
-1. Ambil standard repo/team dari MCP yang relevan.
+1. Ambil standard repo/team dari MCP yang relevan:
+   - `standard-search` dengan query `"pull-request-review"` — untuk memuat PR Hygiene, Security, Performance, Regression, dan Edge Case standards.
+   - `standard-search` dengan query `"code-review"` sebagai fallback.
+   - Baca detail standard yang cocok via `standard-detail`.
+   - Jadikan standard sebagai checklist reference selama review.
 2. Ambil overview PR.
 3. Ambil full diff sebelum komentar inline apa pun.
 4. Ambil existing review comments/threads dan baca isinya satu per satu sebelum menulis komentar baru.

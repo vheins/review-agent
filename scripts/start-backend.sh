@@ -41,4 +41,4 @@ if command -v lsof >/dev/null 2>&1 && [[ -f "$DB_PATH" ]]; then
 fi
 
 cd "$ROOT_DIR"
-exec yarn workspace @review-agent/backend start:continuous
+exec yarn workspace @review-agent/backend start:continuous "$@"

@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node:*)",
+      "Bash(npx -y @modelcontextprotocol/server-sequential-thinking --version)",
+      "Bash(timeout 5 npx -y @modelcontextprotocol/server-sequential-thinking)",
+      "Bash(npm list:*)"
+    ]
+  }
+}

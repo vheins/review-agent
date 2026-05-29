@@ -20,6 +20,7 @@ import { AuditLoggerService } from '../../common/audit/audit-logger.service.js';
 import { GamificationService } from '../team/services/gamification.service.js';
 import { MetricsService } from '../metrics/metrics.service.js';
 import { TuiService } from '../../tui/tui.service.js';
+import { DiscordBotService } from '../discord/discord-bot.service.js';
 import { PrInfo } from '../../tui/tui.service.js';
 
 export interface ReviewRunResult {
@@ -67,6 +68,7 @@ export class ReviewEngineService {
     @InjectRepository(ReviewMetrics)
     private readonly metricsRepository: Repository<ReviewMetrics>,
     @Optional() private readonly tuiService?: TuiService,
+    @Optional() private readonly discordBot?: DiscordBotService,
   ) {}
 
   private toPrInfo(pr: PullRequest): PrInfo {
@@ -416,6 +418,13 @@ export class ReviewEngineService {
       // 15. Gamification
       if (agentDecision === 'APPROVE') {
         await this.gamification.awardPoints(prEntity.author, 10, 'PR Approved by AI');
+      }
+
+      // 16. Discord soundboard
+      if (agentDecision === 'APPROVE' || agentDecision === 'REQUEST_CHANGES') {
+        this.discordBot?.playSound(agentDecision === 'APPROVE' ? 'approved' : 'rejected').catch((err) => {
+          this.logger.warn(`Discord soundboard error: ${err.message}`);
+        });
       }
 
       this.logger.log(`Successfully completed review for PR #${pr.number}`);

@@ -2,10 +2,12 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
 import { ReviewEngineService } from './modules/review/review-engine.service.js';
 import { TuiService } from './tui/tui.service.js';
+import { applyRuntimeFlags } from './runtime/runtime-flags.js';
 import 'reflect-metadata';
 
 const REVIEW_INTERVAL = parseInt(process.env.REVIEW_INTERVAL || '600', 10);
 let tui: TuiService | null = null;
+const runtimeFlags = applyRuntimeFlags();
 
 function updateHeader(cycleCount: number, status: string): void {
   if (!tui) return;
@@ -38,6 +40,9 @@ async function bootstrap() {
   await tui.init();
 
   tui.addLog('Application initialized in continuous review mode.');
+  if (runtimeFlags.noSound) {
+    tui.addLog('Discord soundboard disabled via --no-sound.');
+  }
   updateHeader(0, `{green-fg}Booted{/}`);
 
   process.on('SIGINT', async () => {
