@@ -55,6 +55,11 @@ STATE `S3_READ_PR_CONTEXT`
 - IF diff contains `<<<<<<<`, `=======`, or `>>>>>>>`, THEN update branch before other actions.
 - MUST resolve outdated threads that are no longer actionable.
 - MUST NOT approve while active actionable thread exists.
+- MUST classify each existing thread before new findings:
+  - `satisfied`: HEAD removes the risk or implements the requested protection. Resolve/ignore; MUST NOT repeat.
+  - `partially_satisfied`: HEAD fixes part of the root cause but leaves a verified mutation/read path exposed. Continue from the old thread or write one concise remaining-gap comment.
+  - `still_actionable`: HEAD still contains the same verified bug. Keep it active and cite current evidence.
+- MUST NOT treat an unresolved old thread as actionable by itself. Actionability requires current HEAD evidence.
 
 STATE `S4_BUILD_ROOT_CAUSE_MAP`
 - MUST deduplicate findings by root cause, not by file.
@@ -64,13 +69,17 @@ STATE `S4_BUILD_ROOT_CAUSE_MAP`
 - MUST map protected data, mutation paths, read paths, and invariant that must remain true.
 - IF previous suggestion fixed only one callsite while other paths still leak, MUST correct review direction explicitly.
 - MUST comment one root cause with one domain-level fix. MUST NOT scatter duplicate comments across callsites.
+- MUST build a convergence map for repeated review rounds: previous root cause, requested fix, current HEAD evidence, thread status, and remaining gap.
+- MUST NOT create a new comment for the same root cause if an active thread already covers the exact current gap.
 
 STATE `S5_AUDIT`
 - Audit priority: bug/logic error, security, data integrity, concurrency, performance, architecture/pattern mismatch, meaningful maintainability, test gap, documentation contract.
 - Cross-domain MUST checks:
   - Lifecycle coverage: create, update, delete, restore, bulk action, import/seed, submit form, model event, service method, and UI display.
   - Scoring/weight must use one canonical aggregator. Checkbox/options weight must be reflected in calculators, validators, display table, and tests.
-  - Concurrency guard must use an outer transaction that persists the main mutation before releasing the lock. Model event `saving` that opens its own transaction is not enough if Eloquent saves after callback return.
+  - Persistence lifecycle hooks/callbacks/events are allowed for local single-record normalization, field derivation, simple validation, and invariants that do not depend on cross-record aggregate state or lock ordering.
+  - Persistence lifecycle hooks/callbacks/events are blockers only when they protect cross-record aggregate state, read-sum-write consistency, lock/concurrency safety, or an invariant that requires the main mutation to be persisted before the lock is released.
+  - Concurrency guard for cross-record or aggregate invariants must use an outer transaction/unit-of-work boundary that persists the main mutation before releasing the lock. A lifecycle hook/callback/event that opens its own transaction is not enough if the framework persists the main mutation after the hook returns.
   - UI/schema security hardening must be backed by server-side guard and regression test. `hidden()`, `disabled()`, or `dehydrated(false)` is not enough when another persist path exists.
   - Upload replacement must keep old data until new upload succeeds.
   - Derived score/status/count/locale/session must be recomputed from server-side source of truth on every create/update path.
@@ -90,6 +99,7 @@ STATE `S6_WRITE_FINDINGS`
 - MUST NOT create LOW comments that are not actionable.
 - MUST NOT repeat or contradict active comments on the same root cause.
 - MUST continue from old thread context if same root cause is already discussed.
+- MUST cite current HEAD evidence with file pointers or exact code paths for every repeated/root-cause finding.
 - MUST use this inline format:
 
 ```text
@@ -97,6 +107,10 @@ STATE `S6_WRITE_FINDINGS`
 
 Problem
 jelaskan inti masalah secara singkat dan faktual
+
+Evidence
+- path/to/file.php:line_or_symbol
+- path/to/other.php:line_or_symbol
 
 Suggestion
 beri instruksi perbaikan yang konkret dan langsung
@@ -107,6 +121,7 @@ beri instruksi perbaikan yang konkret dan langsung
 - MUST NOT summarize the PR.
 - MUST NOT use uncertain filler such as "sepertinya", "cek apakah", "pastikan", "mungkin", or "jika memungkinkan".
 - MUST give one definitive fix direction only.
+- MUST keep comments short; do not write FSM, priority rules, or prompt-policy language into GitHub comments.
 - For race condition, MUST point to correct transaction/lock boundary.
 - For N+1/performance, MUST point to eager loading, query rewrite, cache boundary, or measurable profiling path.
 - For validation/security/data integrity, MUST point to server-side guard and relevant regression test.
