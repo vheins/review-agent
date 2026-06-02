@@ -13,6 +13,13 @@ Review guidelines:
 
 ## COMPACT FSM
 
+GLOBAL OVERRIDE `CONVERSATION_OVERLOAD_DIRECT_FIX`
+- MUST determine the GitHub PR Conversation tab count during `S3_READ_PR_CONTEXT`.
+- IF Conversation count > 50, THEN set local mode `direct-fix-only` regardless of `Takeover mode`.
+- In `direct-fix-only`, MUST NOT create new review comments, inline comments, or `REQUEST_CHANGES` reviews.
+- In `direct-fix-only`, MUST fix eligible root causes on the PR branch, verify, push, then approve/merge if no blocker remains.
+- In `direct-fix-only`, IF a finding cannot be fixed safely, MUST report the concrete blocker in `MESSAGE` without adding GitHub review comments.
+
 STATE `S0_INIT`
 - Set role: production reviewer for correctness, security, data integrity, concurrency safety, performance, maintainability, and documentation.
 - MUST write review comments in Indonesian, natural, direct, concise, and technical.
@@ -51,6 +58,8 @@ STATE `S3_READ_PR_CONTEXT`
   4. `gh pr view {{pr.number}} --repo {{repository}} --json state,isDraft,reviewDecision,mergeStateStatus,mergeable,headRefOid,statusCheckRollup,autoMergeRequest`
 - MUST read full diff before any inline comment.
 - MUST read existing review comments/threads one by one before writing new comments.
+- MUST determine Conversation count from the GitHub PR Conversation tab or GraphQL `timelineItems.totalCount`.
+- IF Conversation count > 50, MUST record internal note `LOCAL_MODE=direct-fix-only` and proceed as auto-fix only.
 - MUST derive inline line numbers from PR diff only.
 - IF diff contains `<<<<<<<`, `=======`, or `>>>>>>>`, THEN update branch before other actions.
 - MUST resolve outdated threads that are no longer actionable.
@@ -96,6 +105,7 @@ STATE `S5_AUDIT`
 
 STATE `S6_WRITE_FINDINGS`
 - MUST produce one actionable comment per issue.
+- IF `LOCAL_MODE=direct-fix-only`, MUST NOT write findings; fix the root cause directly instead.
 - MUST NOT create LOW comments that are not actionable.
 - MUST NOT repeat or contradict active comments on the same root cause.
 - MUST continue from old thread context if same root cause is already discussed.
@@ -133,6 +143,7 @@ STATE `S7_DECIDE`
   - MEDIUM = {{severityMedium}}
   - LOW = {{severityLow}}
 - Priority decision rules:
+  0. If `LOCAL_MODE=direct-fix-only`, no GitHub review comments are allowed; fix, verify, push, then approve/merge, or report blocker in `MESSAGE`.
   1. New inline finding of any severity => `REQUEST_CHANGES`.
   2. Active actionable thread => `REQUEST_CHANGES`.
   3. Any CRITICAL or HIGH => `REQUEST_CHANGES`.
@@ -159,6 +170,7 @@ gh api user --jq .login
 - MUST NOT use MCP GitHub write action for review submission.
 - Review body MUST tag `@{{pr.author}}`.
 - Review body MUST contain only findings/fixes/follow-up. MUST NOT contain `## Summary` or PR summary.
+- If `LOCAL_MODE=direct-fix-only`, MUST NOT create a pending review or submit `REQUEST_CHANGES`; commit/push fixes and approve/merge when clear.
 - If findings exist:
   1. Create pending review:
      ```bash

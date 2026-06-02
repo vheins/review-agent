@@ -95,7 +95,7 @@ describe('BaseAiExecutor prompt builder', () => {
     expect(prompt).toContain('STATE `S5_AUDIT`');
     expect(prompt).toContain('Lifecycle coverage: create, update, delete, restore, bulk action, import/seed, submit form, model event, service method, and UI display.');
     expect(prompt).toContain('Scoring/weight must use one canonical aggregator.');
-    expect(prompt).toContain('Concurrency guard must use an outer transaction that persists the main mutation before releasing the lock.');
+    expect(prompt).toContain('Concurrency guard for cross-record or aggregate invariants must use an outer transaction/unit-of-work boundary that persists the main mutation before releasing the lock.');
     expect(prompt).toContain('UI/schema security hardening must be backed by server-side guard and regression test.');
     expect(prompt).toContain('Derived score/status/count/locale/session must be recomputed from server-side source of truth');
   });
@@ -119,6 +119,25 @@ describe('BaseAiExecutor prompt builder', () => {
     expect(prompt).toContain('Use skill `data-corruption-investigation` if PR touches migration, derived score/status/count');
     expect(prompt).toContain('Use skill `regression-test-suite-design` if there is bug fix, security/data-integrity/concurrency finding');
     expect(prompt).toContain('`SKILL_CONTEXT: <skill-name> unavailable; review used prompt rules and verified codebase patterns.`');
+  });
+
+  it('forces PRs with more than 50 conversations into direct-fix-only mode', () => {
+    const executor = new TestExecutor();
+    const prompt = executor.build(
+      {
+        number: 379,
+        title: 'fix: converge repeated review comments',
+        repository: { nameWithOwner: 'idsolutions-id/eprocurement-dashboard' },
+        headSha: 'pqr678',
+      },
+      ['app/Filament/Resources/RequirementResource.php'],
+    );
+
+    expect(prompt).toContain('GLOBAL OVERRIDE `CONVERSATION_OVERLOAD_DIRECT_FIX`');
+    expect(prompt).toContain('IF Conversation count > 50, THEN set local mode `direct-fix-only` regardless of `Takeover mode`.');
+    expect(prompt).toContain('MUST determine Conversation count from the GitHub PR Conversation tab or GraphQL `timelineItems.totalCount`.');
+    expect(prompt).toContain('IF `LOCAL_MODE=direct-fix-only`, MUST NOT write findings; fix the root cause directly instead.');
+    expect(prompt).toContain('If `LOCAL_MODE=direct-fix-only`, MUST NOT create a pending review or submit `REQUEST_CHANGES`; commit/push fixes and approve/merge when clear.');
   });
 
   it('requires a mandatory refactor finding for source files larger than 500 lines', () => {
