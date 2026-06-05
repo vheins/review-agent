@@ -22,6 +22,7 @@ const PACKAGE_ROOT = path.resolve(fileURLToPath(new URL('.', import.meta.url)), 
 export class DiscordBotService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(DiscordBotService.name);
   private client: Client | null = null;
+  private _ready = false;
   private enabled = false;
   private token = '';
   private guildId = '';
@@ -79,10 +80,20 @@ export class DiscordBotService implements OnModuleInit, OnModuleDestroy {
       });
 
       this.logger.log(`Discord bot logged in as ${this.client?.user?.tag} (ready).`);
+      this._ready = true;
     } catch (error: any) {
       this.logger.error(`Failed to start Discord bot: ${error.message}`);
       this.client = null;
     }
+  }
+
+  async waitForReady(timeoutMs = 15_000): Promise<boolean> {
+    if (this._ready) return true;
+    const start = Date.now();
+    while (!this._ready && Date.now() - start < timeoutMs) {
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+    return this._ready;
   }
 
   private async getVoiceChannel(): Promise<{ guild: any; channel: VoiceChannel } | null> {

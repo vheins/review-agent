@@ -41,7 +41,10 @@ async function bootstrap() {
   tui = app.get(TuiService);
   await tui.init();
 
-  discordBot.playTTS('J.A.R.V.I.S akan online');
+  const ready = await discordBot.waitForReady();
+  if (ready) {
+    await discordBot.playTTS('J.A.R.V.I.S akan online');
+  }
   tui.addLog('Application initialized in continuous review mode.');
   if (runtimeFlags.noSound) {
     tui.addLog('Discord soundboard disabled via --no-sound.');
