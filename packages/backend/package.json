@@ -13,7 +13,8 @@
     "validate-migration": "node --loader ts-node/esm ./src/migration/migration-validator.cli.ts validate",
     "soundboard:beep": "NODE_NO_WARNINGS=1 node --no-warnings --loader ts-node/esm ./src/soundboard-test.ts",
     "soundboard:beep:approved": "NODE_NO_WARNINGS=1 node --no-warnings --loader ts-node/esm ./src/soundboard-test.ts approved",
-    "soundboard:beep:rejected": "NODE_NO_WARNINGS=1 node --no-warnings --loader ts-node/esm ./src/soundboard-test.ts rejected"
+    "soundboard:beep:rejected": "NODE_NO_WARNINGS=1 node --no-warnings --loader ts-node/esm ./src/soundboard-test.ts rejected",
+    "tts": "NODE_NO_WARNINGS=1 node --no-warnings --loader ts-node/esm ./src/tts-cli.ts"
   },
   "dependencies": {
     "@discordjs/opus": "^0.10.0",
