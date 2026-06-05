@@ -15,6 +15,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { fileURLToPath } from 'url';
 import { execa } from 'execa';
+import ffmpegPath from 'ffmpeg-static';
 
 const PACKAGE_ROOT = path.resolve(fileURLToPath(new URL('.', import.meta.url)), '..', '..', '..');
 
@@ -170,27 +171,45 @@ export class DiscordBotService implements OnModuleInit, OnModuleDestroy {
     const oggFile = path.join(this.soundsDir, `__tts_temp.ogg`);
 
     try {
-      await execa('curl', [
-        '-s',
-        '-X',
-        'POST',
-        this.ttsApiUrl,
-        '-H',
-        'Content-Type: application/json',
-        '-H',
-        `Authorization: Bearer ${this.ttsApiKey}`,
-        '-d',
-        JSON.stringify({ model: 'edge-tts/id-ID-ArdiNeural', input: text }),
-        '--output',
-        tmpFile,
-      ]);
+      const url = new URL(this.ttsApiUrl);
+      url.searchParams.set('response_format', 'json');
 
-      if (!fs.existsSync(tmpFile)) {
-        this.logger.warn('TTS API returned no audio file, skipping playback.');
+      const response = await fetch(url.toString(), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.ttsApiKey}`,
+        },
+        body: JSON.stringify({ model: 'edge-tts/id-ID-ArdiNeural', input: text }),
+      });
+
+      if (!response.ok) {
+        this.logger.warn(`TTS API returned status ${response.status}, skipping.`);
         return;
       }
 
-      await execa('ffmpeg', [
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        const json = (await response.json()) as any;
+        const audioBase64 =
+          json.audio || json.data || json.base64 || (typeof json === 'string' ? json : null);
+        if (!audioBase64) {
+          this.logger.warn('TTS API returned JSON without audio field, skipping.');
+          return;
+        }
+        const audioBuffer = Buffer.from(audioBase64, 'base64');
+        await fs.promises.writeFile(tmpFile, audioBuffer);
+      } else {
+        const arrayBuffer = await response.arrayBuffer();
+        await fs.promises.writeFile(tmpFile, Buffer.from(arrayBuffer));
+      }
+
+      if (!fs.existsSync(tmpFile) || fs.statSync(tmpFile).size === 0) {
+        this.logger.warn('TTS API returned empty audio, skipping playback.');
+        return;
+      }
+
+      await execa(ffmpegPath, [
         '-y',
         '-i',
         tmpFile,
