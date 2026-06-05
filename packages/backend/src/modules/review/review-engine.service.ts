@@ -91,7 +91,10 @@ export class ReviewEngineService {
   }
 
   private finalizeSkippedReview(pr: PullRequest, step: string): ReviewRunResult {
-    this.tuiService?.setPrState({ repo: pr.repository.nameWithOwner, number: pr.number }, 'skipped');
+    this.tuiService?.setPrState(
+      { repo: pr.repository.nameWithOwner, number: pr.number },
+      'skipped',
+    );
     this.updateReviewStep(pr, 'completed', step);
     return { success: false, outcome: 'skipped' };
   }
@@ -121,10 +124,9 @@ export class ReviewEngineService {
     };
   }
 
-  private getEffectiveRepoConfig<T extends { reviewMode?: string; autoMerge?: boolean; executor?: string }>(
-    pr: PullRequest,
-    repoConfig: T,
-  ): T {
+  private getEffectiveRepoConfig<
+    T extends { reviewMode?: string; autoMerge?: boolean; executor?: string },
+  >(pr: PullRequest, repoConfig: T): T {
     const takeover = this.getStaleTakeoverPolicy(pr);
     if (!takeover.enabled) return repoConfig;
 
@@ -158,9 +160,19 @@ export class ReviewEngineService {
     const appConfig = this.config.getAppConfig();
 
     try {
-      this.tuiService?.setPrState({ repo: pr.repository.nameWithOwner, number: pr.number }, 'processing');
+      this.tuiService?.setPrState(
+        { repo: pr.repository.nameWithOwner, number: pr.number },
+        'processing',
+      );
       this.updateReviewStep(pr, 'processing', 'Preparing review context');
       this.logger.log(`Starting review for PR #${pr.number}: ${pr.title}`);
+
+      // 0a. TTS announcement
+      this.discordBot
+        ?.playTTS(`Reviewing PR from ${pr.author?.login || 'unknown'}: ${pr.title}`)
+        .catch(err => {
+          this.logger.warn(`TTS announcement error: ${err.message}`);
+        });
 
       // 0. Check if already merged
       if (pr.merged) {
@@ -168,20 +180,24 @@ export class ReviewEngineService {
         await queryRunner.rollbackTransaction();
         return this.finalizeSkippedReview(pr, 'Skipped: PR already merged');
       }
-      
+
       // Retroactive Enrichment: if branch info or OIDs are missing (common from bulk CLI search), fetch deep details
       let deepPR: PullRequest = pr;
       if (!pr.headRefName || !pr.headSha || pr.headRefName === 'unknown') {
-        this.logger.log(`[Sync] Fetching deep details for PR #${pr.number} to resolve branch/OID info...`);
+        this.logger.log(
+          `[Sync] Fetching deep details for PR #${pr.number} to resolve branch/OID info...`,
+        );
         deepPR = await this.github.getPRDetail(pr.repository.nameWithOwner, pr.number);
         // Sync original PR object to avoid inconsistencies if passed elsewhere
         pr.headRefName = deepPR.headRefName || 'unknown';
         pr.baseRefName = deepPR.baseRefName || 'unknown';
         pr.headSha = deepPR.headSha;
         pr.baseSha = deepPR.baseSha;
-        this.logger.log(`[Sync] Resolved branch info for PR #${pr.number}: head=${pr.headRefName}, base=${pr.baseRefName}`);
+        this.logger.log(
+          `[Sync] Resolved branch info for PR #${pr.number}: head=${pr.headRefName}, base=${pr.baseRefName}`,
+        );
       }
-      
+
       this.gateway.broadcastReviewStarted(pr.number, pr.repository.nameWithOwner);
 
       const repoConfig = await this.config.getRepositoryConfig(pr.repository.nameWithOwner);
@@ -193,7 +209,12 @@ export class ReviewEngineService {
       pr.takeoverReason = deepPR.takeoverReason;
 
       // 1. Prepare repository
-      this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 10, 'Preparing repository...');
+      this.gateway.broadcastReviewProgress(
+        pr.number,
+        pr.repository.nameWithOwner,
+        10,
+        'Preparing repository...',
+      );
       this.updateReviewStep(pr, 'processing', 'Preparing repository');
       const repoDir = await this.repoManager.prepareRepository(
         pr.repository.nameWithOwner,
@@ -205,10 +226,11 @@ export class ReviewEngineService {
       // Ensure base branch is available locally as remote-tracking ref
       const baseBranch = deepPR.baseRefName || pr.baseRefName || 'main';
       try {
-        await this.github.execaVerbose('git', [
-          'fetch', 'origin',
-          `${baseBranch}:refs/remotes/origin/${baseBranch}`
-        ], { cwd: repoDir });
+        await this.github.execaVerbose(
+          'git',
+          ['fetch', 'origin', `${baseBranch}:refs/remotes/origin/${baseBranch}`],
+          { cwd: repoDir },
+        );
       } catch (e) {
         this.logger.warn(`Failed to fetch base branch '${baseBranch}': ${e.message}`);
       }
@@ -217,7 +239,9 @@ export class ReviewEngineService {
       // Resolve base SHA if missing (common from CLI)
       if (!deepPR.baseSha) {
         try {
-          const { stdout } = await this.github.execaVerbose('git', ['rev-parse', baseRef], { cwd: repoDir });
+          const { stdout } = await this.github.execaVerbose('git', ['rev-parse', baseRef], {
+            cwd: repoDir,
+          });
           deepPR.baseSha = stdout.trim();
         } catch (e) {
           this.logger.warn(`Failed to resolve base SHA via git: ${e.message}`);
@@ -234,28 +258,48 @@ export class ReviewEngineService {
       // 1.6 Reject PR if merge conflicts exist (before sending to AI agent)
       const mergeState = (deepPR.mergeable_state || '').toLowerCase();
       if (mergeState === 'dirty' || deepPR.mergeable === false) {
-        this.logger.log(`PR #${pr.number} has merge conflicts (mergeable_state: ${mergeState}) — rejecting with instructions.`);
+        this.logger.log(
+          `PR #${pr.number} has merge conflicts (mergeable_state: ${mergeState}) — rejecting with instructions.`,
+        );
         const creatorLogin = deepPR.author?.login || pr.author?.login || 'unknown';
         const reviewBody = `Konflik terdeteksi di PR ini. @${creatorLogin} tolong selesaikan konflik dengan base branch terlebih dahulu sebelum review dapat dilanjutkan.`;
         try {
-          await this.github.addReview(pr.repository.nameWithOwner, pr.number, reviewBody, 'REQUEST_CHANGES');
+          await this.github.addReview(
+            pr.repository.nameWithOwner,
+            pr.number,
+            reviewBody,
+            'REQUEST_CHANGES',
+          );
           this.logger.log(`Successfully submitted conflict rejection for PR #${pr.number}`);
         } catch (reviewError) {
-          this.logger.warn(`Failed to submit conflict rejection review for PR #${pr.number}: ${reviewError.message}`);
+          this.logger.warn(
+            `Failed to submit conflict rejection review for PR #${pr.number}: ${reviewError.message}`,
+          );
         }
-        this.gateway.broadcastReviewCompleted(pr.number, pr.repository.nameWithOwner, { status: 'rejected', reason: 'merge_conflict' });
+        this.gateway.broadcastReviewCompleted(pr.number, pr.repository.nameWithOwner, {
+          status: 'rejected',
+          reason: 'merge_conflict',
+        });
         await queryRunner.rollbackTransaction();
         return this.finalizeSkippedReview(pr, 'Rejected: merge conflicts detected');
       }
-      
+
       // 2. Get changed files
-      this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 20, 'Analyzing changed files...');
+      this.gateway.broadcastReviewProgress(
+        pr.number,
+        pr.repository.nameWithOwner,
+        20,
+        'Analyzing changed files...',
+      );
       this.updateReviewStep(pr, 'processing', 'Analyzing changed files');
       const changedFiles = await this.github.getChangedFiles(repoDir, deepPR);
 
       if (changedFiles.length === 0) {
         this.logger.warn(`No changes found for PR #${pr.number}, skipping review.`);
-        this.gateway.broadcastReviewCompleted(pr.number, pr.repository.nameWithOwner, { status: 'skipped', reason: 'no changes' });
+        this.gateway.broadcastReviewCompleted(pr.number, pr.repository.nameWithOwner, {
+          status: 'skipped',
+          reason: 'no changes',
+        });
         await queryRunner.rollbackTransaction();
         return this.finalizeSkippedReview(pr, 'Skipped: no changed files');
       }
@@ -269,51 +313,96 @@ export class ReviewEngineService {
       let qualityScore = 100;
 
       // 3. Run Security Scans
-      this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 30, 'Running security scans...');
+      this.gateway.broadcastReviewProgress(
+        pr.number,
+        pr.repository.nameWithOwner,
+        30,
+        'Running security scans...',
+      );
       this.updateReviewStep(pr, 'processing', 'Running security scans');
-      const staticFindings = await this.securityScanner.scanFiles(pr.repository.nameWithOwner, pr.number, changedFiles);
-      depFindings = await this.dependencyScanner.scanDependencies(repoDir, pr.repository.nameWithOwner, pr.number);
+      const staticFindings = await this.securityScanner.scanFiles(
+        pr.repository.nameWithOwner,
+        pr.number,
+        changedFiles,
+      );
+      depFindings = await this.dependencyScanner.scanDependencies(
+        repoDir,
+        pr.repository.nameWithOwner,
+        pr.number,
+      );
       allSecurityFindings = [...staticFindings, ...depFindings];
 
       // 4. AI Review. The selected CLI agent is responsible for GitHub comments,
       // review submission, rejection, and merge according to context/review-prompt.md.
-      this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 50, 'Executing AI review agent...');
+      this.gateway.broadcastReviewProgress(
+        pr.number,
+        pr.repository.nameWithOwner,
+        50,
+        'Executing AI review agent...',
+      );
       this.updateReviewStep(pr, 'processing', 'Executing AI review agent');
-      const rawAiOutput = await this.ai.executeRaw(deepPR, changedFiles.map((file) => file.path), repoDir);
+      const rawAiOutput = await this.ai.executeRaw(
+        deepPR,
+        changedFiles.map(file => file.path),
+        repoDir,
+      );
       const parsedComments = this.ai.parseOutput(rawAiOutput);
-      const documentationComments = await this.documentationReview.analyzeChangedFiles(changedFiles, repoDir);
+      const documentationComments = await this.documentationReview.analyzeChangedFiles(
+        changedFiles,
+        repoDir,
+      );
       aiComments = [
         ...(Array.isArray(parsedComments) ? parsedComments : []),
         ...documentationComments,
       ];
 
-      const decisionMatch = rawAiOutput.match(/\*?\*?DECISION\*?\*?:\s*(APPROVE|REQUEST[_\s]CHANGES)/i);
+      const decisionMatch = rawAiOutput.match(
+        /\*?\*?DECISION\*?\*?:\s*(APPROVE|REQUEST[_\s]CHANGES)/i,
+      );
       const messageMatch = rawAiOutput.match(/\*?\*?MESSAGE\*?\*?:\s*([\s\S]+)/i);
-      const parsedDecision = decisionMatch ? decisionMatch[1].toUpperCase().replace(/[\s_]+/, '_') : null;
+      const parsedDecision = decisionMatch
+        ? decisionMatch[1].toUpperCase().replace(/[\s_]+/, '_')
+        : null;
       summaryMessage = messageMatch ? messageMatch[1].trim() : '';
-      
+
       // 5. Calculate metrics. The CLI agent owns the GitHub review decision.
-      this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 70, 'Calculating scores...');
+      this.gateway.broadcastReviewProgress(
+        pr.number,
+        pr.repository.nameWithOwner,
+        70,
+        'Calculating scores...',
+      );
       this.updateReviewStep(pr, 'processing', 'Calculating scores');
-      
-      const tempComments = aiComments.map(c => ({
-        severity: c.severity,
-        category: c.issue_type,
-        suggestion: c.suggested_fix,
-      } as any));
+
+      const tempComments = aiComments.map(
+        c =>
+          ({
+            severity: c.severity,
+            category: c.issue_type,
+            suggestion: c.suggested_fix,
+          }) as any,
+      );
 
       healthScore = this.metricsService.calculateHealthScore(allSecurityFindings, tempComments);
       qualityScore = this.metricsService.calculateQualityScore(tempComments);
 
-      agentDecision = parsedDecision === 'APPROVE' || parsedDecision === 'REQUEST_CHANGES'
-        ? parsedDecision
-        : 'UNKNOWN';
+      agentDecision =
+        parsedDecision === 'APPROVE' || parsedDecision === 'REQUEST_CHANGES'
+          ? parsedDecision
+          : 'UNKNOWN';
 
       // 6. Save/Update PR Entity
-      this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 80, 'Saving to database...');
+      this.gateway.broadcastReviewProgress(
+        pr.number,
+        pr.repository.nameWithOwner,
+        80,
+        'Saving to database...',
+      );
       this.updateReviewStep(pr, 'processing', 'Saving review to database');
-      let prEntity = await this.prRepository.findOne({ where: { number: pr.number, repository: pr.repository.nameWithOwner } });
-      
+      let prEntity = await this.prRepository.findOne({
+        where: { number: pr.number, repository: pr.repository.nameWithOwner },
+      });
+
       if (!prEntity) {
         prEntity = this.prRepository.create({
           id: deepPR.id,
@@ -357,7 +446,8 @@ export class ReviewEngineService {
         commentsGenerated: aiComments.length,
         issuesFound: {
           bugs: aiComments.filter(c => c.issue_type === 'logic').length,
-          security: allSecurityFindings.length + aiComments.filter(c => c.issue_type === 'security').length,
+          security:
+            allSecurityFindings.length + aiComments.filter(c => c.issue_type === 'security').length,
           performance: 0,
           maintainability: aiComments.filter(c => c.issue_type === 'quality').length,
           architecture: 0,
@@ -370,20 +460,25 @@ export class ReviewEngineService {
       await queryRunner.manager.save(metrics);
 
       // 9. Create Comment Entities
-      const commentEntities = aiComments.map(c => this.commentRepository.create({
-        reviewId: savedReview.id,
-        file: c.file_path,
-        line: c.line_number,
-        message: c.message,
-        severity: c.severity,
-        category: c.issue_type,
-        suggestion: c.suggested_fix,
-        review: savedReview,
-      }));
+      const commentEntities = aiComments.map(c =>
+        this.commentRepository.create({
+          reviewId: savedReview.id,
+          file: c.file_path,
+          line: c.line_number,
+          message: c.message,
+          severity: c.severity,
+          category: c.issue_type,
+          suggestion: c.suggested_fix,
+          review: savedReview,
+        }),
+      );
       await queryRunner.manager.save(commentEntities);
 
       // 10. Attach Checklists
-      await this.checklistService.attachChecklistsToReview(savedReview.id, pr.repository.nameWithOwner);
+      await this.checklistService.attachChecklistsToReview(
+        savedReview.id,
+        pr.repository.nameWithOwner,
+      );
 
       // 11. Audit Log. No GitHub write action is performed here; the CLI agent owns it.
       await this.auditLogger.logAction(
@@ -391,11 +486,16 @@ export class ReviewEngineService {
         'ai-agent',
         'pull_request',
         `${pr.repository.nameWithOwner}#${pr.number}`,
-        { agentDecision, healthScore, qualityScore, mode: effectiveRepoConfig.reviewMode }
+        { agentDecision, healthScore, qualityScore, mode: effectiveRepoConfig.reviewMode },
       );
 
       // 12. Agent output has already handled GitHub review/comment/merge actions.
-      this.gateway.broadcastReviewProgress(pr.number, pr.repository.nameWithOwner, 90, 'Agent GitHub actions completed.');
+      this.gateway.broadcastReviewProgress(
+        pr.number,
+        pr.repository.nameWithOwner,
+        90,
+        'Agent GitHub actions completed.',
+      );
       this.updateReviewStep(pr, 'processing', 'Finalizing GitHub actions');
 
       // Safety net: if the agent approved but left the PR open, merge it deterministically here.
@@ -403,9 +503,15 @@ export class ReviewEngineService {
 
       if (appConfig.dryRun) {
         this.logger.log(`[DryRun] CLI agent ran in dry-run mode for PR #${pr.number}`);
-        console.log(`[DryRun] Agent summary for PR #${pr.number}:`, summaryMessage || '(no summary emitted)');
+        console.log(
+          `[DryRun] Agent summary for PR #${pr.number}:`,
+          summaryMessage || '(no summary emitted)',
+        );
         if (depFindings.length > 0) {
-          console.log(`[DryRun] Dependency findings (${depFindings.length}):`, depFindings.map(f => f.title));
+          console.log(
+            `[DryRun] Dependency findings (${depFindings.length}):`,
+            depFindings.map(f => f.title),
+          );
         }
       }
 
@@ -413,18 +519,34 @@ export class ReviewEngineService {
       await queryRunner.commitTransaction();
 
       // 14. Real-time updates
-      this.gateway.broadcastMetricsUpdate(pr.number, pr.repository.nameWithOwner, { healthScore, qualityScore });
+      this.gateway.broadcastMetricsUpdate(pr.number, pr.repository.nameWithOwner, {
+        healthScore,
+        qualityScore,
+      });
 
       // 15. Gamification
       if (agentDecision === 'APPROVE') {
         await this.gamification.awardPoints(prEntity.author, 10, 'PR Approved by AI');
       }
 
-      // 16. Discord soundboard
+      // 16. Discord soundboard (TTS priority, then default beep)
       if (agentDecision === 'APPROVE' || agentDecision === 'REQUEST_CHANGES') {
-        this.discordBot?.playSound(agentDecision === 'APPROVE' ? 'approved' : 'rejected').catch((err) => {
-          this.logger.warn(`Discord soundboard error: ${err.message}`);
-        });
+        const ttsText = summaryMessage
+          ? summaryMessage
+              .replace(/[*#_`~\[\]]/g, '')
+              .trim()
+              .slice(0, 200)
+          : '';
+        if (ttsText) {
+          this.discordBot?.playTTS(ttsText).catch(err => {
+            this.logger.warn(`Discord TTS error: ${err.message}`);
+          });
+        }
+        this.discordBot
+          ?.playSound(agentDecision === 'APPROVE' ? 'approved' : 'rejected')
+          .catch(err => {
+            this.logger.warn(`Discord soundboard error: ${err.message}`);
+          });
       }
 
       this.logger.log(`Successfully completed review for PR #${pr.number}`);
@@ -434,9 +556,15 @@ export class ReviewEngineService {
         finishedAt: Date.now(),
         durationMs: Date.now() - startTime,
       });
-      this.tuiService?.setPrState({ repo: pr.repository.nameWithOwner, number: pr.number }, 'completed');
+      this.tuiService?.setPrState(
+        { repo: pr.repository.nameWithOwner, number: pr.number },
+        'completed',
+      );
       this.updateReviewStep(pr, 'completed', 'Review completed');
-      this.gateway.broadcastReviewCompleted(pr.number, pr.repository.nameWithOwner, { decision: agentDecision, healthScore });
+      this.gateway.broadcastReviewCompleted(pr.number, pr.repository.nameWithOwner, {
+        decision: agentDecision,
+        healthScore,
+      });
       return { success: true, outcome: 'completed' };
     } catch (error) {
       this.logger.error(`Failed to review PR #${pr.number}: ${error.message}`, error.stack);
@@ -446,7 +574,10 @@ export class ReviewEngineService {
         finishedAt: Date.now(),
         durationMs: Date.now() - startTime,
       });
-      this.tuiService?.setPrState({ repo: pr.repository.nameWithOwner, number: pr.number }, 'failed');
+      this.tuiService?.setPrState(
+        { repo: pr.repository.nameWithOwner, number: pr.number },
+        'failed',
+      );
       this.updateReviewStep(pr, 'failed', error.message || 'Review failed');
       this.gateway.broadcastReviewFailed(pr.number, pr.repository.nameWithOwner, error.message);
       await queryRunner.rollbackTransaction();
@@ -496,7 +627,9 @@ export class ReviewEngineService {
             const repoConfig = await this.config.getRepositoryConfig(pr.repository.nameWithOwner);
             const effectiveRepoConfig = this.getEffectiveRepoConfig(pr, repoConfig);
             if (!effectiveRepoConfig.autoMerge && !takeover.enabled) {
-              this.logger.log(`PR #${pr.number} unchanged since last completed local review — skipping GitHub status checks.`);
+              this.logger.log(
+                `PR #${pr.number} unchanged since last completed local review — skipping GitHub status checks.`,
+              );
               return true;
             }
           }
@@ -504,8 +637,10 @@ export class ReviewEngineService {
       }
 
       const reviews = await this.github.listReviews(pr.repository.nameWithOwner, pr.number);
-      const submitted = reviews.filter((r: any) => r.state === 'APPROVED' || r.state === 'CHANGES_REQUESTED');
-      
+      const submitted = reviews.filter(
+        (r: any) => r.state === 'APPROVED' || r.state === 'CHANGES_REQUESTED',
+      );
+
       // If never reviewed, don't skip
       if (submitted.length === 0) return false;
 
@@ -514,7 +649,7 @@ export class ReviewEngineService {
       // Get current HEAD sha — use pr.headSha if available, else fetch from API
       let headSha = pr.head_sha || pr.headSha;
       let mergeableState = pr.mergeable_state;
-      
+
       if (!headSha || !mergeableState) {
         const detail: any = await this.github.getPRDetail(pr.repository.nameWithOwner, pr.number);
         headSha = headSha || detail.headSha;
@@ -527,7 +662,9 @@ export class ReviewEngineService {
       if (isProcessedAtHead) {
         if (lastReview.state === 'CHANGES_REQUESTED') {
           if (takeover.enabled) {
-            this.logger.log(`PR #${pr.number} stale pada HEAD ${headSha.slice(0, 7)} — takeover aktif untuk direct fix.`);
+            this.logger.log(
+              `PR #${pr.number} stale pada HEAD ${headSha.slice(0, 7)} — takeover aktif untuk direct fix.`,
+            );
             return false;
           }
 
@@ -535,34 +672,49 @@ export class ReviewEngineService {
           try {
             const prDetail = await this.github.getPRDetail(pr.repository.nameWithOwner, pr.number);
             if (prDetail.requested_reviewers?.length > 0) {
-              this.logger.log(`PR #${pr.number} has pending review requests (${prDetail.requested_reviewers.join(', ')}) — re-reviewing despite CHANGES_REQUESTED at HEAD.`);
+              this.logger.log(
+                `PR #${pr.number} has pending review requests (${prDetail.requested_reviewers.join(', ')}) — re-reviewing despite CHANGES_REQUESTED at HEAD.`,
+              );
               return false;
             }
           } catch (e) {
-            this.logger.warn(`Could not check requested reviewers for PR #${pr.number}: ${e.message}`);
+            this.logger.warn(
+              `Could not check requested reviewers for PR #${pr.number}: ${e.message}`,
+            );
           }
 
-          this.logger.log(`PR #${pr.number} is already rejected at HEAD ${headSha.slice(0, 7)} — skipping until author pushes changes.`);
+          this.logger.log(
+            `PR #${pr.number} is already rejected at HEAD ${headSha.slice(0, 7)} — skipping until author pushes changes.`,
+          );
           return true;
         }
 
         if (lastReview.state === 'APPROVED') {
           // Even if approved, we don't skip if there are conflicts
           if (mergeableState === 'dirty') {
-            this.logger.log(`PR #${pr.number} is approved but has conflicts (state: ${mergeableState}) — needs auto-fix.`);
+            this.logger.log(
+              `PR #${pr.number} is approved but has conflicts (state: ${mergeableState}) — needs auto-fix.`,
+            );
             return false;
           }
 
           // Check if there are fixable comments by fetching them
           try {
-            const comments = await this.github.listReviewComments(pr.repository.nameWithOwner, pr.number);
+            const comments = await this.github.listReviewComments(
+              pr.repository.nameWithOwner,
+              pr.number,
+            );
             const hasFixable = comments.some((c: any) => this.autoFix.isFixable(c));
             if (hasFixable) {
-              this.logger.log(`PR #${pr.number} is approved but has fixable comments — needs auto-fix.`);
+              this.logger.log(
+                `PR #${pr.number} is approved but has fixable comments — needs auto-fix.`,
+              );
               return false;
             }
           } catch (e) {
-            this.logger.warn(`Could not check for fixable comments on PR #${pr.number}: ${e.message}`);
+            this.logger.warn(
+              `Could not check for fixable comments on PR #${pr.number}: ${e.message}`,
+            );
           }
 
           // If autoMerge is enabled, don't skip if the PR is still open.
@@ -571,19 +723,25 @@ export class ReviewEngineService {
             const repoConfig = await this.config.getRepositoryConfig(pr.repository.nameWithOwner);
             const effectiveRepoConfig = this.getEffectiveRepoConfig(pr, repoConfig);
             if (effectiveRepoConfig.autoMerge || takeover.enabled) {
-              this.logger.log(`PR #${pr.number} is approved but still open — sending to CLI agent for merge handling.`);
+              this.logger.log(
+                `PR #${pr.number} is approved but still open — sending to CLI agent for merge handling.`,
+              );
               return false;
             }
           } catch (e) {
             this.logger.warn(`Could not check autoMerge config for PR #${pr.number}: ${e.message}`);
           }
 
-          this.logger.log(`PR #${pr.number} is approved and autoMerge is disabled or not applicable — skipping.`);
+          this.logger.log(
+            `PR #${pr.number} is approved and autoMerge is disabled or not applicable — skipping.`,
+          );
           return true;
         }
       }
 
-      this.logger.log(`PR #${pr.number} needs re-review: state=${lastReview?.state || 'NONE'}, match=${lastReview?.commit_id?.slice(0, 7)}===${headSha?.slice(0, 7)}`);
+      this.logger.log(
+        `PR #${pr.number} needs re-review: state=${lastReview?.state || 'NONE'}, match=${lastReview?.commit_id?.slice(0, 7)}===${headSha?.slice(0, 7)}`,
+      );
       return false;
     } catch (e) {
       this.logger.warn(`Could not check reviews for PR #${pr.number}: ${e.message}`);
@@ -679,8 +837,8 @@ export class ReviewEngineService {
     if (detail.merged || detail.state !== 'open') return;
 
     const reviews = await this.github.listReviews(repoName, pr.number);
-    const submittedReviews = reviews.filter((review: any) =>
-      review?.state === 'APPROVED' || review?.state === 'CHANGES_REQUESTED',
+    const submittedReviews = reviews.filter(
+      (review: any) => review?.state === 'APPROVED' || review?.state === 'CHANGES_REQUESTED',
     );
     const lastReview = submittedReviews[submittedReviews.length - 1];
     const headSha = detail.headSha || pr.headSha;
@@ -708,11 +866,15 @@ export class ReviewEngineService {
       const comments = await this.github.listReviewComments(repoName, pr.number);
       const hasFixable = comments.some((comment: any) => this.autoFix.isFixable(comment));
       if (hasFixable) {
-        this.logger.log(`PR #${pr.number} remains open after approval but still has fixable review comments.`);
+        this.logger.log(
+          `PR #${pr.number} remains open after approval but still has fixable review comments.`,
+        );
         return;
       }
     } catch (error) {
-      this.logger.warn(`Could not verify review comments before merge fallback for PR #${pr.number}: ${error.message}`);
+      this.logger.warn(
+        `Could not verify review comments before merge fallback for PR #${pr.number}: ${error.message}`,
+      );
       return;
     }
 
@@ -724,11 +886,15 @@ export class ReviewEngineService {
         return status !== 'completed' || this.blockingCheckConclusions.has(conclusion);
       });
       if (hasBlockingChecks) {
-        this.logger.log(`PR #${pr.number} remains open after approval because status checks are not green yet.`);
+        this.logger.log(
+          `PR #${pr.number} remains open after approval because status checks are not green yet.`,
+        );
         return;
       }
     } catch (error) {
-      this.logger.warn(`Could not verify status checks before merge fallback for PR #${pr.number}: ${error.message}`);
+      this.logger.warn(
+        `Could not verify status checks before merge fallback for PR #${pr.number}: ${error.message}`,
+      );
       return;
     }
 

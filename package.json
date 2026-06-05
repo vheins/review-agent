@@ -22,7 +22,8 @@
     "dev": "./scripts/cleanup.sh && concurrently -k \"yarn backend:dev\" \"wait-on tcp:30001 && yarn ui:dev\" \"wait-on tcp:30002 && yarn desktop:dev\"",
     "test": "vitest run",
     "lint": "eslint \"packages/**/*.{ts,tsx}\" --fix",
-    "format": "prettier --write \"packages/**/*.{ts,tsx,js,cjs,mjs,json,css,md}\""
+    "format": "prettier --write \"packages/**/*.{ts,tsx,js,cjs,mjs,json,css,md}\"",
+    "tts": "bash .scripts/tts.sh"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

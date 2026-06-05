@@ -3,22 +3,18 @@ import { resolveWorkspaceDir } from './workspace-path.util.js';
 
 /**
  * Configuration Validation Schema
- * 
+ *
  * Joi schema for validating environment variables at startup.
  * Ensures all required configuration values are present and valid.
- * 
+ *
  * Requirements: 9.4
  */
 export const validationSchema = Joi.object({
   // Application
-  NODE_ENV: Joi.string()
-    .valid('development', 'production', 'test')
-    .default('development'),
+  NODE_ENV: Joi.string().valid('development', 'production', 'test').default('development'),
   API_PORT: Joi.number().port().default(3000),
   REVIEW_INTERVAL: Joi.number().min(60).default(600),
-  LOG_LEVEL: Joi.string()
-    .valid('error', 'warn', 'info', 'debug')
-    .default('info'),
+  LOG_LEVEL: Joi.string().valid('error', 'warn', 'info', 'debug').default('info'),
   WORKSPACE_DIR: Joi.string().default(resolveWorkspaceDir()),
   EXCLUDE_REPO_OWNERS: Joi.string().allow('').default(''),
   PR_SCOPE: Joi.string().default('authored,assigned,review-requested,involves'),
@@ -77,4 +73,8 @@ export const validationSchema = Joi.object({
   DISCORD_GUILD_ID: Joi.string().allow('').default(''),
   DISCORD_VOICE_CHANNEL_ID: Joi.string().allow('').default(''),
   DISCORD_SOUNDS_DIR: Joi.string().allow('').optional(),
+
+  // TTS
+  TTS_API_URL: Joi.string().uri().optional().default('http://localhost:20128/v1/audio/speech'),
+  TTS_API_KEY: Joi.string().allow('').default(''),
 });

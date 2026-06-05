@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
 import { ReviewEngineService } from './modules/review/review-engine.service.js';
+import { DiscordBotService } from './modules/discord/discord-bot.service.js';
 import { TuiService } from './tui/tui.service.js';
 import { applyRuntimeFlags } from './runtime/runtime-flags.js';
 import 'reflect-metadata';
@@ -36,9 +37,11 @@ async function bootstrap() {
   });
 
   const reviewEngine = app.get(ReviewEngineService);
+  const discordBot = app.get(DiscordBotService);
   tui = app.get(TuiService);
   await tui.init();
 
+  discordBot.playTTS('J.A.R.V.I.S akan online');
   tui.addLog('Application initialized in continuous review mode.');
   if (runtimeFlags.noSound) {
     tui.addLog('Discord soundboard disabled via --no-sound.');
@@ -74,7 +77,7 @@ async function bootstrap() {
   }
 }
 
-bootstrap().catch((error) => {
+bootstrap().catch(error => {
   tui?.destroy();
   console.error('[NestJS] Failed to bootstrap:', error);
   process.exit(1);
