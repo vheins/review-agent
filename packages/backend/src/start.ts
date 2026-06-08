@@ -54,12 +54,18 @@ async function bootstrap() {
 
   process.on('SIGINT', async () => {
     tui?.addLog('Shutting down...');
+    try {
+      await discordBot.playTTSEnglish('Shutting down. Goodbye.');
+    } catch {}
     tui?.destroy();
     await app.close();
     process.exit(0);
   });
 
   process.on('SIGTERM', async () => {
+    try {
+      await discordBot.playTTSEnglish('Shutting down. Goodbye.');
+    } catch {}
     tui?.destroy();
     await app.close();
     process.exit(0);

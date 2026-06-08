@@ -921,6 +921,11 @@ export class ReviewEngineService {
     const merged = await this.github.mergePR(repoName, pr.number, 'merge');
     if (merged) {
       this.logger.log(`Merged PR #${pr.number} via backend safety net after agent approval.`);
+      this.discordBot
+        ?.playTTSEnglish(`Pull request number ${pr.number} has been merged automatically.`)
+        .catch(err => {
+          this.logger.warn(`TTS auto-merge announcement error: ${err.message}`);
+        });
       return;
     }
 
