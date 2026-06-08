@@ -176,15 +176,6 @@ export class ReviewEngineService {
       this.updateReviewStep(pr, 'processing', 'Preparing review context');
       this.logger.log(`Starting review for PR #${pr.number}: ${pr.title}`);
 
-      // 0a. TTS announcement (skip if owner excluded)
-      if (this.isTtsAllowed(pr)) {
-        this.discordBot
-          ?.playTTS(`Reviewing PR from ${pr.author?.login || 'unknown'}: ${pr.title}`)
-          .catch(err => {
-            this.logger.warn(`TTS announcement error: ${err.message}`);
-          });
-      }
-
       // 0. Check if already merged
       if (pr.merged) {
         this.logger.log(`PR #${pr.number} is already merged — skipping.`);
