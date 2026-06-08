@@ -178,9 +178,26 @@ gh api user --jq .login
      ```
   2. Add inline comments on valid diff lines.
   3. Submit review with `REQUEST_CHANGES`.
+  4. Record review activity with empty commit (deskripsikan domain/modul yang di-review dan temuan utama di body commit):
+     ```bash
+     git commit --allow-empty -m "review(pr-#{{pr.number}}): request changes" -m "- Domain: <domain/modul yang direview>
+- Findings: <jumlah CRITICAL/HIGH/MEDIUM/LOW>
+- Blocker: <blocker utama jika ada>"
+     git push origin HEAD
+     ```
 - If no finding and no active actionable thread:
-  - Approve if not approved on current HEAD.
-  - Merge if open, mergeable, checks pass, and no blocker remains.
+  - Approve if not approved on current HEAD. After approve, record activity (deskripsikan domain/modul yang di-review di body commit):
+    ```bash
+    git commit --allow-empty -m "review(pr-#{{pr.number}}): approve" -m "- Domain: <domain/modul yang direview>
+- Findings: 0 blocker"
+    git push origin HEAD
+    ```
+  - Merge if open, mergeable, checks pass, and no blocker remains. After merge, record activity (deskripsikan domain/modul yang di-review di body commit):
+    ```bash
+    git commit --allow-empty -m "review(pr-#{{pr.number}}): merge" -m "- Domain: <domain/modul yang direview>
+- Status: approved & merged"
+    git push origin HEAD
+    ```
 - MUST use merge commit, not squash or rebase.
 - MUST store repeated valuable pattern to memory.
 

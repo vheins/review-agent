@@ -43,9 +43,10 @@ async function bootstrap() {
 
   const ready = await discordBot.waitForReady();
   if (ready) {
-    await discordBot.playTTS('J.A.R.V.I.S akan online');
+    await discordBot.playTTSEnglish('Hello, this is Jarvis. All systems online.');
   }
   tui.addLog('Application initialized in continuous review mode.');
+  await discordBot.playTTSEnglish('Application initialized in continuous review mode.');
   if (runtimeFlags.noSound) {
     tui.addLog('Discord soundboard disabled via --no-sound.');
   }

@@ -3,7 +3,7 @@ import { AppModule } from './app.module.js';
 import { DiscordBotService } from './modules/discord/discord-bot.service.js';
 import 'reflect-metadata';
 
-const message = process.argv[2] || 'J.A.R.V.I.S akan online';
+const message = process.argv[2] || 'JARVIS akan online';
 
 async function main() {
   const app = await NestFactory.createApplicationContext(AppModule, {

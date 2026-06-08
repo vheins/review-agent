@@ -13,6 +13,7 @@ import {
 } from '@discordjs/voice';
 import * as path from 'path';
 import * as fs from 'fs';
+import { createHash } from 'crypto';
 import { fileURLToPath } from 'url';
 import { execa } from 'execa';
 import ffmpegPath from 'ffmpeg-static';
@@ -161,16 +162,39 @@ export class DiscordBotService implements OnModuleInit, OnModuleDestroy {
     await this.playOggFile(filePath, `${sound}.ogg`);
   }
 
-  async playTTS(text: string): Promise<void> {
+  get hasTts(): boolean {
+    return !!this.ttsApiKey;
+  }
+
+  /** Indonesian TTS (default) */
+  async playTTS(text: string): Promise<boolean> {
+    return this._generateTTS(text, 'edge-tts/id-ID-ArdiNeural', 'id');
+  }
+
+  /** English TTS (en-GB-RyanNeural) */
+  async playTTSEnglish(text: string): Promise<boolean> {
+    return this._generateTTS(text, 'edge-tts/en-GB-RyanNeural', 'en');
+  }
+
+  private async _generateTTS(text: string, model: string, lang: string): Promise<boolean> {
     if (!this.ttsApiKey) {
       this.logger.warn('TTS_API_KEY not set, skipping TTS announcement.');
-      return;
+      return false;
     }
 
-    const tmpFile = path.join(this.soundsDir, `__tts_temp.mp3`);
-    const oggFile = path.join(this.soundsDir, `__tts_temp.ogg`);
+    // Cache: hash(model + text) → ogg file supaya tidak hit API berulang
+    const textHash = createHash('sha256').update(`${model}:${text}`).digest('hex').slice(0, 16);
+    const cachedOgg = path.join(this.soundsDir, `__tts_cache_${lang}_${textHash}.ogg`);
 
     try {
+      if (fs.existsSync(cachedOgg) && fs.statSync(cachedOgg).size > 0) {
+        this.logger.debug(`TTS cache hit: ${cachedOgg}`);
+        await this.playOggFile(cachedOgg, `TTS(${lang}): "${text.slice(0, 60)}..."`);
+        return true;
+      }
+
+      const tmpFile = path.join(this.soundsDir, `__tts_temp_${lang}.mp3`);
+
       const url = new URL(this.ttsApiUrl);
       url.searchParams.set('response_format', 'json');
 
@@ -180,12 +204,12 @@ export class DiscordBotService implements OnModuleInit, OnModuleDestroy {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${this.ttsApiKey}`,
         },
-        body: JSON.stringify({ model: 'edge-tts/id-ID-ArdiNeural', input: text }),
+        body: JSON.stringify({ model, input: text }),
       });
 
       if (!response.ok) {
         this.logger.warn(`TTS API returned status ${response.status}, skipping.`);
-        return;
+        return false;
       }
 
       const contentType = response.headers.get('content-type') || '';
@@ -195,7 +219,7 @@ export class DiscordBotService implements OnModuleInit, OnModuleDestroy {
           json.audio || json.data || json.base64 || (typeof json === 'string' ? json : null);
         if (!audioBase64) {
           this.logger.warn('TTS API returned JSON without audio field, skipping.');
-          return;
+          return false;
         }
         const audioBuffer = Buffer.from(audioBase64, 'base64');
         await fs.promises.writeFile(tmpFile, audioBuffer);
@@ -206,7 +230,7 @@ export class DiscordBotService implements OnModuleInit, OnModuleDestroy {
 
       if (!fs.existsSync(tmpFile) || fs.statSync(tmpFile).size === 0) {
         this.logger.warn('TTS API returned empty audio, skipping playback.');
-        return;
+        return false;
       }
 
       await execa(ffmpegPath, [
@@ -219,16 +243,16 @@ export class DiscordBotService implements OnModuleInit, OnModuleDestroy {
         'libopus',
         '-b:a',
         '24k',
-        oggFile,
+        cachedOgg,
       ]);
 
-      await this.playOggFile(oggFile, `TTS: "${text.slice(0, 60)}..."`);
+      await fs.promises.unlink(tmpFile).catch(() => {});
+
+      await this.playOggFile(cachedOgg, `TTS(${lang}): "${text.slice(0, 60)}..."`);
+      return true;
     } catch (error: any) {
       this.logger.warn(`TTS playback failed: ${error.message}`);
-    } finally {
-      for (const f of [tmpFile, oggFile]) {
-        fs.unlink(f, () => {});
-      }
+      return false;
     }
   }
 

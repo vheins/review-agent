@@ -71,6 +71,15 @@ export class ReviewEngineService {
     @Optional() private readonly discordBot?: DiscordBotService,
   ) {}
 
+  private isTtsAllowed(pr: PullRequest): boolean {
+    const config = this.config.getAppConfig();
+    const owner = pr.repository.nameWithOwner.split('/')[0];
+    if (config.ttsIncludedOwners.length > 0) {
+      return config.ttsIncludedOwners.includes(owner);
+    }
+    return !config.ttsExcludedOwners.includes(owner);
+  }
+
   private toPrInfo(pr: PullRequest): PrInfo {
     const repo = pr.repository.nameWithOwner;
     return {
@@ -167,12 +176,14 @@ export class ReviewEngineService {
       this.updateReviewStep(pr, 'processing', 'Preparing review context');
       this.logger.log(`Starting review for PR #${pr.number}: ${pr.title}`);
 
-      // 0a. TTS announcement
-      this.discordBot
-        ?.playTTS(`Reviewing PR from ${pr.author?.login || 'unknown'}: ${pr.title}`)
-        .catch(err => {
-          this.logger.warn(`TTS announcement error: ${err.message}`);
-        });
+      // 0a. TTS announcement (skip if owner excluded)
+      if (this.isTtsAllowed(pr)) {
+        this.discordBot
+          ?.playTTS(`Reviewing PR from ${pr.author?.login || 'unknown'}: ${pr.title}`)
+          .catch(err => {
+            this.logger.warn(`TTS announcement error: ${err.message}`);
+          });
+      }
 
       // 0. Check if already merged
       if (pr.merged) {
@@ -529,24 +540,42 @@ export class ReviewEngineService {
         await this.gamification.awardPoints(prEntity.author, 10, 'PR Approved by AI');
       }
 
-      // 16. Discord soundboard (TTS priority, then default beep)
+      // 16. Discord TTS announcement with sound fallback (skip if owner excluded)
       if (agentDecision === 'APPROVE' || agentDecision === 'REQUEST_CHANGES') {
-        const ttsText = summaryMessage
-          ? summaryMessage
-              .replace(/[*#_`~\[\]]/g, '')
-              .trim()
-              .slice(0, 200)
-          : '';
-        if (ttsText) {
-          this.discordBot?.playTTS(ttsText).catch(err => {
-            this.logger.warn(`Discord TTS error: ${err.message}`);
-          });
+        if (this.isTtsAllowed(pr)) {
+          const decisionLabel = agentDecision === 'APPROVE' ? 'Approved' : 'Reject';
+          const ttsPrefix = `PR Nomor ${pr.number} sudah di ${decisionLabel}.`;
+          const ttsSummary = summaryMessage
+            ? summaryMessage
+                .replace(/[*#_`~\[\]]/g, '')
+                .trim()
+                .slice(0, 200)
+            : '';
+          const ttsSuffix = agentDecision === 'REQUEST_CHANGES' ? ' Segera Perbaiki.' : '';
+          const ttsText = `${ttsPrefix} ${ttsSummary}${ttsSuffix}`.trim();
+          if (ttsText && this.discordBot?.hasTts) {
+            const ttsOk = await this.discordBot.playTTS(ttsText).catch(() => false);
+            if (!ttsOk) {
+              await this.discordBot
+                ?.playSound(agentDecision === 'APPROVE' ? 'approved' : 'rejected')
+                .catch(err => {
+                  this.logger.warn(`Discord soundboard error: ${err.message}`);
+                });
+            }
+          } else {
+            await this.discordBot
+              ?.playSound(agentDecision === 'APPROVE' ? 'approved' : 'rejected')
+              .catch(err => {
+                this.logger.warn(`Discord soundboard error: ${err.message}`);
+              });
+          }
+        } else {
+          await this.discordBot
+            ?.playSound(agentDecision === 'APPROVE' ? 'approved' : 'rejected')
+            .catch(err => {
+              this.logger.warn(`Discord soundboard error: ${err.message}`);
+            });
         }
-        this.discordBot
-          ?.playSound(agentDecision === 'APPROVE' ? 'approved' : 'rejected')
-          .catch(err => {
-            this.logger.warn(`Discord soundboard error: ${err.message}`);
-          });
       }
 
       this.logger.log(`Successfully completed review for PR #${pr.number}`);
