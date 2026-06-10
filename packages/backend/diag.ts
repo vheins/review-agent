@@ -1,0 +1,10 @@
+import 'reflect-metadata';
+console.log('1: reflect loaded');
+import { NestFactory } from '@nestjs/core';
+console.log('2: nest factory loaded');
+const { AppModule } = await import('./src/app.module.js');
+console.log('3: app module loaded');
+const app = await NestFactory.createApplicationContext(AppModule, { logger: ['error', 'warn'] });
+console.log('4: app context created');
+await app.close();
+console.log('5: done');

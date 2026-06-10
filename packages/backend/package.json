@@ -6,15 +6,17 @@
   "scripts": {
     "dev": "nest start --watch",
     "build": "nest build",
-    "start": "NODE_NO_WARNINGS=1 tsx ./src/start.ts",
-    "start:continuous": "NODE_NO_WARNINGS=1 tsx ./src/start.ts",
+    "prestart": "nest build",
+    "prestart:continuous": "nest build",
+    "start": "NODE_NO_WARNINGS=1 node ./dist/start.js",
+    "start:continuous": "NODE_NO_WARNINGS=1 node ./dist/start.js",
     "debug": "nest start --debug --watch",
-    "once": "NODE_NO_WARNINGS=1 tsx ./src/once.ts",
-    "validate-migration": "NODE_NO_WARNINGS=1 tsx ./src/migration/migration-validator.cli.ts validate",
-    "soundboard:beep": "NODE_NO_WARNINGS=1 tsx ./src/soundboard-test.ts",
-    "soundboard:beep:approved": "NODE_NO_WARNINGS=1 tsx ./src/soundboard-test.ts approved",
-    "soundboard:beep:rejected": "NODE_NO_WARNINGS=1 tsx ./src/soundboard-test.ts rejected",
-    "tts": "NODE_NO_WARNINGS=1 tsx ./src/tts-cli.ts"
+    "once": "cross-env NODE_NO_WARNINGS=1 node ./dist/once.js",
+    "validate-migration": "cross-env NODE_NO_WARNINGS=1 node ./dist/migration/migration-validator.cli.js validate",
+    "soundboard:beep": "cross-env NODE_NO_WARNINGS=1 node ./dist/soundboard-test.js",
+    "soundboard:beep:approved": "cross-env NODE_NO_WARNINGS=1 node ./dist/soundboard-test.js approved",
+    "soundboard:beep:rejected": "cross-env NODE_NO_WARNINGS=1 node ./dist/soundboard-test.js rejected",
+    "tts": "cross-env NODE_NO_WARNINGS=1 node ./dist/tts-cli.js"
   },
   "dependencies": {
     "@discordjs/opus": "^0.10.0",

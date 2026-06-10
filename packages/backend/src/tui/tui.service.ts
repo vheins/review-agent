@@ -935,6 +935,10 @@ class BlessedBackend implements DashboardBackend {
     this.render();
   }
 
+  setGithubRateLimit(_data: GithubRateLimitData | null): void {
+    // no-op for BlessedBackend
+  }
+
   private rememberLastReview(summary: LastReviewSummary): void {
     if (!summary.pr || summary.decision === 'NONE') return;
     this.lastReviewHistory.unshift(summary);

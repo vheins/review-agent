@@ -21,4 +21,5 @@ dist/
 build/
 
 # TTS cache
-packages/backend/sounds/__tts_cache
+packages/backend/sounds/__tts_cache*
+!packages/backend/sounds/__tts_cache/
