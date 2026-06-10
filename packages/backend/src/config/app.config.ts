@@ -21,6 +21,9 @@ export interface AppConfig {
   staleInvolvesReviewDays: number;
   ttsIncludedOwners: string[];
   ttsExcludedOwners: string[];
+  issueSyncEnabled: boolean;
+  issueInterval: number;
+  fixIssue: boolean;
 }
 
 export default registerAs(
@@ -46,5 +49,8 @@ export default registerAs(
     ttsExcludedOwners: process.env.EXCLUDED_TTS_OWNERS
       ? process.env.EXCLUDED_TTS_OWNERS.split(',').map(s => s.trim())
       : [],
+    issueSyncEnabled: process.env.ISSUE_SYNC_ENABLED === 'true',
+    issueInterval: parseInt(process.env.ISSUE_INTERVAL || '600', 10),
+    fixIssue: process.env.FIX_ISSUE === 'true',
   }),
 );

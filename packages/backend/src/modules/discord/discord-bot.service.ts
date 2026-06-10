@@ -1,4 +1,11 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+  Optional,
+  Inject,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Client, GatewayIntentBits, VoiceChannel } from 'discord.js';
 import {
@@ -33,19 +40,27 @@ export class DiscordBotService implements OnModuleInit, OnModuleDestroy {
   private ttsApiUrl = '';
   private ttsApiKey = '';
 
-  constructor(private configService: ConfigService) {
+  private ttsMuteStartHour: number;
+  private ttsMuteEndHour: number;
+
+  constructor(@Optional() @Inject(ConfigService) private configService?: ConfigService) {
     const soundDisabled = process.env.DISCORD_SOUND_DISABLED === 'true';
-    this.enabled = !soundDisabled && this.configService.get('DISCORD_BOT_ENABLED', false);
-    this.token = this.configService.get('DISCORD_BOT_TOKEN', '');
-    this.guildId = this.configService.get('DISCORD_GUILD_ID', '');
-    this.voiceChannelId = this.configService.get('DISCORD_VOICE_CHANNEL_ID', '');
-    const configured = this.configService.get<string>('DISCORD_SOUNDS_DIR', '');
+    this.enabled =
+      !soundDisabled && (this.configService?.get('DISCORD_BOT_ENABLED', false) ?? false);
+    this.token = this.configService?.get('DISCORD_BOT_TOKEN', '') ?? '';
+    this.guildId = this.configService?.get('DISCORD_GUILD_ID', '') ?? '';
+    this.voiceChannelId = this.configService?.get('DISCORD_VOICE_CHANNEL_ID', '') ?? '';
+    const configured = this.configService?.get<string>('DISCORD_SOUNDS_DIR', '') ?? '';
     this.soundsDir = configured || path.join(PACKAGE_ROOT, 'sounds');
-    this.ttsApiUrl = this.configService.get(
-      'TTS_API_URL',
-      'http://localhost:20128/v1/audio/speech',
+    this.ttsApiUrl =
+      this.configService?.get('TTS_API_URL', 'http://localhost:20128/v1/audio/speech') ??
+      'http://localhost:20128/v1/audio/speech';
+    this.ttsApiKey = this.configService?.get('TTS_API_KEY', '') ?? '';
+    this.ttsMuteStartHour = parseInt(
+      this.configService?.get('TTS_MUTE_START_HOUR', '9') ?? '9',
+      10,
     );
-    this.ttsApiKey = this.configService.get('TTS_API_KEY', '');
+    this.ttsMuteEndHour = parseInt(this.configService?.get('TTS_MUTE_END_HOUR', '10') ?? '10', 10);
   }
 
   async onModuleInit(): Promise<void> {
@@ -123,6 +138,12 @@ export class DiscordBotService implements OnModuleInit, OnModuleDestroy {
   private async playOggFile(filePath: string, label: string): Promise<void> {
     const vc = await this.getVoiceChannel();
     if (!vc) return;
+    if (this.isTtsMuteHour()) {
+      this.logger.log(
+        `Sound muted (${label}) — active hours ${this.ttsMuteStartHour}:00-${this.ttsMuteEndHour}:00.`,
+      );
+      return;
+    }
     if (!fs.existsSync(filePath)) {
       this.logger.warn(`Sound file not found: ${filePath}, skipping playback.`);
       return;
@@ -164,6 +185,14 @@ export class DiscordBotService implements OnModuleInit, OnModuleDestroy {
 
   get hasTts(): boolean {
     return !!this.ttsApiKey;
+  }
+
+  isTtsMuteHour(): boolean {
+    const hour = new Date().getHours();
+    if (this.ttsMuteStartHour < this.ttsMuteEndHour) {
+      return hour >= this.ttsMuteStartHour && hour < this.ttsMuteEndHour;
+    }
+    return hour >= this.ttsMuteStartHour || hour < this.ttsMuteEndHour;
   }
 
   /** Indonesian TTS (default) */

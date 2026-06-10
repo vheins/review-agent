@@ -1,12 +1,14 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
 import { ReviewEngineService } from './modules/review/review-engine.service.js';
+import { IssueResolverService } from './modules/issue/issue-resolver.service.js';
 import { DiscordBotService } from './modules/discord/discord-bot.service.js';
 import { TuiService } from './tui/tui.service.js';
 import { applyRuntimeFlags } from './runtime/runtime-flags.js';
 import 'reflect-metadata';
 
 const REVIEW_INTERVAL = parseInt(process.env.REVIEW_INTERVAL || '600', 10);
+const ISSUE_INTERVAL = parseInt(process.env.ISSUE_INTERVAL || '600', 10);
 let tui: TuiService | null = null;
 const runtimeFlags = applyRuntimeFlags();
 
@@ -15,7 +17,7 @@ function updateHeader(cycleCount: number, status: string): void {
 
   const now = new Date().toLocaleTimeString('en-GB', { hour12: false });
   tui.updateHeader(
-    ` {cyan-fg}{bold}PR Review Agent{/}  {yellow-fg}Cycle ${cycleCount}{/}  ${status}  {gray-fg}Interval ${REVIEW_INTERVAL}s{/}  {gray-fg}${now}{/}  {gray-fg}q / Ctrl+C to exit{/}`,
+    ` {cyan-fg}{bold}Review Agent{/}  {yellow-fg}Cycle ${cycleCount}{/}  ${status}  {gray-fg}PR:${REVIEW_INTERVAL}s Issue:${ISSUE_INTERVAL}s{/}  {gray-fg}${now}{/}  {gray-fg}q / Ctrl+C to exit{/}`,
   );
 }
 
@@ -37,6 +39,7 @@ async function bootstrap() {
   });
 
   const reviewEngine = app.get(ReviewEngineService);
+  const issueResolver = app.get(IssueResolverService);
   const discordBot = app.get(DiscordBotService);
   tui = app.get(TuiService);
   await tui.init();
@@ -75,14 +78,25 @@ async function bootstrap() {
   while (true) {
     cycleCount++;
     try {
-      updateHeader(cycleCount, `{green-fg}Running review cycle{/}`);
-      tui?.addLog(`── Cycle #${cycleCount} ──`);
+      updateHeader(cycleCount, `{green-fg}Running PR review cycle{/}`);
+      tui?.addLog(`── Cycle #${cycleCount} [PR Review] ──`);
       await reviewEngine.runAll();
     } catch (error) {
-      const msg = `[NestJS] Error during review run: ${error.message}`;
+      const msg = `[NestJS] Error during PR review run: ${error.message}`;
       tui?.addLog(msg);
-      updateHeader(cycleCount, `{red-fg}Cycle failed{/}`);
+      updateHeader(cycleCount, `{red-fg}PR review cycle failed{/}`);
     }
+
+    try {
+      updateHeader(cycleCount, `{green-fg}Running issue resolution cycle{/}`);
+      tui?.addLog(`── Cycle #${cycleCount} [Issue Resolution] ──`);
+      await issueResolver.runAll();
+    } catch (error) {
+      const msg = `[NestJS] Error during issue resolution run: ${error.message}`;
+      tui?.addLog(msg);
+      updateHeader(cycleCount, `{red-fg}Issue cycle failed{/}`);
+    }
+
     await countdown(cycleCount, REVIEW_INTERVAL);
   }
 }

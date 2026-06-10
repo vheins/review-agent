@@ -22,18 +22,18 @@ export class RepositoryManagerService {
     this.logger.log('[Manager] Syncing repositories from open PRs');
     const start = Date.now();
     const prs = await this.github.fetchOpenPRs();
-    
+
     const syncedRepos: Repository[] = [];
     const seen = new Set<string>();
 
     for (const pr of prs) {
       const fullName = pr.repository.nameWithOwner;
       if (seen.has(fullName)) continue;
-      
+
       const [owner, name] = fullName.split('/');
-      
+
       let repo = await this.repoRepository.findOne({
-        where: { owner, name }
+        where: { owner, name },
       });
 
       if (repo) {
@@ -55,7 +55,9 @@ export class RepositoryManagerService {
       seen.add(fullName);
     }
 
-    this.logger.log(`[Manager] Synced ${syncedRepos.length} repositories in ${Date.now() - start}ms`);
+    this.logger.log(
+      `[Manager] Synced ${syncedRepos.length} repositories in ${Date.now() - start}ms`,
+    );
     return syncedRepos;
   }
 
@@ -72,10 +74,15 @@ export class RepositoryManagerService {
   /**
    * Prepare repository locally for review (clone/fetch and checkout)
    */
-  async prepareRepository(repoName: string, headRef: string, baseRef: string, prNumber?: number): Promise<string> {
+  async prepareRepository(
+    repoName: string,
+    headRef: string,
+    baseRef: string,
+    prNumber?: number,
+  ): Promise<string> {
     this.logger.log(`[Manager] Preparing local repository: ${repoName} (branch: ${headRef})`);
     const start = Date.now();
-    
+
     const appConfig = this.config.getAppConfig();
     const workspaceDir = appConfig.workspaceDir;
     const repoDir = path.join(workspaceDir, repoName.replace('/', '-'));
@@ -84,12 +91,18 @@ export class RepositoryManagerService {
 
     if (await fs.pathExists(repoDir)) {
       if (await this.isShallowRepository(repoDir)) {
-        this.logger.warn(`[Manager] Existing repository is shallow, recreating full clone at ${repoDir}`);
+        this.logger.warn(
+          `[Manager] Existing repository is shallow, recreating full clone at ${repoDir}`,
+        );
         await fs.remove(repoDir);
         await this.cloneRepository(repoName, repoDir);
       } else {
         this.logger.debug(`[Manager] Updating existing repository at ${repoDir}`);
-        await this.github.execaVerbose('git', ['config', 'remote.origin.fetch', '+refs/heads/*:refs/remotes/origin/*'], { cwd: repoDir });
+        await this.github.execaVerbose(
+          'git',
+          ['config', 'remote.origin.fetch', '+refs/heads/*:refs/remotes/origin/*'],
+          { cwd: repoDir },
+        );
         await this.github.execaVerbose('git', ['fetch', 'origin'], { cwd: repoDir });
       }
     } else {
@@ -101,21 +114,70 @@ export class RepositoryManagerService {
     await this.github.execaVerbose('git', ['merge', '--abort'], { cwd: repoDir, allowFail: true });
     await this.github.execaVerbose('git', ['am', '--abort'], { cwd: repoDir, allowFail: true });
     await this.github.execaVerbose('git', ['rebase', '--abort'], { cwd: repoDir, allowFail: true });
-    await this.github.execaVerbose('git', ['reset', '--hard', 'HEAD'], { cwd: repoDir, allowFail: true });
+    await this.github.execaVerbose('git', ['reset', '--hard', 'HEAD'], {
+      cwd: repoDir,
+      allowFail: true,
+    });
 
     this.logger.debug(`[Manager] Checking out branch: ${headRef}`);
     try {
       await this.github.execaVerbose('git', ['checkout', headRef], { cwd: repoDir });
-      await this.github.execaVerbose('git', ['reset', '--hard', `origin/${headRef}`], { cwd: repoDir, allowFail: true });
+      await this.github.execaVerbose('git', ['reset', '--hard', `origin/${headRef}`], {
+        cwd: repoDir,
+        allowFail: true,
+      });
       await this.github.execaVerbose('git', ['clean', '-fd'], { cwd: repoDir, allowFail: true });
     } catch (e) {
       this.logger.warn(`[Manager] Checkout failed, trying fetch fallback: ${e.message}`);
       const fetchTarget = prNumber ? `pull/${prNumber}/head` : headRef;
       await this.github.execaVerbose('git', ['fetch', 'origin', fetchTarget], { cwd: repoDir });
-      await this.github.execaVerbose('git', ['checkout', '-B', headRef, 'FETCH_HEAD'], { cwd: repoDir });
+      await this.github.execaVerbose('git', ['checkout', '-B', headRef, 'FETCH_HEAD'], {
+        cwd: repoDir,
+      });
     }
 
     this.logger.log(`[Manager] Repository ready in ${Date.now() - start}ms`);
+    return repoDir;
+  }
+
+  async prepareIssueRepository(repoName: string): Promise<string> {
+    this.logger.log(`[Manager] Preparing local repository for issue work: ${repoName}`);
+    const start = Date.now();
+
+    const appConfig = this.config.getAppConfig();
+    const workspaceDir = appConfig.workspaceDir;
+    const repoDir = path.join(workspaceDir, repoName.replace('/', '-'));
+
+    await fs.ensureDir(workspaceDir);
+
+    if (await fs.pathExists(repoDir)) {
+      if (await this.isShallowRepository(repoDir)) {
+        this.logger.warn(
+          `[Manager] Existing repository is shallow, recreating full clone at ${repoDir}`,
+        );
+        await fs.remove(repoDir);
+        await this.cloneRepository(repoName, repoDir);
+      } else {
+        this.logger.debug(`[Manager] Updating existing repository at ${repoDir}`);
+        await this.github.execaVerbose(
+          'git',
+          ['config', 'remote.origin.fetch', '+refs/heads/*:refs/remotes/origin/*'],
+          { cwd: repoDir },
+        );
+        await this.github.execaVerbose('git', ['fetch', 'origin'], { cwd: repoDir });
+      }
+    } else {
+      await this.cloneRepository(repoName, repoDir);
+    }
+
+    await this.github.execaVerbose('git', ['merge', '--abort'], { cwd: repoDir, allowFail: true });
+    await this.github.execaVerbose('git', ['reset', '--hard', 'HEAD'], {
+      cwd: repoDir,
+      allowFail: true,
+    });
+    await this.github.execaVerbose('git', ['clean', '-fd'], { cwd: repoDir, allowFail: true });
+
+    this.logger.log(`[Manager] Issue repository ready in ${Date.now() - start}ms`);
     return repoDir;
   }
 
@@ -126,10 +188,14 @@ export class RepositoryManagerService {
 
   private async isShallowRepository(repoDir: string): Promise<boolean> {
     try {
-      const { stdout } = await this.github.execaVerbose('git', ['rev-parse', '--is-shallow-repository'], {
-        cwd: repoDir,
-        silent: true,
-      });
+      const { stdout } = await this.github.execaVerbose(
+        'git',
+        ['rev-parse', '--is-shallow-repository'],
+        {
+          cwd: repoDir,
+          silent: true,
+        },
+      );
 
       return stdout.trim() === 'true';
     } catch {

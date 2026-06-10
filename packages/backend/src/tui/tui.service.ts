@@ -1,5 +1,9 @@
 import { Injectable, OnModuleDestroy, Logger } from '@nestjs/common';
-import { getRandomTamagotchiSpriteTemplate, getTamagotchiSpriteTemplateBySeed, renderBitmap } from './sprites/index.js';
+import {
+  getRandomTamagotchiSpriteTemplate,
+  getTamagotchiSpriteTemplateBySeed,
+  renderBitmap,
+} from './sprites/index.js';
 import type { PixelSpriteTemplate, SpriteMood } from './sprites/index.js';
 
 export interface PrInfo {
@@ -26,6 +30,12 @@ export interface LastReviewSummary {
   durationMs?: number;
 }
 
+export interface GithubRateLimitData {
+  remaining: number;
+  limit: number;
+  reset: Date | null;
+}
+
 interface DashboardBackend {
   init(): Promise<boolean>;
   destroy(): void;
@@ -39,6 +49,7 @@ interface DashboardBackend {
   clearCountdown(): void;
   setCurrentReview(pr: PrInfo | null, status: CurrentReview['status'], step: string): void;
   setLastReview(summary: LastReviewSummary): void;
+  setGithubRateLimit(data: GithubRateLimitData | null): void;
 }
 
 function prKey(pr: Pick<PrInfo, 'repo' | 'number'>): string {
@@ -57,7 +68,10 @@ interface ConsoleLogEntry {
 }
 
 function stripAnsi(s: string): string {
-  return s.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '').replace(/\x1B\][0-9;]*[a-zA-Z]/g, '').trim();
+  return s
+    .replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '')
+    .replace(/\x1B\][0-9;]*[a-zA-Z]/g, '')
+    .trim();
 }
 
 function stripTags(s: string): string {
@@ -237,16 +251,39 @@ export class TuiService implements OnModuleDestroy {
     this.destroy();
   }
 
-  addLog(message: string): void { this.backend?.addLog(message); }
-  addAgentLog(message: string): void { this.backend?.addAgentLog(message); }
-  setPrs(prs: PrInfo[]): void { this.backend?.setPrs(prs); }
-  setPrState(pr: Pick<PrInfo, 'repo' | 'number'>, state: PrState): void { this.backend?.setPrState(pr, state); }
-  updateHeader(text: string): void { this.backend?.updateHeader(text); }
-  setStats(stats: { total: number; success: number; failed: number; skipped: number }): void { this.backend?.setStats(stats); }
-  setCountdown(seconds: number): void { this.backend?.setCountdown(seconds); }
-  clearCountdown(): void { this.backend?.clearCountdown(); }
-  setCurrentReview(pr: PrInfo | null, status: CurrentReview['status'], step: string): void { this.backend?.setCurrentReview(pr, status, step); }
-  setLastReview(summary: LastReviewSummary): void { this.backend?.setLastReview(summary); }
+  addLog(message: string): void {
+    this.backend?.addLog(message);
+  }
+  addAgentLog(message: string): void {
+    this.backend?.addAgentLog(message);
+  }
+  setPrs(prs: PrInfo[]): void {
+    this.backend?.setPrs(prs);
+  }
+  setPrState(pr: Pick<PrInfo, 'repo' | 'number'>, state: PrState): void {
+    this.backend?.setPrState(pr, state);
+  }
+  updateHeader(text: string): void {
+    this.backend?.updateHeader(text);
+  }
+  setStats(stats: { total: number; success: number; failed: number; skipped: number }): void {
+    this.backend?.setStats(stats);
+  }
+  setCountdown(seconds: number): void {
+    this.backend?.setCountdown(seconds);
+  }
+  clearCountdown(): void {
+    this.backend?.clearCountdown();
+  }
+  setCurrentReview(pr: PrInfo | null, status: CurrentReview['status'], step: string): void {
+    this.backend?.setCurrentReview(pr, status, step);
+  }
+  setLastReview(summary: LastReviewSummary): void {
+    this.backend?.setLastReview(summary);
+  }
+  setGithubRateLimit(data: GithubRateLimitData | null): void {
+    this.backend?.setGithubRateLimit(data);
+  }
 }
 
 // ─── Blessed Backend (full TUI) ────────────────────────────────────
@@ -261,7 +298,8 @@ class BlessedBackend implements DashboardBackend {
   private readonly lastReviewHistory: LastReviewSummary[] = [];
   private stats = { total: 0, success: 0, failed: 0, skipped: 0 };
   private countdownText = '';
-  private theme: TuiThemeName = process.env.TUI_THEME === 'amber-terminal' ? 'amber-terminal' : 'retro-green';
+  private theme: TuiThemeName =
+    process.env.TUI_THEME === 'amber-terminal' ? 'amber-terminal' : 'retro-green';
   private currentReviewStartedAt: number | null = null;
 
   private screen: any;
@@ -298,10 +336,7 @@ class BlessedBackend implements DashboardBackend {
       const minBackendLogH = 3;
       const minAgentLogH = 3;
       const maxTopH = Math.max(resultH + minQueueH, availH - minBackendLogH - minAgentLogH);
-      const topH = Math.min(
-        maxTopH,
-        Math.max(resultH + minQueueH, Math.round(availH * 0.66)),
-      );
+      const topH = Math.min(maxTopH, Math.max(resultH + minQueueH, Math.round(availH * 0.66)));
       let remainingH = Math.max(minBackendLogH + minAgentLogH, availH - topH);
       let midH = Math.max(minBackendLogH, Math.floor(remainingH * 0.45));
       let botH = remainingH - midH;
@@ -313,56 +348,105 @@ class BlessedBackend implements DashboardBackend {
       const queueH = Math.max(minQueueH, topH - resultH);
 
       this.headerBox = blessed.text({
-        parent: this.screen, top: 0, left: 0, width: '100%', height: headerH,
-        content: '', style: { fg: theme.header, bg: 'black', bold: true }, tags: true,
+        parent: this.screen,
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: headerH,
+        content: '',
+        style: { fg: theme.header, bg: 'black', bold: true },
+        tags: true,
       });
 
       this.currentReviewBox = blessed.box({
-        parent: this.screen, top: headerH, left: 0, width: '34%' as any, height: topH,
+        parent: this.screen,
+        top: headerH,
+        left: 0,
+        width: '34%' as any,
+        height: topH,
         label: ' Current Review ',
         border: { type: 'line', fg: theme.current } as any,
         style: { fg: 'white', bg: 'black', border: { fg: theme.current } },
-        scrollable: true, alwaysScroll: true, scrollbar: { ch: '│' } as any, tags: true,
+        scrollable: true,
+        alwaysScroll: true,
+        scrollbar: { ch: '│' } as any,
+        tags: true,
       } as any);
 
       this.lastReviewBox = blessed.box({
-        parent: this.screen, top: headerH, left: '34%' as any, width: '66%' as any, height: resultH,
+        parent: this.screen,
+        top: headerH,
+        left: '34%' as any,
+        width: '66%' as any,
+        height: resultH,
         label: ' Review Result ',
         border: { type: 'line', fg: theme.resultIdle } as any,
         style: { fg: 'white', bg: 'black', border: { fg: theme.resultIdle } },
-        scrollable: true, alwaysScroll: true, scrollbar: { ch: '│' } as any, tags: true,
+        scrollable: true,
+        alwaysScroll: true,
+        scrollbar: { ch: '│' } as any,
+        tags: true,
       } as any);
 
       this.queueBox = blessed.box({
-        parent: this.screen, top: headerH + resultH, left: '34%' as any, width: '66%' as any, height: queueH,
+        parent: this.screen,
+        top: headerH + resultH,
+        left: '34%' as any,
+        width: '66%' as any,
+        height: queueH,
         label: ' Review Queue ',
         border: { type: 'line', fg: theme.queue } as any,
         style: { fg: 'white', bg: 'black', border: { fg: theme.queue } },
-        scrollable: true, alwaysScroll: true, scrollbar: { ch: '│' } as any, tags: true,
+        scrollable: true,
+        alwaysScroll: true,
+        scrollbar: { ch: '│' } as any,
+        tags: true,
       } as any);
 
       this.backendLogWidget = blessed.log({
-        parent: this.screen, top: headerH + topH, left: 0, width: '100%', height: midH,
+        parent: this.screen,
+        top: headerH + topH,
+        left: 0,
+        width: '100%',
+        height: midH,
         label: ' Review Logs [BE] ',
         border: { type: 'line', fg: theme.backend } as any,
         style: { fg: 'white', bg: 'black', border: { fg: theme.backend } },
-        scrollable: true, alwaysScroll: true, scrollbar: { ch: '│' } as any, tags: true,
+        scrollable: true,
+        alwaysScroll: true,
+        scrollbar: { ch: '│' } as any,
+        tags: true,
       } as any);
 
       this.agentLogWidget = blessed.log({
-        parent: this.screen, top: headerH + topH + midH, left: 0, width: '100%', height: botH,
+        parent: this.screen,
+        top: headerH + topH + midH,
+        left: 0,
+        width: '100%',
+        height: botH,
         label: ' Review Logs [AG] ',
         border: { type: 'line', fg: theme.agent } as any,
         style: { fg: 'white', bg: 'black', border: { fg: theme.agent } },
-        scrollable: true, alwaysScroll: true, scrollbar: { ch: '│' } as any, tags: true,
+        scrollable: true,
+        alwaysScroll: true,
+        scrollbar: { ch: '│' } as any,
+        tags: true,
       } as any);
 
       this.countdownBox = blessed.text({
-        parent: this.screen, top: headerH + topH + midH + botH, left: 0, width: '100%', height: 1,
-        content: '', style: { fg: theme.runtime, bg: 'black' }, tags: true,
+        parent: this.screen,
+        top: headerH + topH + midH + botH,
+        left: 0,
+        width: '100%',
+        height: 1,
+        content: '',
+        style: { fg: theme.runtime, bg: 'black' },
+        tags: true,
       });
 
-      this.screen.key(['escape', 'q', 'C-c'], () => { process.emit('SIGINT'); });
+      this.screen.key(['escape', 'q', 'C-c'], () => {
+        process.emit('SIGINT');
+      });
       this.screen.key(['t'], () => {
         this.theme = this.theme === 'retro-green' ? 'amber-terminal' : 'retro-green';
         this.applyTheme();
@@ -383,9 +467,13 @@ class BlessedBackend implements DashboardBackend {
     if (this.isDestroyed) return;
     this.restoreConsole();
     this.restoreNestLogger();
-    try { if (this.screen) this.screen.destroy(); } catch {}
+    try {
+      if (this.screen) this.screen.destroy();
+    } catch {}
     this.restoreStdout();
-    try { process.stdin.setRawMode(false); } catch {}
+    try {
+      process.stdin.setRawMode(false);
+    } catch {}
     this.isDestroyed = true;
   }
 
@@ -396,7 +484,12 @@ class BlessedBackend implements DashboardBackend {
       if (tui.isRendering || !tui.isInitialized) {
         return (tui.originalStdoutWrite as any)(chunk, encoding, cb);
       }
-      const str = typeof chunk === 'string' ? chunk : Buffer.isBuffer(chunk) ? chunk.toString() : String(chunk);
+      const str =
+        typeof chunk === 'string'
+          ? chunk
+          : Buffer.isBuffer(chunk)
+            ? chunk.toString()
+            : String(chunk);
       tui.routeCapturedOutput(str);
       if (typeof cb === 'function') cb();
       return true;
@@ -473,7 +566,9 @@ class BlessedBackend implements DashboardBackend {
   private render(): void {
     if (this.isInitialized && !this.isDestroyed) {
       this.isRendering = true;
-      try { this.screen.render(); } catch {}
+      try {
+        this.screen.render();
+      } catch {}
       this.isRendering = false;
     }
   }
@@ -484,7 +579,9 @@ class BlessedBackend implements DashboardBackend {
     for (const method of methods) {
       this.originalConsole[method] = console[method].bind(console);
       console[method] = function (...args: any[]) {
-        const raw = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
+        const raw = args
+          .map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a)))
+          .join(' ');
         tui.routeCapturedOutput(raw);
       };
     }
@@ -524,22 +621,30 @@ class BlessedBackend implements DashboardBackend {
     if (isInstanceLoader(cleaned)) return;
     const safe = escapeBraces ? cleaned.replace(/{/g, '\uFF5B').replace(/}/g, '\uFF5D') : cleaned;
     const theme = this.getThemePalette();
-    try { this.backendLogWidget.add(`[{${theme.backend}-fg}{bold}${timeStr()}{/}] ${safe}`); } catch {}
+    try {
+      this.backendLogWidget.add(`[{${theme.backend}-fg}{bold}${timeStr()}{/}] ${safe}`);
+    } catch {}
     this.render();
   }
 
-  addLog(message: string): void { this.writeLog(message, false); }
+  addLog(message: string): void {
+    this.writeLog(message, false);
+  }
   addAgentLog(message: string): void {
     if (!this.isInitialized || this.isDestroyed || !this.agentLogWidget) return;
     const cleaned = stripAnsi(message);
     if (!cleaned) return;
     const safe = cleaned.replace(/{/g, '\uFF5B').replace(/}/g, '\uFF5D');
     const theme = this.getThemePalette();
-    try { this.agentLogWidget.add(`[{${theme.agent}-fg}{bold}${timeStr()}{/}] ${safe}`); } catch {}
+    try {
+      this.agentLogWidget.add(`[{${theme.agent}-fg}{bold}${timeStr()}{/}] ${safe}`);
+    } catch {}
     this.render();
   }
 
-  private addLogRaw(message: string): void { this.writeLog(message, true); }
+  private addLogRaw(message: string): void {
+    this.writeLog(message, true);
+  }
 
   private routeCapturedOutput(message: string): void {
     if (!message || isTerminalControlOnly(message)) return;
@@ -560,8 +665,13 @@ class BlessedBackend implements DashboardBackend {
   }
 
   setPrs(prs: PrInfo[]): void {
-    this.prs.clear(); this.prOrder = [];
-    for (const pr of prs) { const key = prKey(pr); this.prs.set(key, { info: pr, state: 'queued' }); this.prOrder.push(key); }
+    this.prs.clear();
+    this.prOrder = [];
+    for (const pr of prs) {
+      const key = prKey(pr);
+      this.prs.set(key, { info: pr, state: 'queued' });
+      this.prOrder.push(key);
+    }
     this.updatePrList();
   }
 
@@ -638,39 +748,66 @@ class BlessedBackend implements DashboardBackend {
       }
       let icon: string, color: string;
       switch (e.state) {
-        case 'queued':     icon = '○'; color = '{white-fg}'; break;
-        case 'processing': icon = '●'; color = '{yellow-fg}'; break;
-        case 'completed':  icon = '✓'; color = '{green-fg}';  break;
-        case 'failed':     icon = '✗'; color = '{red-fg}';    break;
-        case 'skipped':    icon = '–'; color = '{gray-fg}';   break;
+        case 'queued':
+          icon = '○';
+          color = '{white-fg}';
+          break;
+        case 'processing':
+          icon = '●';
+          color = '{yellow-fg}';
+          break;
+        case 'completed':
+          icon = '✓';
+          color = '{green-fg}';
+          break;
+        case 'failed':
+          icon = '✗';
+          color = '{red-fg}';
+          break;
+        case 'skipped':
+          icon = '–';
+          color = '{gray-fg}';
+          break;
       }
       const badge = this.getQueueBadge(e.state);
-      lines.push(` ${color}${icon}{/} {bold}${badge}{/} #${String(e.info.number)} ${e.info.repo.replace(/{/g, '\uFF5B').replace(/}/g, '\uFF5D')}`);
-      lines.push(`   ${e.info.title.substring(0, 55).replace(/{/g, '\uFF5B').replace(/}/g, '\uFF5D')}`);
+      lines.push(
+        ` ${color}${icon}{/} {bold}${badge}{/} #${String(e.info.number)} ${e.info.repo.replace(/{/g, '\uFF5B').replace(/}/g, '\uFF5D')}`,
+      );
+      lines.push(
+        `   ${e.info.title.substring(0, 55).replace(/{/g, '\uFF5B').replace(/}/g, '\uFF5D')}`,
+      );
       if (e.info.author) {
-        lines.push(`   {gray-fg}@${e.info.author.replace(/{/g, '\uFF5B').replace(/}/g, '\uFF5D')}{/}`);
+        lines.push(
+          `   {gray-fg}@${e.info.author.replace(/{/g, '\uFF5B').replace(/}/g, '\uFF5D')}{/}`,
+        );
       }
     }
     if (lines.length === 0) {
       lines.push(' {gray-fg}┄┄ ACTIVE ┄┄{/}');
       lines.push(' {bold}BUTUH LAWAN{/}');
     }
-    try { this.queueBox.setContent(lines.join('\n')); } catch {}
+    try {
+      this.queueBox.setContent(lines.join('\n'));
+    } catch {}
     this.render();
   }
 
   updateHeader(text: string): void {
     if (!this.isInitialized || this.isDestroyed || !this.headerBox) return;
-    try { this.headerBox.setContent(text); } catch {}
+    try {
+      this.headerBox.setContent(text);
+    } catch {}
     this.render();
   }
 
   setStats(stats: { total: number; success: number; failed: number; skipped: number }): void {
-    this.stats = stats; this.updateFooter();
+    this.stats = stats;
+    this.updateFooter();
   }
 
   setCountdown(seconds: number): void {
-    const m = Math.floor(seconds / 60), s = seconds % 60;
+    const m = Math.floor(seconds / 60),
+      s = seconds % 60;
     this.countdownText = `Next review in ${m}m ${s}s`;
     this.updateFooter();
   }
@@ -678,7 +815,9 @@ class BlessedBackend implements DashboardBackend {
   clearCountdown(): void {
     this.countdownText = '';
     if (!this.countdownBox) return;
-    try { this.countdownBox.setContent(''); } catch {}
+    try {
+      this.countdownBox.setContent('');
+    } catch {}
     this.render();
   }
 
@@ -723,7 +862,12 @@ class BlessedBackend implements DashboardBackend {
     const nextPrKey = pr?.key ?? null;
     if (!pr) {
       this.currentReviewStartedAt = null;
-    } else if (status === 'processing' && (this.currentReviewStartedAt === null || previousPrKey !== nextPrKey || this.currentReview.status !== 'processing')) {
+    } else if (
+      status === 'processing' &&
+      (this.currentReviewStartedAt === null ||
+        previousPrKey !== nextPrKey ||
+        this.currentReview.status !== 'processing')
+    ) {
       this.currentReviewStartedAt = Date.now();
     }
     this.currentReview = { pr, status, step };
@@ -742,7 +886,8 @@ class BlessedBackend implements DashboardBackend {
       const history = this.lastReviewHistory
         .slice(0, 3)
         .map(item => {
-          const mark = item.decision === 'APPROVE' ? '✓' : item.decision === 'REQUEST_CHANGES' ? '!' : '×';
+          const mark =
+            item.decision === 'APPROVE' ? '✓' : item.decision === 'REQUEST_CHANGES' ? '!' : '×';
           return `${mark}#${item.pr?.number ?? '?'}`;
         })
         .join('  ');
@@ -752,29 +897,33 @@ class BlessedBackend implements DashboardBackend {
       this.render();
       return;
     }
-    const decisionColor = summary.decision === 'APPROVE'
-      ? '{green-fg}'
-      : summary.decision === 'REQUEST_CHANGES'
-        ? '{red-fg}'
-        : '{yellow-fg}';
-    const borderColor = summary.decision === 'APPROVE'
-      ? theme.resultApprove
-      : summary.decision === 'REQUEST_CHANGES'
-        ? theme.resultReject
-        : theme.resultFailed;
+    const decisionColor =
+      summary.decision === 'APPROVE'
+        ? '{green-fg}'
+        : summary.decision === 'REQUEST_CHANGES'
+          ? '{red-fg}'
+          : '{yellow-fg}';
+    const borderColor =
+      summary.decision === 'APPROVE'
+        ? theme.resultApprove
+        : summary.decision === 'REQUEST_CHANGES'
+          ? theme.resultReject
+          : theme.resultFailed;
     const decisionText = summary.decision === 'REQUEST_CHANGES' ? 'REJECT' : summary.decision;
-    const decisionBadge = summary.decision === 'APPROVE'
-      ? '<< APPROVE >>'
-      : summary.decision === 'REQUEST_CHANGES'
-        ? '<< REJECT >>'
-        : '<< FAILED >>';
+    const decisionBadge =
+      summary.decision === 'APPROVE'
+        ? '<< APPROVE >>'
+        : summary.decision === 'REQUEST_CHANGES'
+          ? '<< REJECT >>'
+          : '<< FAILED >>';
     const title = summary.pr.title.substring(0, 34).replace(/{/g, '\uFF5B').replace(/}/g, '\uFF5D');
     const author = summary.pr.author ? `@${summary.pr.author}` : 'unknown';
     const timing = `${shortTime(summary.finishedAt)}  ${shortDuration(summary.durationMs)}`;
     const history = this.lastReviewHistory
       .slice(0, 3)
       .map(item => {
-        const mark = item.decision === 'APPROVE' ? '✓' : item.decision === 'REQUEST_CHANGES' ? '!' : '×';
+        const mark =
+          item.decision === 'APPROVE' ? '✓' : item.decision === 'REQUEST_CHANGES' ? '!' : '×';
         return `${mark}#${item.pr?.number ?? '?'}`;
       })
       .join('  ');
@@ -814,28 +963,46 @@ class BlessedBackend implements DashboardBackend {
       this.currentReviewBox.setContent(
         ` {gray-fg}┄┄ STATUS ┄┄{/}\n {bold}[IDLE]{/} Waiting for next PR\n {gray-fg}┄┄ TELEMETRY ┄┄{/}\n {gray-fg}AUTHOR{/} --\n {gray-fg}POSITION{/} --/--   {gray-fg}ELAPSED{/} --\n {gray-fg}┄┄ MODE ┄┄{/}\n {bold}MODE STANDBY{/}`,
       );
-      this.render(); return;
+      this.render();
+      return;
     }
     let icon: string, statusColor: string;
     switch (c.status) {
-      case 'idle':       icon = '○'; statusColor = '{white-fg}'; break;
-      case 'processing': icon = '●'; statusColor = '{yellow-fg}'; break;
-      case 'completed':  icon = '✓'; statusColor = '{green-fg}';  break;
-      case 'failed':     icon = '✗'; statusColor = '{red-fg}';    break;
+      case 'idle':
+        icon = '○';
+        statusColor = '{white-fg}';
+        break;
+      case 'processing':
+        icon = '●';
+        statusColor = '{yellow-fg}';
+        break;
+      case 'completed':
+        icon = '✓';
+        statusColor = '{green-fg}';
+        break;
+      case 'failed':
+        icon = '✗';
+        statusColor = '{red-fg}';
+        break;
     }
     const title = c.pr.title.substring(0, 50).replace(/{/g, '\uFF5B').replace(/}/g, '\uFF5D');
     const repoText = `${c.pr.repo}`.replace(/{/g, '\uFF5B').replace(/}/g, '\uFF5D');
-    const author = c.pr.author ? `@${c.pr.author.replace(/{/g, '\uFF5B').replace(/}/g, '\uFF5D')}` : 'unknown';
+    const author = c.pr.author
+      ? `@${c.pr.author.replace(/{/g, '\uFF5B').replace(/}/g, '\uFF5D')}`
+      : 'unknown';
     const position = this.getCurrentReviewQueuePosition();
     const elapsed = this.getCurrentReviewElapsedText();
-    const modeLabel = c.status === 'failed'
-      ? 'MODE ALERT'
-      : c.status === 'completed'
-        ? 'MODE RESULT'
-        : c.status === 'processing'
-          ? 'MODE REVIEW'
-          : 'MODE STANDBY';
-    const stepText = c.step ? `\n {yellow-fg}→{/} ${c.step.replace(/{/g, '\uFF5B').replace(/}/g, '\uFF5D')}` : '';
+    const modeLabel =
+      c.status === 'failed'
+        ? 'MODE ALERT'
+        : c.status === 'completed'
+          ? 'MODE RESULT'
+          : c.status === 'processing'
+            ? 'MODE REVIEW'
+            : 'MODE STANDBY';
+    const stepText = c.step
+      ? `\n {yellow-fg}→{/} ${c.step.replace(/{/g, '\uFF5B').replace(/}/g, '\uFF5D')}`
+      : '';
     try {
       this.currentReviewBox.setContent(
         ` {gray-fg}┄┄ STATUS ┄┄{/}\n ${statusColor}${icon}{/} {bold}#${c.pr.number}{/} ${repoText}\n {gray-fg}${title}{/}\n {gray-fg}┄┄ TELEMETRY ┄┄{/}\n {gray-fg}AUTHOR{/} ${author}\n {gray-fg}POSITION{/} ${position}   {gray-fg}ELAPSED{/} ${elapsed}\n {gray-fg}┄┄ MODE ┄┄{/}\n {bold}${modeLabel}{/}${stepText}`,
@@ -861,12 +1028,14 @@ class ConsoleBackend implements DashboardBackend {
   private activeSpriteOwnerKey: string | null = null;
   private stats = { total: 0, success: 0, failed: 0, skipped: 0 };
   private countdownText = '';
+  private githubRateLimit: GithubRateLimitData | null = null;
   private isDestroyed = false;
   private readonly isInteractive = !!(process.stdout.isTTY && process.stdin.isTTY);
   private headerText = 'PR Review Agent';
   private readonly logEntries: ConsoleLogEntry[] = [];
   private logFocus: LogFocus = 'all';
-  private theme: TuiThemeName = process.env.TUI_THEME === 'amber-terminal' ? 'amber-terminal' : 'retro-green';
+  private theme: TuiThemeName =
+    process.env.TUI_THEME === 'amber-terminal' ? 'amber-terminal' : 'retro-green';
   private logScrollOffset = 0;
   private lastLogsViewportHeight = 0;
   private stdinListener?: (chunk: Buffer | string) => void;
@@ -904,7 +1073,9 @@ class ConsoleBackend implements DashboardBackend {
     this.isDestroyed = true;
     if (this.isInteractive) {
       if (this.stdinListener) process.stdin.off('data', this.stdinListener);
-      try { process.stdin.setRawMode(false); } catch {}
+      try {
+        process.stdin.setRawMode(false);
+      } catch {}
       this.stopAnimationLoop();
       this.restoreConsole();
       this.restoreNestLogger();
@@ -918,7 +1089,9 @@ class ConsoleBackend implements DashboardBackend {
 
   private enterInteractiveMode(): void {
     process.stdout.write('\x1b[?1049h\x1b[?25l\x1b[2J\x1b[H');
-    try { process.stdin.setRawMode(true); } catch {}
+    try {
+      process.stdin.setRawMode(true);
+    } catch {}
     process.stdin.resume();
     this.stdinListener = (chunk: Buffer | string) => {
       const text = typeof chunk === 'string' ? chunk : chunk.toString('utf8');
@@ -1116,7 +1289,12 @@ class ConsoleBackend implements DashboardBackend {
       if (tui.isRendering || !tui.isInteractive || !tui.originalStdoutWrite) {
         return (tui.originalStdoutWrite as any)?.(chunk, encoding, cb) ?? true;
       }
-      const str = typeof chunk === 'string' ? chunk : Buffer.isBuffer(chunk) ? chunk.toString() : String(chunk);
+      const str =
+        typeof chunk === 'string'
+          ? chunk
+          : Buffer.isBuffer(chunk)
+            ? chunk.toString()
+            : String(chunk);
       tui.routeCapturedOutput(str);
       if (typeof cb === 'function') cb();
       return true;
@@ -1136,7 +1314,9 @@ class ConsoleBackend implements DashboardBackend {
     for (const method of methods) {
       this.originalConsole[method] = console[method].bind(console);
       console[method] = function (...args: any[]) {
-        const raw = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
+        const raw = args
+          .map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a)))
+          .join(' ');
         tui.routeCapturedOutput(raw);
       };
     }
@@ -1291,8 +1471,8 @@ class ConsoleBackend implements DashboardBackend {
     return isSleeping
       ? Math.floor(this.animationTick / 5)
       : status === 'processing'
-      ? Math.floor(this.animationTick / 3)
-      : Math.floor(this.animationTick / 4);
+        ? Math.floor(this.animationTick / 3)
+        : Math.floor(this.animationTick / 4);
   }
 
   private getAvatarDirectionGlyph(
@@ -1318,9 +1498,9 @@ class ConsoleBackend implements DashboardBackend {
   }
 
   private buildSparseLine(width: number, spacing: number, phase: number, glyph = '·'): string {
-    const chars = Array.from({ length: width }, (_, index) => (
-      (index + phase) % Math.max(2, spacing) === 0 ? glyph : ' '
-    ));
+    const chars = Array.from({ length: width }, (_, index) =>
+      (index + phase) % Math.max(2, spacing) === 0 ? glyph : ' ',
+    );
     return chars.join('');
   }
 
@@ -1341,7 +1521,11 @@ class ConsoleBackend implements DashboardBackend {
   ): string[] {
     if (width < 30) {
       return [
-        this.alignLeftRight(`${left.label} ${left.value}`, `${center.label} ${center.value}`, width),
+        this.alignLeftRight(
+          `${left.label} ${left.value}`,
+          `${center.label} ${center.value}`,
+          width,
+        ),
         this.alignLeftRight(`${right.label} ${right.value}`, '', width),
       ];
     }
@@ -1397,13 +1581,17 @@ class ConsoleBackend implements DashboardBackend {
       .replace(/\bseconds?\b/gi, 's')
       .trim();
 
-    return Array.from(new Set([
-      `CORE ${stateTag} ${rawHeader}`.trim(),
-      `CORE ${stateTag} ${compactHeader}`.trim(),
-      `${stateTag} ${compactHeader}`.trim(),
-      `${stateTag} ${ultraCompact}`.trim(),
-      stateTag,
-    ].filter(Boolean)));
+    return Array.from(
+      new Set(
+        [
+          `CORE ${stateTag} ${rawHeader}`.trim(),
+          `CORE ${stateTag} ${compactHeader}`.trim(),
+          `${stateTag} ${compactHeader}`.trim(),
+          `${stateTag} ${ultraCompact}`.trim(),
+          stateTag,
+        ].filter(Boolean),
+      ),
+    );
   }
 
   private buildFooterOpsVariants(): string[] {
@@ -1416,16 +1604,18 @@ class ConsoleBackend implements DashboardBackend {
     const hintsCompact = `  jk queue  JK log  H/L edge  a/b/g/e${theme}`;
     const hintsTiny = `  jk q  JK log${theme}`;
 
-    return Array.from(new Set([
-      `OPS  ${stats}${countdown}${hintsFull}`,
-      `OPS  ${stats}${countdown}${hintsCompact}`,
-      `OPS  ${stats}${countdown}${hintsTiny}`,
-      `OPS  ${stats}${countdown}`,
-      `OPS  ${statsCompact}${countdown}`,
-      `OPS  ${statsTiny}${countdown}`,
-      countdown ? `OPS  ${this.countdownText}` : `OPS  ${statsTiny}`,
-      `OPS  t${this.stats.total}`,
-    ]));
+    return Array.from(
+      new Set([
+        `OPS  ${stats}${countdown}${hintsFull}`,
+        `OPS  ${stats}${countdown}${hintsCompact}`,
+        `OPS  ${stats}${countdown}${hintsTiny}`,
+        `OPS  ${stats}${countdown}`,
+        `OPS  ${statsCompact}${countdown}`,
+        `OPS  ${statsTiny}${countdown}`,
+        countdown ? `OPS  ${this.countdownText}` : `OPS  ${statsTiny}`,
+        `OPS  t${this.stats.total}`,
+      ]),
+    );
   }
 
   private buildFooterBar(width: number): string {
@@ -1516,7 +1706,9 @@ class ConsoleBackend implements DashboardBackend {
       case 'agent':
         return entry.channel === 'agent';
       case 'errors':
-        return /\b(error|failed|warn|rejected|conflict|exception|timeout|exit code [1-9]|sql|abort)\b/i.test(entry.message);
+        return /\b(error|failed|warn|rejected|conflict|exception|timeout|exit code [1-9]|sql|abort)\b/i.test(
+          entry.message,
+        );
       default:
         return true;
     }
@@ -1597,11 +1789,8 @@ class ConsoleBackend implements DashboardBackend {
     const history = this.lastReviewHistory
       .slice(0, 3)
       .map(item => {
-        const verdict = item.decision === 'APPROVE'
-          ? 'ok'
-          : item.decision === 'REQUEST_CHANGES'
-          ? 'fix'
-          : 'fail';
+        const verdict =
+          item.decision === 'APPROVE' ? 'ok' : item.decision === 'REQUEST_CHANGES' ? 'fix' : 'fail';
         return `#${item.pr?.number ?? '?'} ${verdict}`;
       })
       .join('  |  ');
@@ -1706,7 +1895,9 @@ class ConsoleBackend implements DashboardBackend {
       const timestamp = match?.[1] ?? '--:--:--';
       const body = match?.[2] ?? entry.message;
       const source = entry.channel === 'agent' ? 'AG' : 'BE';
-      const actionMatch = body.match(/^(?:→\s+)?(Read|Open|Edit|Write|Update|Create|Delete)\s+(.+)$/i);
+      const actionMatch = body.match(
+        /^(?:→\s+)?(Read|Open|Edit|Write|Update|Create|Delete)\s+(.+)$/i,
+      );
 
       if (actionMatch) {
         const action = actionMatch[1]!;
@@ -1717,7 +1908,9 @@ class ConsoleBackend implements DashboardBackend {
           const prev = sourceEntries[cursor]!;
           const prevMatch = prev.message.match(/^\[(\d{2}:\d{2}:\d{2})\]\s*(.*)$/);
           const prevBody = prevMatch?.[2] ?? prev.message;
-          const prevAction = prevBody.match(/^(?:→\s+)?(Read|Open|Edit|Write|Update|Create|Delete)\s+(.+)$/i);
+          const prevAction = prevBody.match(
+            /^(?:→\s+)?(Read|Open|Edit|Write|Update|Create|Delete)\s+(.+)$/i,
+          );
           if (!prevAction || prevAction[1]!.toLowerCase() !== action.toLowerCase()) {
             break;
           }
@@ -1727,9 +1920,10 @@ class ConsoleBackend implements DashboardBackend {
 
         const normalizedAction = action[0]!.toUpperCase() + action.slice(1).toLowerCase();
         const tail = this.extractPathHint(latestTarget) ?? this.truncate(latestTarget, 24);
-        const summary = count > 1
-          ? `→ ${normalizedAction} ${count} files · ${tail}`
-          : `→ ${normalizedAction} ${latestTarget}`;
+        const summary =
+          count > 1
+            ? `→ ${normalizedAction} ${count} files · ${tail}`
+            : `→ ${normalizedAction} ${latestTarget}`;
         compacted.push(this.truncate(`[${source} ${timestamp}] ${summary}`, width));
         index = cursor;
         continue;
@@ -1777,8 +1971,9 @@ class ConsoleBackend implements DashboardBackend {
   }
 
   private extractReviewTargetHint(text: string): string | null {
-    const prTarget = text.match(/\b(?:on|for)\s+([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+#\d+)\b/i)?.[1]
-      ?? text.match(/\bPR\s+([A-Za-z0-9_.-]+#\d+)\b/i)?.[1];
+    const prTarget =
+      text.match(/\b(?:on|for)\s+([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+#\d+)\b/i)?.[1] ??
+      text.match(/\bPR\s+([A-Za-z0-9_.-]+#\d+)\b/i)?.[1];
     if (prTarget) {
       return this.truncate(`PR ${prTarget}`, 24);
     }
@@ -1794,7 +1989,9 @@ class ConsoleBackend implements DashboardBackend {
   private extractGithubPullRequestTargetHint(text: string): string | null {
     const owner = text.match(/"owner":"([^"]+)"/i)?.[1];
     const repo = text.match(/"repo":"([^"]+)"/i)?.[1];
-    const prNumber = text.match(/"(?:pullNumber|prNumber|number|pull_number|pr_number)":"?(\d+)"?/i)?.[1];
+    const prNumber = text.match(
+      /"(?:pullNumber|prNumber|number|pull_number|pr_number)":"?(\d+)"?/i,
+    )?.[1];
 
     if (!owner || !repo) return null;
     const repoTarget = `${owner}/${repo}${prNumber ? `#${prNumber}` : ''}`;
@@ -1821,9 +2018,16 @@ class ConsoleBackend implements DashboardBackend {
   } {
     const latestAgentLog = this.getLatestLogEntry('agent');
     if (!latestAgentLog) {
-      const staleMs = this.currentReviewStepUpdatedAt ? Math.max(0, Date.now() - this.currentReviewStepUpdatedAt) : null;
+      const staleMs = this.currentReviewStepUpdatedAt
+        ? Math.max(0, Date.now() - this.currentReviewStepUpdatedAt)
+        : null;
       if (staleMs !== null && staleMs >= 30_000) {
-        return { ageMs: staleMs, label: `Step stale ${shortDuration(staleMs)}`, boardLabel: `STALE ${shortDuration(staleMs)}`, isSearch: false };
+        return {
+          ageMs: staleMs,
+          label: `Step stale ${shortDuration(staleMs)}`,
+          boardLabel: `STALE ${shortDuration(staleMs)}`,
+          isSearch: false,
+        };
       }
       return { ageMs: null, label: 'No output', boardLabel: 'NO LOG', isSearch: false };
     }
@@ -1831,7 +2035,9 @@ class ConsoleBackend implements DashboardBackend {
     const ageMs = Math.max(0, Date.now() - latestAgentLog.timestamp);
     const body = this.extractLogBody(latestAgentLog.message).toLowerCase();
     const isSearch = /\b(glob|grep|search|find)\b/.test(body);
-    const stepAgeMs = this.currentReviewStepUpdatedAt ? Math.max(0, Date.now() - this.currentReviewStepUpdatedAt) : null;
+    const stepAgeMs = this.currentReviewStepUpdatedAt
+      ? Math.max(0, Date.now() - this.currentReviewStepUpdatedAt)
+      : null;
 
     if (stepAgeMs !== null && stepAgeMs >= 90_000 && ageMs >= 30_000) {
       return {
@@ -1893,7 +2099,11 @@ class ConsoleBackend implements DashboardBackend {
         if (/(get_diff|list_files|get_files|get_pull_request)/.test(githubMethod)) {
           return ['Reading the diff...', githubTarget ?? 'Looking closer.'];
         }
-        if (/(create_review_comment|update_review_comment|reply_to_review_comment|add_comment)/.test(githubMethod)) {
+        if (
+          /(create_review_comment|update_review_comment|reply_to_review_comment|add_comment)/.test(
+            githubMethod,
+          )
+        ) {
           return ['Leaving a note...', githubTarget ?? 'This needs context.'];
         }
         if (/approve/.test(githubMethod)) {
@@ -1960,14 +2170,29 @@ class ConsoleBackend implements DashboardBackend {
 
     const normalizedStep = step.toLowerCase();
     const mappings: Array<{ patterns: string[]; lines: [string, string] }> = [
-      { patterns: ['executing ai review', 'starting raw', 'raw review'], lines: ['Reviewing...', 'Thinking hard.'] },
+      {
+        patterns: ['executing ai review', 'starting raw', 'raw review'],
+        lines: ['Reviewing...', 'Thinking hard.'],
+      },
       { patterns: ['scanning', 'scan'], lines: ['Scanning...', 'Looking for clues.'] },
-      { patterns: ['analyzing', 'analyse', 'analyze'], lines: ['Analyzing...', 'Patterns detected.'] },
+      {
+        patterns: ['analyzing', 'analyse', 'analyze'],
+        lines: ['Analyzing...', 'Patterns detected.'],
+      },
       { patterns: ['checking build', 'build'], lines: ['Checking build...', 'Hope it passes.'] },
       { patterns: ['running tests', 'test'], lines: ['Running tests...', 'No flakes, please.'] },
-      { patterns: ['parsing comments', 'reading comments', 'comments'], lines: ['Reading notes...', 'Got some clues.'] },
-      { patterns: ['generating review', 'writing review'], lines: ['Writing review...', 'Be precise.'] },
-      { patterns: ['posting review', 'sending review'], lines: ['Sending it...', 'Ship the verdict.'] },
+      {
+        patterns: ['parsing comments', 'reading comments', 'comments'],
+        lines: ['Reading notes...', 'Got some clues.'],
+      },
+      {
+        patterns: ['generating review', 'writing review'],
+        lines: ['Writing review...', 'Be precise.'],
+      },
+      {
+        patterns: ['posting review', 'sending review'],
+        lines: ['Sending it...', 'Ship the verdict.'],
+      },
       { patterns: ['applying fix', 'patch'], lines: ['Patching...', 'Let me fix that.'] },
       { patterns: ['waiting', 'queued'], lines: ['On standby...', 'Queue moving.'] },
     ];
@@ -2076,10 +2301,7 @@ class ConsoleBackend implements DashboardBackend {
     return decorated;
   }
 
-  private getSceneStatusBoardLines(
-    status: CurrentReview['status'],
-    prNumber?: number,
-  ): string[] {
+  private getSceneStatusBoardLines(status: CurrentReview['status'], prNumber?: number): string[] {
     if (status !== 'processing') return [];
     const outputState = this.getCurrentReviewOutputState();
     return [
@@ -2089,11 +2311,7 @@ class ConsoleBackend implements DashboardBackend {
     ];
   }
 
-  private decorateSceneStatusBoard(
-    lines: string[],
-    width: number,
-    boardLines: string[],
-  ): string[] {
+  private decorateSceneStatusBoard(lines: string[], width: number, boardLines: string[]): string[] {
     if (boardLines.length === 0 || lines.length < 7 || width < 28) {
       return lines;
     }
@@ -2103,7 +2321,10 @@ class ConsoleBackend implements DashboardBackend {
     const boardWidth = boardInnerWidth + 2;
     const boardCol = Math.max(1, Math.min(width - boardWidth - 1, Math.floor(width * 0.1)));
     const boardHeight = boardLines.length + 4;
-    const boardRow = Math.max(1, Math.min(lines.length - boardHeight, Math.floor(lines.length * 0.56)));
+    const boardRow = Math.max(
+      1,
+      Math.min(lines.length - boardHeight, Math.floor(lines.length * 0.56)),
+    );
     const top = ` /${'-'.repeat(boardInnerWidth)}\\`;
     const bottom = ` \\${'_'.repeat(boardInnerWidth)}/`;
     const postOffset = Math.max(2, Math.floor(boardInnerWidth * 0.22));
@@ -2152,9 +2373,18 @@ class ConsoleBackend implements DashboardBackend {
     const decorated = lines.map(line => this.pad(line, width));
     const isMinimal = width < 34;
     const isCompact = width < 52;
-    const cloudDrift = this.getPingPongOffset(Math.max(2, Math.min(8, Math.floor(width * 0.08))), 4);
-    const sparkleDrift = this.getPingPongOffset(Math.max(2, Math.min(6, Math.floor(width * 0.06))), 3);
-    const accentDrift = this.getPingPongOffset(Math.max(2, Math.min(5, Math.floor(width * 0.05))), 2);
+    const cloudDrift = this.getPingPongOffset(
+      Math.max(2, Math.min(8, Math.floor(width * 0.08))),
+      4,
+    );
+    const sparkleDrift = this.getPingPongOffset(
+      Math.max(2, Math.min(6, Math.floor(width * 0.06))),
+      3,
+    );
+    const accentDrift = this.getPingPongOffset(
+      Math.max(2, Math.min(5, Math.floor(width * 0.05))),
+      2,
+    );
     const directionGlyph = this.getAvatarDirectionGlyph(status, isSleeping, decision);
     const skyTop = 0;
     const skyMid = Math.max(1, Math.floor(lines.length * 0.18));
@@ -2170,78 +2400,201 @@ class ConsoleBackend implements DashboardBackend {
     const radarMid = Math.max(2, spriteBand - 1);
     const radarLow = Math.min(lines.length - 3, spriteBand + 3);
 
-    for (let row = 1; row < Math.max(1, lines.length - 2); row += (isMinimal ? 4 : 3)) {
+    for (let row = 1; row < Math.max(1, lines.length - 2); row += isMinimal ? 4 : 3) {
       decorated[row] = this.overlayIntoBlank(
         decorated[row]!,
         0,
-        this.buildSparseLine(width, isMinimal ? 10 : isCompact ? 8 : 7, row + cloudDrift, isSleeping ? '·' : '.'),
+        this.buildSparseLine(
+          width,
+          isMinimal ? 10 : isCompact ? 8 : 7,
+          row + cloudDrift,
+          isSleeping ? '·' : '.',
+        ),
       );
     }
 
     const motifs = isSleeping
       ? [
           { row: skyTop, col: Math.max(1, Math.floor(width * 0.08)), text: 'z' },
-          ...(!isMinimal ? [{ row: skyTop, col: Math.max(1, Math.floor(width * 0.22)), text: '·' }] : []),
-          { row: skyMid, col: Math.max(1, Math.floor(width * 0.12)), text: isMinimal ? '.' : '.-.' },
-          ...(!isMinimal ? [{ row: skyMid, col: Math.max(1, Math.floor(width * 0.72)), text: isCompact ? '()' : '(__)' }] : []),
+          ...(!isMinimal
+            ? [{ row: skyTop, col: Math.max(1, Math.floor(width * 0.22)), text: '·' }]
+            : []),
+          {
+            row: skyMid,
+            col: Math.max(1, Math.floor(width * 0.12)),
+            text: isMinimal ? '.' : '.-.',
+          },
+          ...(!isMinimal
+            ? [
+                {
+                  row: skyMid,
+                  col: Math.max(1, Math.floor(width * 0.72)),
+                  text: isCompact ? '()' : '(__)',
+                },
+              ]
+            : []),
           { row: spriteBand, col: Math.max(1, Math.floor(width * 0.82)), text: '*' },
           { row: skyMid + 1, col: leftCoreX, text: isMinimal ? 'oo' : 'o==o' },
-          ...(!isMinimal ? [
-            { row: skyMid + 2, col: leftCoreX, text: isCompact ? '|:|' : '|##|' },
-            { row: skyMid + 3, col: leftCoreX, text: 'o==o' },
-          ] : []),
-          ...(!isCompact ? [
-            { row: skyMid + 1, col: leftBusX, text: 'o--o' },
-            { row: skyMid + 2, col: leftBusX + 1, text: '\\/' },
-            { row: skyMid + 3, col: leftBusX, text: 'o--o' },
-          ] : []),
-          { row: radarTop, col: Math.max(1, centerX - (isMinimal ? 2 : 4)), text: isMinimal ? '.~.' : '.-~~-.' },
-          { row: radarMid, col: Math.max(1, centerX - (isMinimal ? 4 : 7)), text: isMinimal ? '/..\\' : isCompact ? '/ .. \\' : '/  ..  \\' },
-          ...(!isMinimal ? [{ row: radarLow, col: Math.max(1, centerX - (isCompact ? 4 : 6)), text: isCompact ? '\\.__./' : '\\_.__./' }] : []),
+          ...(!isMinimal
+            ? [
+                { row: skyMid + 2, col: leftCoreX, text: isCompact ? '|:|' : '|##|' },
+                { row: skyMid + 3, col: leftCoreX, text: 'o==o' },
+              ]
+            : []),
+          ...(!isCompact
+            ? [
+                { row: skyMid + 1, col: leftBusX, text: 'o--o' },
+                { row: skyMid + 2, col: leftBusX + 1, text: '\\/' },
+                { row: skyMid + 3, col: leftBusX, text: 'o--o' },
+              ]
+            : []),
+          {
+            row: radarTop,
+            col: Math.max(1, centerX - (isMinimal ? 2 : 4)),
+            text: isMinimal ? '.~.' : '.-~~-.',
+          },
+          {
+            row: radarMid,
+            col: Math.max(1, centerX - (isMinimal ? 4 : 7)),
+            text: isMinimal ? '/..\\' : isCompact ? '/ .. \\' : '/  ..  \\',
+          },
+          ...(!isMinimal
+            ? [
+                {
+                  row: radarLow,
+                  col: Math.max(1, centerX - (isCompact ? 4 : 6)),
+                  text: isCompact ? '\\.__./' : '\\_.__./',
+                },
+              ]
+            : []),
           { row: bushRow, col: Math.max(1, Math.floor(width * 0.09)), text: '/\\' },
-          ...(!isMinimal ? [{ row: bushRow, col: Math.max(1, Math.floor(width * 0.78)), text: '/\\' }] : []),
+          ...(!isMinimal
+            ? [{ row: bushRow, col: Math.max(1, Math.floor(width * 0.78)), text: '/\\' }]
+            : []),
           { row: grassRow, col: Math.max(1, Math.floor(width * 0.12)), text: ',v,' },
-          ...(!isMinimal ? [{ row: grassRow, col: Math.max(1, Math.floor(width * 0.43)), text: '(v)' }] : []),
-          ...(!isCompact ? [{ row: grassRow, col: Math.max(1, Math.floor(width * 0.73)), text: ',v,' }] : []),
-          { row: groundRow, col: Math.max(1, Math.floor(width * 0.18)), text: isMinimal ? '._._.' : isCompact ? '._.._.' : '._.._.._.' },
-          ...(!isMinimal ? [{ row: groundRow, col: Math.max(1, Math.floor(width * 0.58)), text: isCompact ? '._.' : '._.._.' }] : []),
+          ...(!isMinimal
+            ? [{ row: grassRow, col: Math.max(1, Math.floor(width * 0.43)), text: '(v)' }]
+            : []),
+          ...(!isCompact
+            ? [{ row: grassRow, col: Math.max(1, Math.floor(width * 0.73)), text: ',v,' }]
+            : []),
+          {
+            row: groundRow,
+            col: Math.max(1, Math.floor(width * 0.18)),
+            text: isMinimal ? '._._.' : isCompact ? '._.._.' : '._.._.._.',
+          },
+          ...(!isMinimal
+            ? [
+                {
+                  row: groundRow,
+                  col: Math.max(1, Math.floor(width * 0.58)),
+                  text: isCompact ? '._.' : '._.._.',
+                },
+              ]
+            : []),
         ]
       : [
           { row: skyTop, col: Math.max(1, Math.floor(width * 0.08) + cloudDrift), text: '.-.' },
-          ...(!isMinimal ? [{ row: skyTop, col: Math.max(1, Math.floor(width * 0.74)), text: isCompact ? '( )' : '(___)' }] : []),
+          ...(!isMinimal
+            ? [
+                {
+                  row: skyTop,
+                  col: Math.max(1, Math.floor(width * 0.74)),
+                  text: isCompact ? '( )' : '(___)',
+                },
+              ]
+            : []),
           { row: skyMid, col: Math.max(1, Math.floor(width * 0.14) + sparkleDrift), text: '*' },
-          ...(!isMinimal ? [{ row: skyMid, col: Math.max(1, Math.floor(width * 0.86) - sparkleDrift), text: 'o' }] : []),
+          ...(!isMinimal
+            ? [
+                {
+                  row: skyMid,
+                  col: Math.max(1, Math.floor(width * 0.86) - sparkleDrift),
+                  text: 'o',
+                },
+              ]
+            : []),
           { row: skyMid + 1, col: leftCoreX, text: isMinimal ? 'oo' : 'o==o' },
-          ...(!isMinimal ? [
-            { row: skyMid + 2, col: leftCoreX, text: isCompact ? '|:|' : '|::|' },
-            { row: skyMid + 3, col: leftCoreX, text: 'o==o' },
-          ] : []),
-          ...(!isCompact ? [
-            { row: skyMid + 1, col: leftBusX, text: 'o--o' },
-            { row: skyMid + 2, col: leftBusX - 1, text: '/\\/' },
-            { row: skyMid + 3, col: leftBusX, text: 'o--o' },
-            { row: skyMid + 1, col: rightGraphX, text: 'o--o' },
-            { row: skyMid + 2, col: rightGraphX - 1, text: '\\o/' },
-            { row: skyMid + 3, col: rightGraphX, text: 'o--o' },
-          ] : []),
-          { row: radarTop, col: Math.max(1, centerX - (isMinimal ? 3 : 5)), text: isMinimal ? '.~~.' : isCompact ? '.-~~-.' : '.-~~~~-.' },
-          { row: radarMid, col: Math.max(1, centerX - (isMinimal ? 4 : 8)), text: isMinimal ? '/..\\' : isCompact ? '/ .-. \\' : '/  .--.  \\' },
-          ...(!isMinimal ? [{
-            row: Math.max(radarMid + 1, 0),
-            col: Math.max(1, centerX - (isCompact ? 5 : 10)),
-            text: isCompact ? '| /\\ |' : '|  /  \\  |',
-          }] : []),
-          ...(!isCompact ? [{ row: radarLow, col: Math.max(1, centerX - 8), text: '\\__----__/' }] : []),
+          ...(!isMinimal
+            ? [
+                { row: skyMid + 2, col: leftCoreX, text: isCompact ? '|:|' : '|::|' },
+                { row: skyMid + 3, col: leftCoreX, text: 'o==o' },
+              ]
+            : []),
+          ...(!isCompact
+            ? [
+                { row: skyMid + 1, col: leftBusX, text: 'o--o' },
+                { row: skyMid + 2, col: leftBusX - 1, text: '/\\/' },
+                { row: skyMid + 3, col: leftBusX, text: 'o--o' },
+                { row: skyMid + 1, col: rightGraphX, text: 'o--o' },
+                { row: skyMid + 2, col: rightGraphX - 1, text: '\\o/' },
+                { row: skyMid + 3, col: rightGraphX, text: 'o--o' },
+              ]
+            : []),
+          {
+            row: radarTop,
+            col: Math.max(1, centerX - (isMinimal ? 3 : 5)),
+            text: isMinimal ? '.~~.' : isCompact ? '.-~~-.' : '.-~~~~-.',
+          },
+          {
+            row: radarMid,
+            col: Math.max(1, centerX - (isMinimal ? 4 : 8)),
+            text: isMinimal ? '/..\\' : isCompact ? '/ .-. \\' : '/  .--.  \\',
+          },
+          ...(!isMinimal
+            ? [
+                {
+                  row: Math.max(radarMid + 1, 0),
+                  col: Math.max(1, centerX - (isCompact ? 5 : 10)),
+                  text: isCompact ? '| /\\ |' : '|  /  \\  |',
+                },
+              ]
+            : []),
+          ...(!isCompact
+            ? [{ row: radarLow, col: Math.max(1, centerX - 8), text: '\\__----__/' }]
+            : []),
           { row: spriteBand, col: Math.max(1, Math.floor(width * 0.08)), text: directionGlyph },
-          ...(!isMinimal ? [{ row: Math.max(0, spriteBand + 1), col: Math.max(1, Math.floor(width * 0.78) - accentDrift), text: '*' }] : []),
+          ...(!isMinimal
+            ? [
+                {
+                  row: Math.max(0, spriteBand + 1),
+                  col: Math.max(1, Math.floor(width * 0.78) - accentDrift),
+                  text: '*',
+                },
+              ]
+            : []),
           { row: bushRow, col: Math.max(1, Math.floor(width * 0.08)), text: '/\\' },
-          { row: bushRow, col: Math.max(1, Math.floor(width * 0.46)), text: isMinimal ? '|' : '\\|/' },
-          ...(!isMinimal ? [{ row: bushRow, col: Math.max(1, Math.floor(width * 0.82)), text: '/\\' }] : []),
+          {
+            row: bushRow,
+            col: Math.max(1, Math.floor(width * 0.46)),
+            text: isMinimal ? '|' : '\\|/',
+          },
+          ...(!isMinimal
+            ? [{ row: bushRow, col: Math.max(1, Math.floor(width * 0.82)), text: '/\\' }]
+            : []),
           { row: grassRow, col: Math.max(1, Math.floor(width * 0.12)), text: ',v,' },
-          { row: grassRow, col: Math.max(1, Math.floor(width * 0.41)), text: isMinimal ? '*' : '*|*' },
-          ...(!isCompact ? [{ row: grassRow, col: Math.max(1, Math.floor(width * 0.73)), text: ',v,' }] : []),
-          { row: groundRow, col: Math.max(1, Math.floor(width * 0.16)), text: isMinimal ? '._._.' : isCompact ? '._/\\_.' : '._/\\_._/\\_.' },
-          ...(!isMinimal ? [{ row: groundRow, col: Math.max(1, Math.floor(width * 0.62)), text: isCompact ? '._.' : '._/\\_.' }] : []),
+          {
+            row: grassRow,
+            col: Math.max(1, Math.floor(width * 0.41)),
+            text: isMinimal ? '*' : '*|*',
+          },
+          ...(!isCompact
+            ? [{ row: grassRow, col: Math.max(1, Math.floor(width * 0.73)), text: ',v,' }]
+            : []),
+          {
+            row: groundRow,
+            col: Math.max(1, Math.floor(width * 0.16)),
+            text: isMinimal ? '._._.' : isCompact ? '._/\\_.' : '._/\\_._/\\_.',
+          },
+          ...(!isMinimal
+            ? [
+                {
+                  row: groundRow,
+                  col: Math.max(1, Math.floor(width * 0.62)),
+                  text: isCompact ? '._.' : '._/\\_.',
+                },
+              ]
+            : []),
         ];
 
     if (status === 'processing') {
@@ -2292,7 +2645,11 @@ class ConsoleBackend implements DashboardBackend {
     return decorated;
   }
 
-  private getLeftPanelHeights(bodyHeight: number): { lastReview: number; queue: number; logs: number } {
+  private getLeftPanelHeights(bodyHeight: number): {
+    lastReview: number;
+    queue: number;
+    logs: number;
+  } {
     const lastTarget = bodyHeight >= 30 ? 10 : bodyHeight >= 24 ? 9 : bodyHeight >= 20 ? 8 : 6;
     const lastMin = bodyHeight >= 20 ? 6 : 5;
     const queueMin = bodyHeight >= 24 ? 11 : bodyHeight >= 18 ? 9 : 7;
@@ -2373,19 +2730,53 @@ class ConsoleBackend implements DashboardBackend {
     const panels = [
       {
         key: 'result',
-        output: this.drawBox(1, 1, leftW, lastReviewH, resultTitle, lastReviewLines, lastReviewVisual.color, lastReviewVisual.color),
+        output: this.drawBox(
+          1,
+          1,
+          leftW,
+          lastReviewH,
+          resultTitle,
+          lastReviewLines,
+          lastReviewVisual.color,
+          lastReviewVisual.color,
+        ),
       },
       {
         key: 'queue',
-        output: this.drawBox(1, 1 + lastReviewH, leftW, queueH, queueTitle, queueLines, theme.queue),
+        output: this.drawBox(
+          1,
+          1 + lastReviewH,
+          leftW,
+          queueH,
+          queueTitle,
+          queueLines,
+          theme.queue,
+        ),
       },
       {
         key: 'current',
-        output: this.drawBox(leftW + 1, 1, rightW, bodyH, reviewTitle, reviewLines, theme.current, theme.current),
+        output: this.drawBox(
+          leftW + 1,
+          1,
+          rightW,
+          bodyH,
+          reviewTitle,
+          reviewLines,
+          theme.current,
+          theme.current,
+        ),
       },
       {
         key: 'runtime',
-        output: this.drawBox(1, rows - footerH + 1, cols, footerH, runtimeTitle, [this.buildFooterBar(cols - 2)], theme.runtime),
+        output: this.drawBox(
+          1,
+          rows - footerH + 1,
+          cols,
+          footerH,
+          runtimeTitle,
+          [this.buildFooterBar(cols - 2)],
+          theme.runtime,
+        ),
       },
     ];
 
@@ -2459,12 +2850,12 @@ class ConsoleBackend implements DashboardBackend {
     const offsets = isSleeping
       ? [0, 0, 1, 1, 0, 0, -1, -1]
       : decision === 'APPROVE'
-      ? [0, -1, -2, -1, 0, -1, 0, 1]
-      : decision === 'REQUEST_CHANGES' || decision === 'FAILED'
-      ? [1, 0, 1, 0, 1, 0, 0, 0]
-      : status === 'processing'
-      ? [0, -maxTravel, -maxTravel, -1, 0, maxTravel, maxTravel, 1]
-      : [-1, 0, 1, 0];
+        ? [0, -1, -2, -1, 0, -1, 0, 1]
+        : decision === 'REQUEST_CHANGES' || decision === 'FAILED'
+          ? [1, 0, 1, 0, 1, 0, 0, 0]
+          : status === 'processing'
+            ? [0, -maxTravel, -maxTravel, -1, 0, maxTravel, maxTravel, 1]
+            : [-1, 0, 1, 0];
     const offset = Math.max(-maxTravel, Math.min(maxTravel, offsets[phase % offsets.length] ?? 0));
     const top = Math.min(slack, Math.max(0, centeredTop + offset));
     return { top, bottom: slack - top };
@@ -2491,10 +2882,10 @@ class ConsoleBackend implements DashboardBackend {
     const mood: SpriteMood = isSleeping
       ? 'sleeping'
       : decision === 'REQUEST_CHANGES' || decision === 'FAILED'
-      ? 'failed'
-      : decision === 'APPROVE'
-      ? 'completed'
-      : status;
+        ? 'failed'
+        : decision === 'APPROVE'
+          ? 'completed'
+          : status;
     const frames = this.activeSprite.bitmaps[mood];
     const frameHold = isSleeping ? 5 : mood === 'processing' ? 3 : 6;
     const frameIndex = Math.floor(this.animationTick / frameHold) % Math.max(1, frames.length);
@@ -2505,21 +2896,21 @@ class ConsoleBackend implements DashboardBackend {
     const swayFrames = isSleeping
       ? [-1, -1, 0, 0, 1, 1, 0, 0]
       : decision === 'APPROVE'
-      ? [0, -1, 0, 1, 0, -1, 0, 1]
-      : decision === 'REQUEST_CHANGES' || decision === 'FAILED'
-      ? [-2, 2, -1, 1, -2, 2, 0, 0]
-      : status === 'processing'
-      ? [
-          -maxTravel,
-          -Math.max(1, Math.ceil(maxTravel * 0.66)),
-          -Math.max(1, Math.ceil(maxTravel * 0.33)),
-          Math.max(1, Math.ceil(maxTravel * 0.33)),
-          maxTravel,
-          Math.max(1, Math.ceil(maxTravel * 0.66)),
-          Math.max(1, Math.ceil(maxTravel * 0.33)),
-          -Math.max(1, Math.ceil(maxTravel * 0.33)),
-        ]
-      : [-1, 0, 1, 0];
+        ? [0, -1, 0, 1, 0, -1, 0, 1]
+        : decision === 'REQUEST_CHANGES' || decision === 'FAILED'
+          ? [-2, 2, -1, 1, -2, 2, 0, 0]
+          : status === 'processing'
+            ? [
+                -maxTravel,
+                -Math.max(1, Math.ceil(maxTravel * 0.66)),
+                -Math.max(1, Math.ceil(maxTravel * 0.33)),
+                Math.max(1, Math.ceil(maxTravel * 0.33)),
+                maxTravel,
+                Math.max(1, Math.ceil(maxTravel * 0.66)),
+                Math.max(1, Math.ceil(maxTravel * 0.33)),
+                -Math.max(1, Math.ceil(maxTravel * 0.33)),
+              ]
+            : [-1, 0, 1, 0];
     const swayIndex = this.getAvatarMotionPhase(status, isSleeping);
     const swayOffset = swayFrames[swayIndex % swayFrames.length] ?? 0;
     return {
@@ -2544,7 +2935,10 @@ class ConsoleBackend implements DashboardBackend {
     const left = Math.min(Math.max(0, centeredLeft + frame.swayOffset), maxLeft);
     const right = Math.min(width - 1, left + Math.max(0, frame.spriteWidth - 1));
     const top = Math.max(0, topPadding);
-    const bottom = Math.min(top + Math.max(0, frame.spriteHeight - 1), topPadding + Math.max(0, height - 1));
+    const bottom = Math.min(
+      top + Math.max(0, frame.spriteHeight - 1),
+      topPadding + Math.max(0, height - 1),
+    );
     return {
       left,
       right,
@@ -2561,7 +2955,9 @@ class ConsoleBackend implements DashboardBackend {
     const reaction = !this.currentReview.pr ? this.getRecentReaction() : null;
     const reactionDecision = reaction?.decision ?? 'NONE';
     const visualStatus = reaction
-      ? (reactionDecision === 'APPROVE' ? 'completed' : 'failed')
+      ? reactionDecision === 'APPROVE'
+        ? 'completed'
+        : 'failed'
       : this.currentReview.status;
     const visualDecision = reaction ? reactionDecision : this.getCurrentReviewDecision();
     const isSleeping = this.currentReview.status === 'idle' && !this.currentReview.pr && !reaction;
@@ -2575,11 +2971,8 @@ class ConsoleBackend implements DashboardBackend {
       this.currentReview.step,
       Boolean(this.currentReview.pr || reaction?.pr),
     );
-    const footerReserve = (!this.currentReview.pr && !reaction)
-      ? 4
-      : this.currentReview.step && !reaction
-      ? 12
-      : 8;
+    const footerReserve =
+      !this.currentReview.pr && !reaction ? 4 : this.currentReview.step && !reaction ? 12 : 8;
     const availableAvatarArea = Math.max(3, height - footerReserve);
     const avatarHeight = Math.min(
       availableAvatarArea,
@@ -2651,35 +3044,44 @@ class ConsoleBackend implements DashboardBackend {
     }
 
     const pr = this.currentReview.pr ?? reaction?.pr!;
-    const animatedDots = this.currentReview.status === 'processing'
-      ? '.'.repeat((this.animationTick % 3) + 1)
-      : '';
+    const animatedDots =
+      this.currentReview.status === 'processing' ? '.'.repeat((this.animationTick % 3) + 1) : '';
     const author = pr.author ? `@${pr.author}` : '@unknown';
     const elapsed = reaction
       ? `Elapsed ${shortDuration(reaction.durationMs)}`
       : `Elapsed ${this.getCurrentReviewElapsedText()}`;
-    const modeLabel = visualDecision === 'APPROVE'
-      ? 'MODE MERCY'
-      : visualDecision === 'REQUEST_CHANGES'
-      ? 'MODE JUDGE'
-      : visualDecision === 'FAILED'
-      ? 'MODE ALERT'
-      : 'MODE REVIEW';
+    const modeLabel =
+      visualDecision === 'APPROVE'
+        ? 'MODE MERCY'
+        : visualDecision === 'REQUEST_CHANGES'
+          ? 'MODE JUDGE'
+          : visualDecision === 'FAILED'
+            ? 'MODE ALERT'
+            : 'MODE REVIEW';
     const compactTelemetry = contentWidth < 52;
     const outputState = this.getCurrentReviewOutputState();
     const telemetryLines = this.buildTelemetryTriplet(
       contentWidth,
       { label: compactTelemetry ? 'AUTH' : 'AUTHOR', value: author },
-      { label: compactTelemetry ? 'POS' : 'POSITION', value: reaction ? 'LAST' : this.getCurrentReviewQueuePosition() },
-      { label: compactTelemetry ? 'TIME' : 'ELAPSED', value: reaction ? shortDuration(reaction.durationMs) : this.getCurrentReviewElapsedText() },
+      {
+        label: compactTelemetry ? 'POS' : 'POSITION',
+        value: reaction ? 'LAST' : this.getCurrentReviewQueuePosition(),
+      },
+      {
+        label: compactTelemetry ? 'TIME' : 'ELAPSED',
+        value: reaction ? shortDuration(reaction.durationMs) : this.getCurrentReviewElapsedText(),
+      },
     );
-    const modeDetail = this.getCurrentReviewModeDetail(this.currentReview.status, this.currentReview.step);
-    const modeStepLabel = this.currentReview.step && !reaction
-      ? `${modeLabel} · ${modeDetail || `Active${animatedDots}`}`
-      : modeLabel;
-    const currentReviewLogLines = this.currentReview.step && !reaction
-      ? this.buildCurrentReviewLogLines(contentWidth, 3)
-      : [];
+    const modeDetail = this.getCurrentReviewModeDetail(
+      this.currentReview.status,
+      this.currentReview.step,
+    );
+    const modeStepLabel =
+      this.currentReview.step && !reaction
+        ? `${modeLabel} · ${modeDetail || `Active${animatedDots}`}`
+        : modeLabel;
+    const currentReviewLogLines =
+      this.currentReview.step && !reaction ? this.buildCurrentReviewLogLines(contentWidth, 3) : [];
     lines.push(
       ...this.buildReviewStatusBox(
         contentWidth,
@@ -2700,7 +3102,11 @@ class ConsoleBackend implements DashboardBackend {
               this.buildSectionDivider(contentWidth, 'TELEMETRY'),
               ...telemetryLines,
               this.buildSectionDivider(contentWidth, 'MODE'),
-              this.alignLeftRight(modeLabel, reaction ? 'LAST REVIEW' : outputState.label, contentWidth),
+              this.alignLeftRight(
+                modeLabel,
+                reaction ? 'LAST REVIEW' : outputState.label,
+                contentWidth,
+              ),
             ],
       ),
     );
@@ -2723,9 +3129,8 @@ class ConsoleBackend implements DashboardBackend {
     }
 
     const visual = this.getLastReviewVisual();
-    const decision = this.lastReview.decision === 'REQUEST_CHANGES'
-      ? 'REJECT'
-      : this.lastReview.decision;
+    const decision =
+      this.lastReview.decision === 'REQUEST_CHANGES' ? 'REJECT' : this.lastReview.decision;
     const badge = visual.badge;
     const author = this.lastReview.pr.author ? `@${this.lastReview.pr.author}` : '@unknown';
     const timing = `${shortTime(this.lastReview.finishedAt)}  ${shortDuration(this.lastReview.durationMs)}`;
@@ -2738,7 +3143,13 @@ class ConsoleBackend implements DashboardBackend {
       lines.push(this.buildSectionDivider(contentWidth, 'META'));
     }
     if (canFit(1)) {
-      lines.push(this.alignLeftRight(`#${this.lastReview.pr.number} ${this.lastReview.pr.repo}`, author, contentWidth));
+      lines.push(
+        this.alignLeftRight(
+          `#${this.lastReview.pr.number} ${this.lastReview.pr.repo}`,
+          author,
+          contentWidth,
+        ),
+      );
     }
     if (canFit(1)) {
       lines.push(this.truncate(this.lastReview.pr.title, contentWidth));
@@ -2783,13 +3194,20 @@ class ConsoleBackend implements DashboardBackend {
         lines.push(this.buildSectionDivider(contentWidth, sectionLabel));
         lastSection = sectionLabel;
       }
-      const icon = entry.state === 'processing' ? this.getSpinnerFrame(lines.length)
-        : entry.state === 'completed' ? '✓'
-        : entry.state === 'failed' ? '✗'
-        : entry.state === 'skipped' ? '–'
-        : '○';
+      const icon =
+        entry.state === 'processing'
+          ? this.getSpinnerFrame(lines.length)
+          : entry.state === 'completed'
+            ? '✓'
+            : entry.state === 'failed'
+              ? '✗'
+              : entry.state === 'skipped'
+                ? '–'
+                : '○';
       const badge = this.getQueueBadge(entry.state);
-      lines.push(this.truncate(`${icon} ${badge} #${entry.info.number} ${entry.info.repo}`, contentWidth));
+      lines.push(
+        this.truncate(`${icon} ${badge} #${entry.info.number} ${entry.info.repo}`, contentWidth),
+      );
       lines.push(this.truncate(`  ${entry.info.title}`, contentWidth));
       if (entry.info.author) {
         lines.push(this.truncate(`  @${entry.info.author}`, contentWidth));
@@ -2813,22 +3231,23 @@ class ConsoleBackend implements DashboardBackend {
     const start = Math.max(0, end - height);
     const visible = filtered.slice(start, end);
     if (visible.length === 0) {
-      const emptyLabel = this.logFocus === 'all'
-        ? 'Belum ada log'
-        : this.logFocus === 'backend'
-        ? 'Belum ada backend log'
-        : this.logFocus === 'agent'
-        ? 'Belum ada agent log'
-        : 'Belum ada error log';
-      return [this.pad(`${' '.repeat(innerPadding)}${this.center(emptyLabel, contentWidth)}`, width)];
+      const emptyLabel =
+        this.logFocus === 'all'
+          ? 'Belum ada log'
+          : this.logFocus === 'backend'
+            ? 'Belum ada backend log'
+            : this.logFocus === 'agent'
+              ? 'Belum ada agent log'
+              : 'Belum ada error log';
+      return [
+        this.pad(`${' '.repeat(innerPadding)}${this.center(emptyLabel, contentWidth)}`, width),
+      ];
     }
     return visible.map(entry => {
       const match = entry.message.match(/^\[(\d{2}:\d{2}:\d{2})\]\s*(.*)$/);
       const timestamp = match?.[1] ?? '--:--:--';
       const body = match?.[2] ?? entry.message;
-      const prefix = entry.channel === 'agent'
-        ? `[AG ${timestamp}] `
-        : `[BE ${timestamp}] `;
+      const prefix = entry.channel === 'agent' ? `[AG ${timestamp}] ` : `[BE ${timestamp}] `;
       const line = this.truncate(`${prefix}${body}`, contentWidth);
       return this.pad(`${' '.repeat(innerPadding)}${line}`, width);
     });
@@ -2843,9 +3262,14 @@ class ConsoleBackend implements DashboardBackend {
     statusLine += `\n`;
 
     if (cr.pr) {
-      const icon = cr.status === 'processing' ? '\x1B[33m●\x1B[0m' :
-                   cr.status === 'completed' ? '\x1B[32m✓\x1B[0m' :
-                   cr.status === 'failed' ? '\x1B[31m✗\x1B[0m' : '\x1B[37m○\x1B[0m';
+      const icon =
+        cr.status === 'processing'
+          ? '\x1B[33m●\x1B[0m'
+          : cr.status === 'completed'
+            ? '\x1B[32m✓\x1B[0m'
+            : cr.status === 'failed'
+              ? '\x1B[31m✗\x1B[0m'
+              : '\x1B[37m○\x1B[0m';
       statusLine += `  ${icon} \x1B[1m#${cr.pr.number}\x1B[0m ${cr.pr.repo}\n`;
       statusLine += `    \x1B[90m${cr.pr.title.substring(0, 60)}\x1B[0m\n`;
       if (cr.step) statusLine += `    \x1B[33m→ ${cr.step}\x1B[0m\n`;
@@ -2887,8 +3311,13 @@ class ConsoleBackend implements DashboardBackend {
   }
 
   setPrs(prs: PrInfo[]): void {
-    this.prs.clear(); this.prOrder = [];
-    for (const pr of prs) { const key = prKey(pr); this.prs.set(key, { info: pr, state: 'queued' }); this.prOrder.push(key); }
+    this.prs.clear();
+    this.prOrder = [];
+    for (const pr of prs) {
+      const key = prKey(pr);
+      this.prs.set(key, { info: pr, state: 'queued' });
+      this.prOrder.push(key);
+    }
     this.queueScrollOffset = 0;
     if (this.isInteractive) {
       this.renderInteractive();
@@ -2923,7 +3352,8 @@ class ConsoleBackend implements DashboardBackend {
   }
 
   setCountdown(seconds: number): void {
-    const m = Math.floor(seconds / 60), s = seconds % 60;
+    const m = Math.floor(seconds / 60),
+      s = seconds % 60;
     this.countdownText = `Next review in ${m}m ${s}s`;
     if (this.isInteractive) {
       this.renderInteractive();
@@ -2951,14 +3381,22 @@ class ConsoleBackend implements DashboardBackend {
       this.activeSprite = getRandomTamagotchiSpriteTemplate();
     }
     const currentKey = this.currentReview.pr?.key ?? null;
-    if (pr && status === 'processing' && (currentKey !== nextKey || this.currentReview.status !== 'processing')) {
+    if (
+      pr &&
+      status === 'processing' &&
+      (currentKey !== nextKey || this.currentReview.status !== 'processing')
+    ) {
       this.currentReviewStartedAt = Date.now();
     } else if (!pr && status === 'idle') {
       this.currentReviewStartedAt = null;
     }
     if (!pr && status === 'idle') {
       this.currentReviewStepUpdatedAt = null;
-    } else if (currentKey !== nextKey || this.currentReview.status !== status || this.currentReview.step !== step) {
+    } else if (
+      currentKey !== nextKey ||
+      this.currentReview.status !== status ||
+      this.currentReview.step !== step
+    ) {
       this.currentReviewStepUpdatedAt = Date.now();
     }
     this.currentReview = { pr, status, step };
@@ -2981,5 +3419,12 @@ class ConsoleBackend implements DashboardBackend {
       return;
     }
     this.printStatusBar(summary.decision);
+  }
+
+  setGithubRateLimit(data: GithubRateLimitData | null): void {
+    this.githubRateLimit = data;
+    if (this.isInteractive) {
+      this.renderInteractive();
+    }
   }
 }
