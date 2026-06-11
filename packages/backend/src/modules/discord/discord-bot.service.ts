@@ -211,7 +211,22 @@ export class DiscordBotService implements OnModuleInit, OnModuleDestroy {
       return false;
     }
 
-    // Cache: hash(model + text) → ogg file supaya tidak hit API berulang
+    const fallbackModel = 'google-tts/id';
+    const models = model !== fallbackModel ? [model, fallbackModel] : [model];
+
+    for (const currentModel of models) {
+      if (await this._tryGenerateTTS(text, currentModel, lang)) {
+        return true;
+      }
+      if (currentModel !== fallbackModel) {
+        this.logger.warn(`TTS model "${currentModel}" gagal, fallback ke "${fallbackModel}".`);
+      }
+    }
+
+    return false;
+  }
+
+  private async _tryGenerateTTS(text: string, model: string, lang: string): Promise<boolean> {
     const textHash = createHash('sha256').update(`${model}:${text}`).digest('hex').slice(0, 16);
     const cachedOgg = path.join(this.soundsDir, `__tts_cache_${lang}_${textHash}.ogg`);
 
@@ -237,7 +252,7 @@ export class DiscordBotService implements OnModuleInit, OnModuleDestroy {
       });
 
       if (!response.ok) {
-        this.logger.warn(`TTS API returned status ${response.status}, skipping.`);
+        this.logger.warn(`TTS API returned status ${response.status} for model "${model}".`);
         return false;
       }
 
@@ -247,7 +262,7 @@ export class DiscordBotService implements OnModuleInit, OnModuleDestroy {
         const audioBase64 =
           json.audio || json.data || json.base64 || (typeof json === 'string' ? json : null);
         if (!audioBase64) {
-          this.logger.warn('TTS API returned JSON without audio field, skipping.');
+          this.logger.warn(`TTS API returned JSON without audio field for model "${model}".`);
           return false;
         }
         const audioBuffer = Buffer.from(audioBase64, 'base64');
@@ -258,7 +273,7 @@ export class DiscordBotService implements OnModuleInit, OnModuleDestroy {
       }
 
       if (!fs.existsSync(tmpFile) || fs.statSync(tmpFile).size === 0) {
-        this.logger.warn('TTS API returned empty audio, skipping playback.');
+        this.logger.warn(`TTS API returned empty audio for model "${model}".`);
         return false;
       }
 
@@ -280,7 +295,7 @@ export class DiscordBotService implements OnModuleInit, OnModuleDestroy {
       await this.playOggFile(cachedOgg, `TTS(${lang}): "${text.slice(0, 60)}..."`);
       return true;
     } catch (error: any) {
-      this.logger.warn(`TTS playback failed: ${error.message}`);
+      this.logger.warn(`TTS playback failed for model "${model}": ${error.message}`);
       return false;
     }
   }
