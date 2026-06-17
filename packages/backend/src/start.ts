@@ -17,19 +17,26 @@ function updateHeader(cycleCount: number, status: string): void {
 
   const now = new Date().toLocaleTimeString('en-GB', { hour12: false });
   tui.updateHeader(
-    ` {cyan-fg}{bold}Review Agent{/}  {yellow-fg}Cycle ${cycleCount}{/}  ${status}  {gray-fg}PR:${REVIEW_INTERVAL}s Issue:${ISSUE_INTERVAL}s{/}  {gray-fg}${now}{/}  {gray-fg}q / Ctrl+C to exit{/}`,
+    ` {cyan-fg}{bold}Review Agent{/}  {yellow-fg}Cycle ${cycleCount}{/}  ${status}  {gray-fg}PR:${REVIEW_INTERVAL}s Issue:${ISSUE_INTERVAL}s{/}  {gray-fg}${now}{/}  {gray-fg}[f] fetch now  q / Ctrl+C to exit{/}`,
   );
 }
 
 async function countdown(cycleCount: number, seconds: number): Promise<void> {
   if (tui) {
+    let fetchNowRequested = false;
+    tui.setFetchNowCallback(() => {
+      fetchNowRequested = true;
+    });
     for (let i = seconds; i > 0; i--) {
+      if (fetchNowRequested) break;
       tui.setCountdown(i);
       updateHeader(cycleCount, `{yellow-fg}Waiting for next cycle{/}`);
       await new Promise(resolve => setTimeout(resolve, 1000));
+      if (fetchNowRequested) break;
     }
+    tui.setFetchNowCallback(null);
     tui.clearCountdown();
-    tui.addLog('Starting next review run...');
+    tui.addLog(fetchNowRequested ? 'Fetch now triggered by user.' : 'Starting next review run...');
   }
 }
 

@@ -195,31 +195,34 @@ export class DiscordBotService implements OnModuleInit, OnModuleDestroy {
     return hour >= this.ttsMuteStartHour || hour < this.ttsMuteEndHour;
   }
 
-  /** Indonesian TTS (default) */
+  /** Indonesian TTS dengan fallback prioritas */
   async playTTS(text: string): Promise<boolean> {
-    return this._generateTTS(text, 'edge-tts/id-ID-ArdiNeural', 'id');
+    return this._generateTTS(
+      text,
+      ['gemini/gemini-2.5-flash-preview-tts/Algieba', 'edge-tts/id-ID-ArdiNeural', 'google-tts/id'],
+      'id',
+    );
   }
 
   /** English TTS (en-GB-RyanNeural) */
   async playTTSEnglish(text: string): Promise<boolean> {
-    return this._generateTTS(text, 'edge-tts/en-GB-RyanNeural', 'en');
+    return this._generateTTS(text, ['edge-tts/en-GB-RyanNeural', 'google-tts/id'], 'en');
   }
 
-  private async _generateTTS(text: string, model: string, lang: string): Promise<boolean> {
+  private async _generateTTS(text: string, models: string[], lang: string): Promise<boolean> {
     if (!this.ttsApiKey) {
       this.logger.warn('TTS_API_KEY not set, skipping TTS announcement.');
       return false;
     }
 
-    const fallbackModel = 'google-tts/id';
-    const models = model !== fallbackModel ? [model, fallbackModel] : [model];
-
-    for (const currentModel of models) {
+    for (let i = 0; i < models.length; i++) {
+      const currentModel = models[i];
       if (await this._tryGenerateTTS(text, currentModel, lang)) {
         return true;
       }
-      if (currentModel !== fallbackModel) {
-        this.logger.warn(`TTS model "${currentModel}" gagal, fallback ke "${fallbackModel}".`);
+      const nextModel = models[i + 1];
+      if (nextModel) {
+        this.logger.warn(`TTS model "${currentModel}" gagal, fallback ke "${nextModel}".`);
       }
     }
 

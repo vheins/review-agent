@@ -224,12 +224,24 @@ function isInstanceLoader(msg: string): boolean {
 export class TuiService implements OnModuleDestroy {
   private readonly logger = new Logger(TuiService.name);
   private backend: DashboardBackend | null = null;
+  private fetchNowCallback: (() => void) | null = null;
+
+  setFetchNowCallback(cb: (() => void) | null): void {
+    this.fetchNowCallback = cb;
+  }
+
+  getFetchNowCallback(): (() => void) | null {
+    return this.fetchNowCallback;
+  }
 
   async init(): Promise<boolean> {
     const isTty = !!(process.stdout.isTTY || process.stdin.isTTY || process.env.FORCE_TUI);
 
+    const trigger = () => this.fetchNowCallback?.();
+
     if (isTty && process.env.TUI_BACKEND === 'blessed') {
       const b = new BlessedBackend();
+      b.setFetchNowTrigger(trigger);
       if (await b.init()) {
         this.backend = b;
         return true;
@@ -238,6 +250,7 @@ export class TuiService implements OnModuleDestroy {
     }
 
     const b = new ConsoleBackend();
+    b.setFetchNowTrigger(trigger);
     await b.init();
     this.backend = b;
     return true;
@@ -314,6 +327,11 @@ class BlessedBackend implements DashboardBackend {
   private originalLoggerMethods: Record<string, Function> = {};
   private originalStdoutWrite: typeof process.stdout.write | null = null;
   private isRendering = false;
+  private fetchNowTrigger: (() => void) | null = null;
+
+  setFetchNowTrigger(cb: (() => void) | null): void {
+    this.fetchNowTrigger = cb;
+  }
 
   async init(): Promise<boolean> {
     try {
@@ -446,6 +464,9 @@ class BlessedBackend implements DashboardBackend {
 
       this.screen.key(['escape', 'q', 'C-c'], () => {
         process.emit('SIGINT');
+      });
+      this.screen.key(['f'], () => {
+        this.fetchNowTrigger?.();
       });
       this.screen.key(['t'], () => {
         this.theme = this.theme === 'retro-green' ? 'amber-terminal' : 'retro-green';
@@ -838,7 +859,7 @@ class BlessedBackend implements DashboardBackend {
     const countdown = this.countdownText ? `  ${this.countdownText}` : '';
     try {
       this.countdownBox.setContent(
-        ` {${theme.runtime}-fg}{bold}CORE ${stateTag}{/}  {gray-fg}┆{/}  {${theme.runtime}-fg}{bold}OPS{/} {${theme.runtime}-fg}${ops}{/}{${theme.runtime}-fg}${countdown}{/}  {gray-fg}[t] theme  [q] exit{/}`,
+        ` {${theme.runtime}-fg}{bold}CORE ${stateTag}{/}  {gray-fg}┆{/}  {${theme.runtime}-fg}{bold}OPS{/} {${theme.runtime}-fg}${ops}{/}{${theme.runtime}-fg}${countdown}{/}  {gray-fg}[f] fetch now  [t] theme  [q] exit{/}`,
       );
     } catch {}
     this.render();
@@ -1057,6 +1078,11 @@ class ConsoleBackend implements DashboardBackend {
   private readonly lastInteractivePanels = new Map<string, string>();
   private currentReviewStartedAt: number | null = null;
   private currentReviewStepUpdatedAt: number | null = null;
+  private fetchNowTrigger: (() => void) | null = null;
+
+  setFetchNowTrigger(cb: (() => void) | null): void {
+    this.fetchNowTrigger = cb;
+  }
 
   async init(): Promise<boolean> {
     if (this.isInteractive) {
@@ -1183,6 +1209,10 @@ class ConsoleBackend implements DashboardBackend {
       if (plainText === 't' || plainText === 'T') {
         this.theme = this.theme === 'retro-green' ? 'amber-terminal' : 'retro-green';
         this.renderInteractive();
+        return;
+      }
+      if (plainText === 'f' || plainText === 'F') {
+        this.fetchNowTrigger?.();
         return;
       }
       if (plainText === 'q' || plainText === 'Q') {
@@ -1604,8 +1634,8 @@ class ConsoleBackend implements DashboardBackend {
     const statsTiny = `t${this.stats.total} ✓${this.stats.success} ✗${this.stats.failed}`;
     const countdown = this.countdownText ? `  ${this.countdownText}` : '';
     const theme = `  ${this.getThemeBadge()} t theme`;
-    const hintsFull = `  ↑↓/jk queue  J/K log hist  H/L edge  a/b/g/e filter${theme}  q / Ctrl+C`;
-    const hintsCompact = `  jk queue  JK log  H/L edge  a/b/g/e${theme}`;
+    const hintsFull = `  ↑↓/jk queue  J/K log hist  H/L edge  a/b/g/e filter  [f] fetch now${theme}  q / Ctrl+C`;
+    const hintsCompact = `  jk queue  JK log  H/L edge  a/b/g/e  [f] fetch${theme}`;
     const hintsTiny = `  jk q  JK log${theme}`;
 
     return Array.from(
