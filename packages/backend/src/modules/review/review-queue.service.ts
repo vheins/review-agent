@@ -1,5 +1,5 @@
 import { Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
-import { ReviewEngineService } from './review-engine.service.js';
+import { ReviewEngineService, ReviewRunResult } from './review-engine.service.js';
 import { PullRequest } from '../github/github.service.js';
 import { MissionControlService } from '../orchestration/services/mission-control.service.js';
 import { ConfigService } from '@nestjs/config';
@@ -170,17 +170,17 @@ export class ReviewQueueService implements OnModuleInit {
         }
       }
 
-      const success = await Promise.race([
+      const result = await Promise.race<ReviewRunResult>([
         this.reviewEngine.reviewPullRequest(nextItem.pr),
-        new Promise<boolean>((_, reject) => 
+        new Promise<ReviewRunResult>((_, reject) => 
           setTimeout(() => reject(new Error('Review timeout')), 300000)
         )
       ]);
 
-      if (success) {
+      if (result.outcome !== 'failed') {
         nextItem.status = QueueStatus.COMPLETED;
         nextItem.completedAt = new Date();
-        this.logger.log(`Completed PR #${nextItem.pr.number} successfully`);
+        this.logger.log(`Completed PR #${nextItem.pr.number} with outcome=${result.outcome}`);
         
         if (this.missionControlEnabled && nextItem.missionId) {
           const session = await (this.missionControl as any).sessionRepository.findOne({ 

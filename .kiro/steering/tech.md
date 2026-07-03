@@ -45,7 +45,7 @@ yarn install
 
 ### Native Module Compilation
 ```bash
-npm rebuild better-sqlite3
+yarn rebuild better-sqlite3
 ```
 Required after installation due to native SQLite bindings.
 

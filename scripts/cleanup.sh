@@ -3,7 +3,7 @@
 echo "🧹 Cleaning up environment..."
 
 # Kill processes by ports
-PORTS=(3000 5173)
+PORTS=(30001 30002)
 for port in "${PORTS[@]}"; do
     PID=$(lsof -ti :$port)
     if [ ! -z "$PID" ]; then

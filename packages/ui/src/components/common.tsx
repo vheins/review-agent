@@ -1,9 +1,17 @@
 import React from 'react';
+import type { ReactNode, ElementType } from 'react';
 import { LayoutGrid } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card.jsx';
 import { cn } from '../lib/utils.js';
 
-export function MetricCard({ label, value, description, icon: Icon = LayoutGrid }) {
+interface MetricCardProps {
+    label: string;
+    value: string | number;
+    description?: string;
+    icon?: ElementType;
+}
+
+export function MetricCard({ label, value, description, icon: Icon = LayoutGrid }: MetricCardProps) {
     return (
         <Card className="overflow-hidden p-5">
             <CardHeader className="gap-4">
@@ -22,7 +30,16 @@ export function MetricCard({ label, value, description, icon: Icon = LayoutGrid 
     );
 }
 
-export function Section({ eyebrow, title, description, action, children, className }) {
+interface SectionProps {
+    eyebrow: string;
+    title: string;
+    description?: string;
+    action?: ReactNode;
+    children?: ReactNode;
+    className?: string;
+}
+
+export function Section({ eyebrow, title, description, action, children, className }: SectionProps) {
     return (
         <Card className={cn('p-5', className)}>
             <CardHeader className="mb-4 flex-row items-start justify-between gap-4">
@@ -38,7 +55,13 @@ export function Section({ eyebrow, title, description, action, children, classNa
     );
 }
 
-export function ProgressBar({ label, value, subtitle }) {
+interface ProgressBarProps {
+    label: string;
+    value: number | string;
+    subtitle?: string;
+}
+
+export function ProgressBar({ label, value, subtitle }: ProgressBarProps) {
     return (
         <div className="grid gap-2">
             <div className="flex items-center justify-between gap-3 text-sm">
@@ -52,7 +75,11 @@ export function ProgressBar({ label, value, subtitle }) {
     );
 }
 
-export function EmptyState({ message }) {
+interface EmptyStateProps {
+    message: string;
+}
+
+export function EmptyState({ message }: EmptyStateProps) {
     return (
         <div className="rounded-[1.5rem] border border-dashed border-border bg-panel/70 px-4 py-10 text-center text-sm text-muted-foreground">
             {message}

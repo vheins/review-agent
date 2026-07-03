@@ -101,6 +101,20 @@ describe('Configuration Validation Schema', () => {
       expect(error2).toBeUndefined();
       expect(value2.AUTO_MERGE).toBe(false);
     });
+
+    it('should validate stale involves threshold as positive integer', () => {
+      const { error, value } = validationSchema.validate({
+        STALE_INVOLVES_REVIEW_DAYS: '3',
+      });
+      expect(error).toBeUndefined();
+      expect(value.STALE_INVOLVES_REVIEW_DAYS).toBe(3);
+
+      const { error: invalidError } = validationSchema.validate({
+        STALE_INVOLVES_REVIEW_DAYS: '0',
+      });
+      expect(invalidError).toBeDefined();
+      expect(invalidError?.message).toContain('STALE_INVOLVES_REVIEW_DAYS');
+    });
   });
 
   describe('Review Configuration', () => {
@@ -227,6 +241,7 @@ describe('Configuration Validation Schema', () => {
       expect(value.LOG_LEVEL).toBe('info');
       expect(value.WORKSPACE_DIR).toMatch(/\/workspace$/);
       expect(value.AUTO_MERGE).toBe(false);
+      expect(value.STALE_INVOLVES_REVIEW_DAYS).toBe(3);
       expect(value.DELEGATE).toBe(false);
       expect(value.REVIEW_MODE).toBe('comment');
       expect(value.AI_EXECUTOR).toBe('gemini');

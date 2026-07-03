@@ -212,7 +212,7 @@ export class AppConfigService {
     }
 
     // Validate scan scope
-    const validScopes = ['authored', 'assigned', 'review-requested', 'all'];
+    const validScopes = ['authored', 'assigned', 'review-requested', 'mentions', 'involves', 'all'];
     const scopes = config.scanScope.split(',').map((s) => s.trim());
     for (const scope of scopes) {
       if (!validScopes.includes(scope)) {

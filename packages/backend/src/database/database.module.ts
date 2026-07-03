@@ -54,6 +54,8 @@ const __dirname = path.dirname(__filename);
         return {
           type: 'sqlite',
           database: dbPath,
+          enableWAL: true,
+          busyTimeout: 10000,
           entities: [
             PullRequest,
             Review,

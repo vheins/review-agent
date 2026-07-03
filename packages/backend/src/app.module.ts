@@ -21,6 +21,9 @@ import { NotificationModule } from './common/notification/notification.module.js
 import { ShutdownModule } from './common/shutdown/shutdown.module.js';
 import { CleanupModule } from './common/cleanup/cleanup.module.js';
 import { QueueModule } from './modules/queue/queue.module.js';
+import { IssueModule } from './modules/issue/issue.module.js';
+import { TuiModule } from './tui/tui.module.js';
+import { DiscordBotModule } from './modules/discord/discord-bot.module.js';
 
 /**
  * AppModule - Root NestJS Module
@@ -31,13 +34,15 @@ import { QueueModule } from './modules/queue/queue.module.js';
     ConfigModule,
     DatabaseModule,
     LoggerModule,
-    
+
     // Rate limiting
-    ThrottlerModule.forRoot([{
-      ttl: 60000,
-      limit: 100,
-    }]),
-    
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60000,
+        limit: 100,
+      },
+    ]),
+
     // Feature modules
     GitHubModule,
     AiModule,
@@ -57,6 +62,9 @@ import { QueueModule } from './modules/queue/queue.module.js';
     ShutdownModule,
     CleanupModule,
     QueueModule,
+    IssueModule,
+    TuiModule,
+    DiscordBotModule,
   ],
   controllers: [],
   providers: [],

@@ -23,11 +23,11 @@ describe('KiroExecutor', () => {
     );
 
     expect(execSpy).toHaveBeenCalledWith(
-      'kiro',
-      ['chat', '-'],
+      'kiro-cli',
+      ['chat', '--no-interactive', '--trust-all-tools'],
       {
         cwd: '/tmp/repo',
-        input: expect.stringContaining('Changed File Paths:'),
+        input: expect.stringContaining('Pull Request: #10 Update employee milestones'),
       },
     );
   });
@@ -61,13 +61,14 @@ describe('OpenCodeExecutor', () => {
         'run',
         '--dir',
         '/tmp/repo',
+        '--dangerously-skip-permissions',
         '--model',
         'openai/gpt-5',
         '--agent',
         'reviewer',
-        expect.stringContaining('Review the following Pull Request:'),
+        expect.stringContaining('Pull Request: #11 Update employee milestones'),
       ],
-      { cwd: '/tmp/repo' },
+      { cwd: '/tmp/repo', allowFail: true },
     );
   });
 });

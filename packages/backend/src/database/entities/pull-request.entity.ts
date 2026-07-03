@@ -49,7 +49,7 @@ export class PullRequest {
   body: string | null;
 
   @Column('varchar')
-  state: string; // 'open' or 'closed'
+  state: string; // open or closed
 
   @Column('varchar')
   status: string; // legacy status mapping, usually matches state

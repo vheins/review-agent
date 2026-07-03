@@ -19,7 +19,7 @@ export class TestAndHealService {
     this.logger.log(`Running tests for PR #${prNumber} in ${repository} (${type})...`);
 
     try {
-      const { stdout, stderr, exitCode } = await this.github.execaVerbose('npm', ['test'], { cwd: repoDir, allowFail: true });
+      const { stdout, stderr, exitCode } = await this.github.execaVerbose('yarn', ['test'], { cwd: repoDir, allowFail: true });
       const endTime = new Date();
       const status = exitCode === 0 ? 'passed' : 'failed';
 
@@ -80,13 +80,13 @@ export class TestAndHealService {
     for (const failure of failures) {
       if (failure.type === 'snapshot_mismatch') {
         this.logger.log('Healing: Updating snapshots...');
-        await this.github.execaVerbose('npm', ['test', '--', '-u'], { cwd: repoDir, allowFail: true });
+        await this.github.execaVerbose('yarn', ['test', '-u'], { cwd: repoDir, allowFail: true });
         healed = true;
       }
       
       if (failure.type === 'import_error') {
-        this.logger.log('Healing: Running npm install...');
-        await this.github.execaVerbose('npm', ['install'], { cwd: repoDir, allowFail: true });
+        this.logger.log('Healing: Running yarn install...');
+        await this.github.execaVerbose('yarn', ['install'], { cwd: repoDir, allowFail: true });
         healed = true;
       }
     }

@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
 import { ReviewEngineService } from './modules/review/review-engine.service.js';
+import { applyRuntimeFlags } from './runtime/runtime-flags.js';
 import 'reflect-metadata';
 
 /**
@@ -10,7 +11,12 @@ import 'reflect-metadata';
  * review scan across all open PRs, and then shuts down.
  */
 async function bootstrap() {
+  const runtimeFlags = applyRuntimeFlags();
+
   console.log('[NestJS] Initializing application for single-run review...');
+  if (runtimeFlags.noSound) {
+    console.log('[NestJS] Discord soundboard disabled via --no-sound.');
+  }
   
   // Create application context instead of a full web server
   const app = await NestFactory.createApplicationContext(AppModule, {

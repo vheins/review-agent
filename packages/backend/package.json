@@ -1,18 +1,26 @@
 {
   "name": "@review-agent/backend",
   "version": "1.0.0",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "nest start --watch",
     "build": "nest build",
-    "start": "node ./dist/main.js",
-    "start:continuous": "node --loader ts-node/esm ./src/start.ts",
+    "prestart": "nest build",
+    "prestart:continuous": "nest build",
+    "start": "NODE_NO_WARNINGS=1 node ./dist/start.js",
+    "start:continuous": "NODE_NO_WARNINGS=1 node ./dist/start.js",
     "debug": "nest start --debug --watch",
-    "once": "node --loader ts-node/esm ./src/once.ts",
-    "start": "node --loader ts-node/esm ./src/start.ts",
-    "validate-migration": "node --loader ts-node/esm ./src/migration/migration-validator.cli.ts validate"
+    "once": "cross-env NODE_NO_WARNINGS=1 node ./dist/once.js",
+    "validate-migration": "cross-env NODE_NO_WARNINGS=1 node ./dist/migration/migration-validator.cli.js validate",
+    "soundboard:beep": "cross-env NODE_NO_WARNINGS=1 node ./dist/soundboard-test.js",
+    "soundboard:beep:approved": "cross-env NODE_NO_WARNINGS=1 node ./dist/soundboard-test.js approved",
+    "soundboard:beep:rejected": "cross-env NODE_NO_WARNINGS=1 node ./dist/soundboard-test.js rejected",
+    "tts": "cross-env NODE_NO_WARNINGS=1 node ./dist/tts-cli.js"
   },
   "dependencies": {
+    "@discordjs/opus": "^0.10.0",
+    "@discordjs/voice": "^0.19.2",
     "@nestjs/common": "^11.1.16",
     "@nestjs/config": "^4.0.3",
     "@nestjs/core": "^11.1.16",
@@ -23,12 +31,15 @@
     "@nestjs/typeorm": "^11.0.0",
     "@nestjs/websockets": "^11.1.16",
     "@types/nodemailer": "^7.0.11",
+    "blessed": "^0.1.81",
     "chalk": "^5.6.2",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
     "commander": "^14.0.3",
     "compression": "^1.8.1",
+    "discord.js": "^14.26.4",
     "execa": "^8.0.1",
+    "ffmpeg-static": "^5.3.0",
     "fs-extra": "^11.2.0",
     "globby": "^16.1.1",
     "helmet": "^8.1.0",
@@ -47,11 +58,13 @@
     "@nestjs/cli": "^11.0.0",
     "@nestjs/schematics": "^11.0.0",
     "@nestjs/testing": "^11.1.16",
+    "@types/blessed": "^0.1.27",
     "@types/compression": "^1.7.5",
     "@types/express": "^5.0.0",
     "@types/fs-extra": "^11.0.4",
     "@types/node": "^22.10.5",
     "@types/ws": "^8.5.13",
-    "ts-node": "^10.9.2"
+    "ts-node": "^10.9.2",
+    "tsx": "^4.22.4"
   }
 }

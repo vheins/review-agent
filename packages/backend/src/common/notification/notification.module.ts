@@ -6,9 +6,7 @@ import { EmailService } from './email.service.js';
 
 @Global()
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([Notification]),
-  ],
+  imports: [TypeOrmModule.forFeature([Notification])],
   providers: [NotificationService, EmailService],
   exports: [NotificationService, EmailService],
 })

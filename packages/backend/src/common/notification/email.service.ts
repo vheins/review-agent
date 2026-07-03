@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 
@@ -8,9 +8,9 @@ export class EmailService {
   private transporter: nodemailer.Transporter | null = null;
   private readonly from: string;
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(@Inject(ConfigService) private readonly configService: ConfigService) {
     const host = this.configService.get<string>('EMAIL_HOST');
-    this.from = this.configService.get<string>('EMAIL_FROM', 'pr-review-agent@example.com');
+    this.from = this.configService.get<string>('EMAIL_FROM') ?? 'pr-review-agent@example.com';
 
     if (host) {
       this.transporter = nodemailer.createTransport({
@@ -25,7 +25,12 @@ export class EmailService {
     }
   }
 
-  async sendEmail(to: string, subject: string, text: string, html?: string): Promise<{ status: string; messageId?: string; error?: string }> {
+  async sendEmail(
+    to: string,
+    subject: string,
+    text: string,
+    html?: string,
+  ): Promise<{ status: string; messageId?: string; error?: string }> {
     if (!this.transporter) {
       this.logger.warn('Email delivery service not configured. Simulation mode.');
       this.logger.log(`EMAIL to ${to}: ${subject}\n${text}`);

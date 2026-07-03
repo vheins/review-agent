@@ -44,6 +44,9 @@ export interface PullRequest {
   mergeable_state?: string | null;
   merged?: boolean;
   mergedBy?: string | null;
+  matchedScopes?: string[];
+  takeoverMode?: 'review-only' | 'direct-fix';
+  takeoverReason?: string | null;
   stats?: {
     commits: number;
     additions: number;
@@ -75,6 +78,7 @@ export interface Issue {
     id?: number;
   };
   labels: string[];
+  assignees?: string[];
 }
 
 /**
@@ -105,25 +109,37 @@ export class GitHubClientService {
     const start = Date.now();
 
     this.logger.log(`► Starting targeted bulk PR sync for ${username}...`);
-    
+
     const allPRs: PullRequest[] = [];
-    const scopeActions = [
-      { scope: 'authored',         query: `author:${username}`,           label: `authored by ${username}` },
-      { scope: 'assigned',         query: `assignee:${username}`,         label: `assigned to ${username}` },
-      { scope: 'review-requested', query: `review-requested:${username}`, label: `review-requested ${username}` },
-      { scope: 'mentions',         query: `mentions:${username}`,         label: `mentions ${username}` },
-      { scope: 'involves',         query: `involves:${username}`,         label: `involves ${username}` },
+    const configuredScopes = new Set(appConfig.prScope || []);
+    const availableScopeActions = [
+      { scope: 'authored', query: `author:${username}`, label: `authored by ${username}` },
+      { scope: 'assigned', query: `assignee:${username}`, label: `assigned to ${username}` },
+      {
+        scope: 'review-requested',
+        query: `review-requested:${username}`,
+        label: `review-requested ${username}`,
+      },
+      { scope: 'mentions', query: `mentions:${username}`, label: `mentions ${username}` },
+      { scope: 'involves', query: `involves:${username}`, label: `involves ${username}` },
     ];
+    const scopeActions = configuredScopes.has('all')
+      ? availableScopeActions.filter(({ scope }) => scope === 'involves')
+      : availableScopeActions.filter(({ scope }) => configuredScopes.has(scope));
+
+    if (scopeActions.length === 0) {
+      scopeActions.push({
+        scope: 'involves',
+        query: `involves:${username}`,
+        label: `involves ${username}`,
+      });
+    }
 
     try {
-      this.logger.debug('[CLI] Performing targeted search for all states via gh search prs');
+      this.logger.debug('[CLI] Performing targeted search for open PRs via gh search prs');
       for (const { scope, query } of scopeActions) {
-        // If scope is not in config and it's not the default involves fallback, skip
-        if (!appConfig.prScope.includes(scope) && scope !== 'involves') continue;
-        
-        // Search all states, no archived filter to include historical data
-        const items = await this.cli.searchPRs(`${query}`);
-        
+        const items = await this.cli.searchPRs(`is:pr is:open archived:false ${query}`);
+
         // Normalize CLI results
         const normalizedItems = items.map(item => ({
           id: item.id, // CLI 'id' is already the node ID string
@@ -132,7 +148,7 @@ export class GitHubClientService {
           node_id: item.id,
           title: item.title,
           body: item.body || '',
-          state: item.state,
+          state: String(item.state || '').toLowerCase(),
           locked: item.isLocked || false,
           draft: item.isDraft || false,
           repository: { nameWithOwner: item.repository?.nameWithOwner || item.repository },
@@ -143,41 +159,17 @@ export class GitHubClientService {
           headRefName: item.headRefName,
           baseRefName: item.baseRefName,
           author: { login: item.author?.login || item.author },
-          labels: (item.labels || []).map(l => typeof l === 'string' ? l : l.name)
+          labels: (item.labels || []).map(l => (typeof l === 'string' ? l : l.name)),
+          matchedScopes: [scope],
         }));
-        
+
         allPRs.push(...(normalizedItems as any[] as PullRequest[]));
       }
 
-      // If absolutely nothing found in specific scopes, try targeted involves
-      if (allPRs.length === 0) {
-          this.logger.debug('[CLI] No specific scope matches, trying involves filter (all states)');
-          const items = await this.cli.searchPRs(`involves:${username}`);
-          const normalizedItems = items.map(item => ({
-            id: item.id,
-            github_id: null,
-            number: item.number,
-            node_id: item.id,
-            title: item.title,
-            body: item.body || '',
-            state: item.state,
-            locked: item.isLocked || false,
-            draft: item.isDraft || false,
-            repository: { nameWithOwner: item.repository?.nameWithOwner || item.repository },
-            url: item.url,
-            updatedAt: item.updatedAt,
-            createdAt: item.createdAt || item.updatedAt,
-            closedAt: item.closedAt || null,
-            author: { login: item.author?.login || item.author },
-            labels: (item.labels || []).map(l => typeof l === 'string' ? l : l.name)
-          }));
-          allPRs.push(...(normalizedItems as any[] as PullRequest[]));
-      }
-
-      if (allPRs.length > 0) {
-        this.logger.log(`► Targeted sync found ${allPRs.length} relevant PRs in ${Date.now() - start}ms`);
-        return this.processPRs(allPRs);
-      }
+      this.logger.log(
+        `► Targeted sync found ${allPRs.length} relevant PRs in ${Date.now() - start}ms`,
+      );
+      return this.processPRs(allPRs);
     } catch (cliError) {
       this.logger.warn(`[CLI] Targeted search failed: ${cliError.message}`);
     }
@@ -185,57 +177,31 @@ export class GitHubClientService {
     if (token) {
       try {
         this.logger.log('► Falling back to REST API discovery (targeted)...');
-        const filters = [];
-        if (appConfig.prScope.includes('authored')) filters.push(`author:${username}`);
-        if (appConfig.prScope.includes('assigned')) filters.push(`assignee:${username}`);
-        if (appConfig.prScope.includes('review-requested')) filters.push(`review-requested:${username}`);
-        
-        const filterStr = filters.length > 0 ? `(${filters.join(' OR ')})` : `involves:${username}`;
-        const query = `is:pr archived:false ${filterStr}`; 
-        
-        let prs: PullRequest[] = [];
-        try {
-          const result = await this.api.searchPRs(query);
-          prs = result.items.map(item => ({
-            id: item.node_id,
-            github_id: item.id,
-            number: item.number,
-            node_id: item.node_id,
-            title: item.title,
-            body: item.body,
-            state: item.state,
-            locked: item.locked,
-            draft: item.draft || false,
-            repository: { nameWithOwner: item.repository_url.split('repos/')[1] },
-            url: item.html_url,
-            updatedAt: item.updated_at,
-            createdAt: item.created_at,
-            headRefName: (item as any).head?.ref,
-            baseRefName: (item as any).base?.ref,
-            author: { login: item.user?.login || 'unknown', id: item.user?.id },
-            labels: (item.labels || []).map(l => typeof l === 'string' ? l : l.name)
-          }));
-        } catch (e) {
-          const simpleResult = await this.api.searchPRs(`is:pr archived:false involves:${username}`);
-          prs = simpleResult.items.map(item => ({
-            id: item.node_id,
-            github_id: item.id,
-            number: item.number,
-            node_id: item.node_id,
-            title: item.title,
-            body: item.body,
-            state: item.state,
-            locked: item.locked,
-            draft: item.draft || false,
-            repository: { nameWithOwner: item.repository_url.split('repos/')[1] },
-            url: item.html_url,
-            updatedAt: item.updated_at,
-            createdAt: item.created_at,
-            headRefName: (item as any).head?.ref,
-            baseRefName: (item as any).base?.ref,
-            author: { login: item.user?.login || 'unknown', id: item.user?.id },
-            labels: (item.labels || []).map(l => typeof l === 'string' ? l : l.name)
-          }));
+        const prs: PullRequest[] = [];
+        for (const { scope, query } of scopeActions) {
+          const result = await this.api.searchPRs(`is:pr is:open archived:false ${query}`);
+          prs.push(
+            ...result.items.map(item => ({
+              id: item.node_id,
+              github_id: item.id,
+              number: item.number,
+              node_id: item.node_id,
+              title: item.title,
+              body: item.body,
+              state: item.state,
+              locked: item.locked,
+              draft: item.draft || false,
+              repository: { nameWithOwner: item.repository_url.split('repos/')[1] },
+              url: item.html_url,
+              updatedAt: item.updated_at,
+              createdAt: item.created_at,
+              headRefName: (item as any).head?.ref,
+              baseRefName: (item as any).base?.ref,
+              author: { login: item.user?.login || 'unknown', id: item.user?.id },
+              labels: (item.labels || []).map(l => (typeof l === 'string' ? l : l.name)),
+              matchedScopes: [scope],
+            })),
+          );
         }
         this.logger.log(`► API discovery found ${prs.length} PRs in ${Date.now() - start}ms`);
         return this.processPRs(prs);
@@ -249,15 +215,16 @@ export class GitHubClientService {
   }
 
   /**
-   * Fetch open issues
+   * Fetch open issues assigned to the configured user
    */
   async fetchOpenIssues(): Promise<Issue[]> {
-    this.logger.log('► Syncing issues...');
+    const username = this.configService.get<string>('GITHUB_USERNAME') || 'vheins';
+    this.logger.log(`► Syncing issues assigned to ${username}...`);
     const token = this.configService.get<string>('GITHUB_TOKEN');
 
     if (token) {
       try {
-        const result = await this.api.searchIssues('is:issue is:open mentions:@me');
+        const result = await this.api.searchIssues(`is:issue is:open assignee:${username}`);
         return result.items.map(item => {
           const repoUrl = item.repository_url;
           const repoPath = repoUrl.split('/repos/')[1];
@@ -269,16 +236,17 @@ export class GitHubClientService {
             body: item.body,
             state: item.state,
             repository: {
-              nameWithOwner: repoPath
+              nameWithOwner: repoPath,
             },
             url: item.html_url,
             updatedAt: item.updated_at,
             createdAt: item.created_at,
             author: {
               login: item.user?.login || 'unknown',
-              id: item.user?.id
+              id: item.user?.id,
             },
-            labels: (item.labels || []).map(l => typeof l === 'string' ? l : l.name)
+            labels: (item.labels || []).map(l => (typeof l === 'string' ? l : l.name)),
+            assignees: (item.assignees || []).map(a => a.login),
           };
         });
       } catch (apiError) {
@@ -294,10 +262,31 @@ export class GitHubClientService {
    */
   private async processPRs(prs: PullRequest[]): Promise<PullRequest[]> {
     const appConfig = this.config.getAppConfig();
-    const uniquePRs = Array.from(new Map(prs.map(pr => [pr.url, pr])).values());
-    
+    const prMap = new Map<string, PullRequest>();
+    for (const pr of prs) {
+      const existing = prMap.get(pr.url);
+      if (!existing) {
+        prMap.set(pr.url, {
+          ...pr,
+          matchedScopes: [...new Set(pr.matchedScopes || [])],
+        });
+        continue;
+      }
+
+      prMap.set(pr.url, {
+        ...existing,
+        ...pr,
+        matchedScopes: [
+          ...new Set([...(existing.matchedScopes || []), ...(pr.matchedScopes || [])]),
+        ],
+      });
+    }
+    const uniquePRs = Array.from(prMap.values());
+
     this.logger.log(`► Processing ${uniquePRs.length} unique PRs...`);
-    this.logger.debug(`[Sync] Filter criteria - Excluded owners: ${JSON.stringify(appConfig.excludeRepoOwners || [])}`);
+    this.logger.debug(
+      `[Sync] Filter criteria - Excluded owners: ${JSON.stringify(appConfig.excludeRepoOwners || [])}`,
+    );
 
     const filteredPRs = uniquePRs.filter(pr => {
       if (!pr.repository?.nameWithOwner) {
@@ -332,7 +321,7 @@ export class GitHubClientService {
   async getPRDetail(repoName: string, prNumber: number): Promise<PullRequest> {
     const token = this.configService.get<string>('GITHUB_TOKEN');
     this.logger.debug(`[Sync] Getting deep PR details for ${repoName}#${prNumber}`);
-    
+
     if (token) {
       const detail = await this.api.getPRDetail(repoName, prNumber);
       return {
@@ -363,7 +352,7 @@ export class GitHubClientService {
         mergeable: detail.mergeable,
         mergeable_state: detail.mergeable_state,
         mergedBy: detail.merged_by?.login,
-        labels: (detail.labels || []).map(l => typeof l === 'string' ? l : l.name),
+        labels: (detail.labels || []).map(l => (typeof l === 'string' ? l : l.name)),
         requested_reviewers: (detail.requested_reviewers || []).map(r => r.login),
         milestone: detail.milestone?.title,
         auto_merge: detail.auto_merge,
@@ -374,8 +363,8 @@ export class GitHubClientService {
           deletions: detail.deletions,
           changed_files: detail.changed_files,
           comments: detail.comments,
-          review_comments: detail.review_comments
-        }
+          review_comments: detail.review_comments,
+        },
       };
     }
 
@@ -399,7 +388,7 @@ export class GitHubClientService {
       baseRefName: cliDetail.baseRefName,
       baseSha: '', // PR view doesn't provide base OID by default, will be resolved via git
       author: { login: cliDetail.author?.login || cliDetail.author },
-      labels: cliDetail.labels || []
+      labels: cliDetail.labels || [],
     } as PullRequest;
   }
 
@@ -427,19 +416,24 @@ export class GitHubClientService {
           updatedAt: item.updated_at,
           createdAt: item.created_at,
           author: { login: item.user.login, id: item.user.id },
-          labels: (item.labels || []).map(l => typeof l === 'string' ? l : l.name)
+          labels: (item.labels || []).map(l => (typeof l === 'string' ? l : l.name)),
         }));
       } catch (e) {
         this.logger.warn(`API list PRs failed: ${e.message}`);
       }
     }
-    return this.cli.searchPRs(`--repo ${repoName} ${params.state ? `--state ${params.state}` : ''}`);
+    return this.cli.searchPRs(
+      `--repo ${repoName} ${params.state ? `--state ${params.state}` : ''}`,
+    );
   }
 
   /**
    * Create a pull request
    */
-  async createPR(repoName: string, data: { title: string; head: string; base: string; body?: string; draft?: boolean }): Promise<PullRequest> {
+  async createPR(
+    repoName: string,
+    data: { title: string; head: string; base: string; body?: string; draft?: boolean },
+  ): Promise<PullRequest> {
     this.logger.log(`[Sync] Creating PR in ${repoName}`);
     const token = this.configService.get<string>('GITHUB_TOKEN');
     if (token) {
@@ -459,7 +453,7 @@ export class GitHubClientService {
         updatedAt: result.updated_at,
         createdAt: result.created_at,
         author: { login: result.user.login, id: result.user.id },
-        labels: (result.labels || []).map(l => typeof l === 'string' ? l : l.name)
+        labels: (result.labels || []).map(l => (typeof l === 'string' ? l : l.name)),
       };
     }
     throw new Error('Create PR via CLI not implemented yet in this service');
@@ -488,7 +482,7 @@ export class GitHubClientService {
         updatedAt: result.updated_at,
         createdAt: result.created_at,
         author: { login: result.user.login, id: result.user.id },
-        labels: (result.labels || []).map(l => typeof l === 'string' ? l : l.name)
+        labels: (result.labels || []).map(l => (typeof l === 'string' ? l : l.name)),
       };
     }
     throw new Error('Update PR via CLI not implemented');
@@ -503,7 +497,7 @@ export class GitHubClientService {
     if (token) {
       return this.api.listPRCommits(repoName, prNumber);
     }
-    return []; 
+    return [];
   }
 
   /**
@@ -533,7 +527,11 @@ export class GitHubClientService {
   /**
    * Update PR branch
    */
-  async updatePRBranch(repoName: string, prNumber: number, expectedHeadSha?: string): Promise<boolean> {
+  async updatePRBranch(
+    repoName: string,
+    prNumber: number,
+    expectedHeadSha?: string,
+  ): Promise<boolean> {
     this.logger.log(`[Sync] Updating branch for PR ${repoName}#${prNumber}`);
     const token = this.configService.get<string>('GITHUB_TOKEN');
     if (token) {
@@ -573,7 +571,12 @@ export class GitHubClientService {
     return reviews.find(r => r.id === reviewId);
   }
 
-  async updateReview(repoName: string, prNumber: number, reviewId: number, body: string): Promise<boolean> {
+  async updateReview(
+    repoName: string,
+    prNumber: number,
+    reviewId: number,
+    body: string,
+  ): Promise<boolean> {
     this.logger.log(`[Sync] Updating review ${reviewId} for PR ${repoName}#${prNumber}`);
     const token = this.configService.get<string>('GITHUB_TOKEN');
     if (token) {
@@ -593,8 +596,16 @@ export class GitHubClientService {
     return false;
   }
 
-  async submitReview(repoName: string, prNumber: number, reviewId: number, event: string, body?: string): Promise<boolean> {
-    this.logger.log(`[Sync] Submitting review ${reviewId} for PR ${repoName}#${prNumber} as ${event}`);
+  async submitReview(
+    repoName: string,
+    prNumber: number,
+    reviewId: number,
+    event: string,
+    body?: string,
+  ): Promise<boolean> {
+    this.logger.log(
+      `[Sync] Submitting review ${reviewId} for PR ${repoName}#${prNumber} as ${event}`,
+    );
     const token = this.configService.get<string>('GITHUB_TOKEN');
     if (token) {
       await this.api.submitReview(repoName, prNumber, reviewId, event, body);
@@ -603,7 +614,12 @@ export class GitHubClientService {
     return false;
   }
 
-  async dismissReview(repoName: string, prNumber: number, reviewId: number, message: string): Promise<boolean> {
+  async dismissReview(
+    repoName: string,
+    prNumber: number,
+    reviewId: number,
+    message: string,
+  ): Promise<boolean> {
     this.logger.log(`[Sync] Dismissing review ${reviewId} for PR ${repoName}#${prNumber}`);
     const token = this.configService.get<string>('GITHUB_TOKEN');
     if (token) {
@@ -655,7 +671,12 @@ export class GitHubClientService {
   /**
    * Add a review comment to a Pull Request
    */
-  async addReview(repoName: string, prNumber: number, body: string, event: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT' = 'COMMENT'): Promise<boolean> {
+  async addReview(
+    repoName: string,
+    prNumber: number,
+    body: string,
+    event: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT' = 'COMMENT',
+  ): Promise<boolean> {
     this.logger.log(`[Sync] Adding review to PR ${repoName}#${prNumber} (${event})`);
     const token = this.configService.get<string>('GITHUB_TOKEN');
     if (token) {
@@ -679,7 +700,11 @@ export class GitHubClientService {
   /**
    * Merge a Pull Request
    */
-  async mergePR(repoName: string, prNumber: number, method: 'squash' | 'merge' | 'rebase' = 'merge'): Promise<boolean> {
+  async mergePR(
+    repoName: string,
+    prNumber: number,
+    method: 'squash' | 'merge' | 'rebase' = 'merge',
+  ): Promise<boolean> {
     this.logger.log(`[Sync] Merging PR ${repoName}#${prNumber} using ${method}`);
     const token = this.configService.get<string>('GITHUB_TOKEN');
     if (token) {
@@ -703,11 +728,17 @@ export class GitHubClientService {
   /**
    * Assign reviewers to a Pull Request
    */
-  async assignReviewers(repoName: string, prNumber: number, reviewers: string[] = []): Promise<boolean> {
+  async assignReviewers(
+    repoName: string,
+    prNumber: number,
+    reviewers: string[] = [],
+  ): Promise<boolean> {
     if (reviewers.length === 0) return true;
-    this.logger.log(`[Sync] Assigning reviewers to PR ${repoName}#${prNumber}: ${reviewers.join(', ')}`);
+    this.logger.log(
+      `[Sync] Assigning reviewers to PR ${repoName}#${prNumber}: ${reviewers.join(', ')}`,
+    );
     const token = this.configService.get<string>('GITHUB_TOKEN');
-    
+
     if (token) {
       try {
         await this.api.assignReviewers(repoName, prNumber, reviewers);
@@ -729,7 +760,7 @@ export class GitHubClientService {
   async getPRChecks(repoName: string, prNumber: number): Promise<any[]> {
     this.logger.debug(`[Sync] Fetching checks for PR ${repoName}#${prNumber}`);
     try {
-      // GitHub API for checks is a bit complex (Check Runs API), 
+      // GitHub API for checks is a bit complex (Check Runs API),
       // CLI 'pr checks' is very convenient. API implementation can be added if needed.
       return await this.cli.getPRChecks(repoName, prNumber);
     } catch (e) {
@@ -746,38 +777,61 @@ export class GitHubClientService {
       passed: checks.filter(c => c.conclusion === 'success').length,
       failed: checks.filter(c => c.conclusion === 'failure').length,
       pending: checks.filter(c => c.status !== 'completed').length,
-      checks
+      checks,
     };
   }
 
   async createPendingReview(repoName: string, prNumber: number): Promise<void> {
-    await this.cli.execaVerbose('gh', [
-      'api', '--method', 'POST',
-      `repos/${repoName}/pulls/${prNumber}/reviews`,
-      '-f', 'event=',
-    ], { allowFail: true });
+    await this.cli.execaVerbose(
+      'gh',
+      ['api', '--method', 'POST', `repos/${repoName}/pulls/${prNumber}/reviews`, '-f', 'event='],
+      { allowFail: true },
+    );
   }
 
-  async addFileComment(repoName: string, prNumber: number, filePath: string, body: string): Promise<void> {
+  async addFileComment(
+    repoName: string,
+    prNumber: number,
+    filePath: string,
+    body: string,
+  ): Promise<void> {
     // Post as a PR comment (not inline) since dep findings don't have a specific line
     await this.cli.execaVerbose('gh', [
-      'api', '--method', 'POST',
+      'api',
+      '--method',
+      'POST',
       `repos/${repoName}/issues/${prNumber}/comments`,
-      '-f', `body=${body}`,
+      '-f',
+      `body=${body}`,
     ]);
   }
 
-  async submitPendingReview(repoName: string, prNumber: number, reviewId: number, event: string, body: string): Promise<void> {
+  async submitPendingReview(
+    repoName: string,
+    prNumber: number,
+    reviewId: number,
+    event: string,
+    body: string,
+  ): Promise<void> {
     await this.cli.execaVerbose('gh', [
-      'api', '--method', 'POST',
+      'api',
+      '--method',
+      'POST',
       `repos/${repoName}/pulls/${prNumber}/reviews/${reviewId}/events`,
-      '-f', `event=${event}`,
-      '-f', `body=${body}`,
+      '-f',
+      `event=${event}`,
+      '-f',
+      `body=${body}`,
     ]);
   }
 
-  async getChangedFiles(repoDir: string, pr: PullRequest): Promise<{ path: string; content: string }[]> {
-    this.logger.debug(`[Sync] Getting changed files for PR ${pr.repository.nameWithOwner}#${pr.number}`);
+  async getChangedFiles(
+    repoDir: string,
+    pr: PullRequest,
+  ): Promise<{ path: string; content: string }[]> {
+    this.logger.debug(
+      `[Sync] Getting changed files for PR ${pr.repository.nameWithOwner}#${pr.number}`,
+    );
     try {
       // Verify PR is still open before diffing
       const detail = await this.cli.getPRDetail(pr.repository.nameWithOwner, pr.number);

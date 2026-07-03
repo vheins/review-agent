@@ -72,8 +72,8 @@ export class ReviewController {
     }
 
     // Trigger review
-    const success = await this.reviewEngine.reviewPullRequest(pr);
-    return { success };
+    const result = await this.reviewEngine.reviewPullRequest(pr);
+    return { success: result.success, outcome: result.outcome };
   }
 
   @Post('run-once')

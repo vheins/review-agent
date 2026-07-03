@@ -7,6 +7,7 @@ import { AutoFixService } from './services/auto-fix.service.js';
 import { DiscussionService } from './services/discussion.service.js';
 import { FalsePositiveService } from './services/false-positive.service.js';
 import { RejectionCategorizerService } from './services/rejection-categorizer.service.js';
+import { DocumentationReviewService } from './services/documentation-review.service.js';
 import { RuleEngineService } from './services/rule-engine.service.js';
 import { TaskLockService } from './services/task-lock.service.js';
 import { TemplateService } from './services/template.service.js';
@@ -59,6 +60,7 @@ import { ReviewController } from './review.controller.js';
     DiscussionService, 
     FalsePositiveService,
     RejectionCategorizerService,
+    DocumentationReviewService,
     RuleEngineService,
     TaskLockService,
     TemplateService,
@@ -72,6 +74,7 @@ import { ReviewController } from './review.controller.js';
     DiscussionService, 
     FalsePositiveService,
     RejectionCategorizerService,
+    DocumentationReviewService,
     RuleEngineService,
     TaskLockService,
     TemplateService,

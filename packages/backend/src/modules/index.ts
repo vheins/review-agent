@@ -15,3 +15,4 @@ export * from './github/github.module.js';
 export * from './ai/ai.module.js';
 export * from './webhook/index.js';
 export * from './websocket/index.js';
+export * from './discord/index.js';

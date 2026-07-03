@@ -20,6 +20,7 @@ describe('AppConfigService', () => {
     excludeRepoOwners: [],
     prScope: ['authored', 'assigned', 'review-requested'],
     autoMerge: false,
+    staleInvolvesReviewDays: 3,
   };
 
   const mockReviewConfig = {
@@ -212,6 +213,13 @@ describe('AppConfigService', () => {
       expect(() => {
         (service as any).validateConfig(invalidConfig);
       }).toThrow('Invalid scan scope');
+    });
+
+    it('should allow involves scan scope', () => {
+      const validConfig = { ...mockRepoConfig, scanScope: 'involves' };
+      expect(() => {
+        (service as any).validateConfig(validConfig);
+      }).not.toThrow();
     });
 
     it('should throw error for non-array protected branches', () => {

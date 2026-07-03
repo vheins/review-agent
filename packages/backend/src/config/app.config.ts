@@ -3,9 +3,9 @@ import { resolveWorkspaceDir } from './workspace-path.util.js';
 
 /**
  * Application Configuration
- * 
+ *
  * Typed configuration for general application settings.
- * 
+ *
  * Requirements: 9.1, 9.2, 9.5
  */
 export interface AppConfig {
@@ -18,20 +18,39 @@ export interface AppConfig {
   prScope: string[];
   autoMerge: boolean;
   dryRun: boolean;
+  staleInvolvesReviewDays: number;
+  ttsIncludedOwners: string[];
+  ttsExcludedOwners: string[];
+  issueSyncEnabled: boolean;
+  issueInterval: number;
+  fixIssue: boolean;
 }
 
-export default registerAs('app', (): AppConfig => ({
-  nodeEnv: process.env.NODE_ENV || 'development',
-  apiPort: parseInt(process.env.API_PORT || '3000', 10),
-  reviewInterval: parseInt(process.env.REVIEW_INTERVAL || '600', 10),
-  logLevel: process.env.LOG_LEVEL || 'info',
-  workspaceDir: resolveWorkspaceDir(),
-  excludeRepoOwners: process.env.EXCLUDE_REPO_OWNERS
-    ? process.env.EXCLUDE_REPO_OWNERS.split(',').map(s => s.trim())
-    : [],
-  prScope: process.env.PR_SCOPE
-    ? process.env.PR_SCOPE.split(',').map(s => s.trim())
-    : ['authored', 'assigned', 'review-requested'],
-  autoMerge: process.env.AUTO_MERGE === 'true',
-  dryRun: process.env.DRY_RUN === 'true',
-}));
+export default registerAs(
+  'app',
+  (): AppConfig => ({
+    nodeEnv: process.env.NODE_ENV || 'development',
+    apiPort: parseInt(process.env.API_PORT || '3000', 10),
+    reviewInterval: parseInt(process.env.REVIEW_INTERVAL || '600', 10),
+    logLevel: process.env.LOG_LEVEL || 'info',
+    workspaceDir: resolveWorkspaceDir(),
+    excludeRepoOwners: process.env.EXCLUDE_REPO_OWNERS
+      ? process.env.EXCLUDE_REPO_OWNERS.split(',').map(s => s.trim())
+      : [],
+    prScope: process.env.PR_SCOPE
+      ? process.env.PR_SCOPE.split(',').map(s => s.trim())
+      : ['authored', 'assigned', 'review-requested', 'involves'],
+    autoMerge: process.env.AUTO_MERGE === 'true',
+    dryRun: process.env.DRY_RUN === 'true',
+    staleInvolvesReviewDays: parseInt(process.env.STALE_INVOLVES_REVIEW_DAYS || '3', 10),
+    ttsIncludedOwners: process.env.TTS_INCLUDED_OWNERS
+      ? process.env.TTS_INCLUDED_OWNERS.split(',').map(s => s.trim())
+      : [],
+    ttsExcludedOwners: process.env.EXCLUDED_TTS_OWNERS
+      ? process.env.EXCLUDED_TTS_OWNERS.split(',').map(s => s.trim())
+      : [],
+    issueSyncEnabled: process.env.ISSUE_SYNC_ENABLED === 'true',
+    issueInterval: parseInt(process.env.ISSUE_INTERVAL || '600', 10),
+    fixIssue: process.env.FIX_ISSUE === 'true',
+  }),
+);

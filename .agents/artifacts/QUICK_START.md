@@ -8,7 +8,7 @@
 
 # Or manually:
 yarn install
-npm rebuild better-sqlite3
+yarn rebuild better-sqlite3
 cp .env.example .env
 ```
 
@@ -36,7 +36,7 @@ You should see:
 
 ### Native Module Error
 ```bash
-npm rebuild better-sqlite3
+yarn rebuild better-sqlite3
 ```
 
 ### Backend Not Running

@@ -1,7 +1,7 @@
 // Helper functions for HTTP API calls to backend server
 // ESM version for Electron renderer process (Vite)
 
-let API_BASE_URL = 'http://127.0.0.1:3000/api';
+let API_BASE_URL = 'http://127.0.0.1:30001/api';
 
 async function apiCall(endpoint, options = {}) {
     try {
@@ -125,6 +125,45 @@ export const api = {
             method: 'POST',
             body: { filters, format }
         });
+    },
+
+    // Custom Rules
+    testCustomRule: async ({ rule, sampleCode }) => {
+        return apiCall('/config/test-rule', {
+            method: 'POST',
+            body: { rule, sampleCode }
+        });
+    },
+
+    saveCustomRule: async ({ repositoryId, rule }) => {
+        const repoParam = String(repositoryId).replace('/', '-');
+        return apiCall(`/config/${repoParam}/rules`, {
+            method: 'POST',
+            body: rule
+        });
+    },
+
+    deleteCustomRule: async (ruleId) => {
+        return apiCall(`/config/rules/${ruleId}`, {
+            method: 'DELETE'
+        });
+    },
+
+    // Review Engine Control
+    startContinuous: async () => {
+        return apiCall('/reviews/run-all', { method: 'POST' });
+    },
+
+    startOnce: async () => {
+        return apiCall('/reviews/run-once', { method: 'POST' });
+    },
+
+    stopReview: async () => {
+        return apiCall('/reviews/stop', { method: 'POST' });
+    },
+
+    getReviewStatus: async () => {
+        return apiCall('/reviews/status');
     },
 
     // History

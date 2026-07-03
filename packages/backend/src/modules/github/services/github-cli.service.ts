@@ -2,31 +2,41 @@ import { Injectable, Logger } from '@nestjs/common';
 import { execa } from 'execa';
 import chalk from 'chalk';
 import stripAnsi from 'strip-ansi';
+import { formatRateLimitWait } from '../../../common/utils/rate-limit-wait-format.util.js';
 
 @Injectable()
 export class GithubCliService {
   private readonly logger = new Logger(GithubCliService.name);
+  private readonly rateLimitWaitBufferMs = 5000;
 
   /**
    * Execute a command with verbose logging
    */
-  async execaVerbose(cmd: string, args: string[], opts: any = {}): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  async execaVerbose(
+    cmd: string,
+    args: string[],
+    opts: any = {},
+  ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+    const rateLimitAttempts = opts.rateLimitAttempts ?? 0;
+    const sanitizedOpts = { ...opts };
+    delete sanitizedOpts.rateLimitAttempts;
+
     const label = chalk.magenta(`[exec]`) + ' ' + chalk.white(`${cmd} ${args.join(' ')}`);
     this.logger.log(`▶ ${label}`);
     const start = Date.now();
 
     // Use execa's built-in buffering for data integrity
     const proc = execa(cmd, args, {
-      ...opts,
+      ...sanitizedOpts,
       all: true, // Combine stdout and stderr
       reject: false,
     });
 
-    // For verbose logging without corrupting the return value, 
+    // For verbose logging without corrupting the return value,
     // we pipe to a logger but return the raw buffer result.
-    if (proc.stdout && !opts.silent) {
+    if (proc.stdout && !sanitizedOpts.silent) {
       let lineCount = 0;
-      proc.stdout.on('data', (chunk) => {
+      proc.stdout.on('data', chunk => {
         if (lineCount > 100) return; // Limit console noise for huge outputs
         const lines = chunk.toString().split('\n');
         for (const line of lines) {
@@ -37,7 +47,9 @@ export class GithubCliService {
           }
         }
         if (lineCount === 100) {
-          process.stdout.write(chalk.gray('  │ ') + '... (output truncated in console for brevity)\n');
+          process.stdout.write(
+            chalk.gray('  │ ') + '... (output truncated in console for brevity)\n',
+          );
           lineCount++;
         }
       });
@@ -50,13 +62,33 @@ export class GithubCliService {
     const stderr = stripAnsi(result.stderr || '');
 
     if (result.exitCode !== 0) {
-      if (!opts.allowFail) {
+      const errorOutput = [stdout, stderr, stripAnsi((result as any).all || '')]
+        .filter(Boolean)
+        .join('\n');
+      if (
+        cmd === 'gh' &&
+        !sanitizedOpts.allowFail &&
+        rateLimitAttempts < 1 &&
+        this.isRateLimitExceeded(errorOutput)
+      ) {
+        await this.waitForGitHubRateLimitReset(errorOutput);
+        return this.execaVerbose(cmd, args, {
+          ...sanitizedOpts,
+          rateLimitAttempts: rateLimitAttempts + 1,
+        });
+      }
+
+      if (!sanitizedOpts.allowFail) {
         this.logger.error(`[CLI] ✖ ${cmd} failed in ${duration}ms with code ${result.exitCode}`);
-        const err = new Error(stderr || `${cmd} failed with exit code ${result.exitCode}`) as any;
+        const err = new Error(
+          errorOutput.trim() || `${cmd} failed with exit code ${result.exitCode}`,
+        ) as any;
         err.exitCode = result.exitCode;
         throw err;
       }
-      this.logger.warn(`[CLI] ✖ ${cmd} exited with code ${result.exitCode} (allowed) after ${duration}ms`);
+      this.logger.warn(
+        `[CLI] ✖ ${cmd} exited with code ${result.exitCode} (allowed) after ${duration}ms`,
+      );
     } else {
       this.logger.log(`[CLI] ✔ ${cmd} completed in ${duration}ms (exit 0)`);
     }
@@ -68,18 +100,67 @@ export class GithubCliService {
     };
   }
 
+  private isRateLimitExceeded(output: string): boolean {
+    const msg = output.toLowerCase();
+    return (
+      msg.includes('rate limit') &&
+      (msg.includes('exceeded') ||
+        msg.includes('secondary rate limit') ||
+        msg.includes('api rate limit'))
+    );
+  }
+
+  private async waitForGitHubRateLimitReset(errorOutput: string): Promise<void> {
+    const resetMs = await this.getGitHubRateLimitResetMs(errorOutput);
+    const waitMs = Math.max(resetMs - Date.now() + this.rateLimitWaitBufferMs, 1000);
+    const waitDescription = formatRateLimitWait(waitMs);
+
+    this.logger.warn(
+      `[CLI] GitHub API rate limit exceeded. Waiting ${waitDescription} before retrying...`,
+    );
+    await new Promise(resolve => setTimeout(resolve, waitMs));
+  }
+
+  private async getGitHubRateLimitResetMs(errorOutput: string): Promise<number> {
+    try {
+      const result = await execa('gh', ['api', 'rate_limit'], {
+        all: true,
+        reject: false,
+      });
+      if (result.exitCode === 0) {
+        const limits = JSON.parse(result.stdout || (result as any).all || '{}');
+        const resourceName = errorOutput.toLowerCase().includes('graphql') ? 'graphql' : 'core';
+        const resetSeconds =
+          limits?.resources?.[resourceName]?.reset ??
+          limits?.resources?.core?.reset ??
+          limits?.rate?.reset;
+
+        if (typeof resetSeconds === 'number' && resetSeconds > 0) {
+          return resetSeconds * 1000;
+        }
+      }
+    } catch (e) {
+      this.logger.warn(`[CLI] Could not read GitHub rate limit reset time: ${e.message}`);
+    }
+
+    return Date.now() + 60_000;
+  }
+
   async searchPRs(query: string): Promise<any[]> {
     this.logger.log(`[CLI] Searching PRs: ${query}`);
     // Split query by space to handle multiple qualifiers correctly in execa
     const queryParts = query.split(' ').filter(part => part.trim() !== '');
-    
+
     const { stdout } = await this.execaVerbose('gh', [
-      'search', 'prs',
+      'search',
+      'prs',
       ...queryParts,
-      '--limit', '100',
-      '--json', 'id,number,title,body,state,url,author,labels,createdAt,updatedAt,closedAt,isDraft,isLocked,repository',
+      '--limit',
+      '100',
+      '--json',
+      'id,number,title,body,state,url,author,labels,createdAt,updatedAt,closedAt,isDraft,isLocked,repository',
     ]);
-    
+
     try {
       return JSON.parse(stdout || '[]');
     } catch (e) {
@@ -89,13 +170,18 @@ export class GithubCliService {
   }
 
   async searchIssues(): Promise<any[]> {
-    this.logger.log('[CLI] Searching issues mentioning @me');
+    const username = process.env.GITHUB_USERNAME || 'vheins';
+    this.logger.log(`[CLI] Searching issues assigned to ${username}`);
     const { stdout } = await this.execaVerbose('gh', [
-      'search', 'issues',
+      'search',
+      'issues',
       '--state=open',
-      '--mentions=@me',
-      '--limit', '100',
-      '--json', 'number,title,repository,url,updatedAt,state,author',
+      '--assignee',
+      username,
+      '--limit',
+      '100',
+      '--json',
+      'number,title,repository,url,updatedAt,createdAt,state,author,body,labels,assignees',
     ]);
     try {
       return JSON.parse(stdout || '[]');
@@ -108,11 +194,15 @@ export class GithubCliService {
   async getPRDetail(repoName: string, prNumber: number): Promise<any> {
     this.logger.debug(`[CLI] Getting PR view: ${repoName}#${prNumber}`);
     const { stdout } = await this.execaVerbose('gh', [
-      'pr', 'view', prNumber.toString(),
-      '--repo', repoName,
-      '--json', 'id,number,title,body,state,url,author,labels,headRefName,headRefOid,baseRefName,isDraft,mergeable,mergeStateStatus,mergedAt,closedAt,createdAt',
+      'pr',
+      'view',
+      prNumber.toString(),
+      '--repo',
+      repoName,
+      '--json',
+      'id,number,title,body,state,url,author,labels,headRefName,headRefOid,baseRefName,isDraft,mergeable,mergeStateStatus,mergedAt,closedAt,createdAt',
     ]);
-    
+
     let detail;
     try {
       detail = JSON.parse(stdout || '{}');
@@ -120,7 +210,7 @@ export class GithubCliService {
       this.logger.error(`[CLI] Failed to parse JSON response from pr view: ${e.message}`);
       throw e;
     }
-    
+
     // Normalize to match API structure if needed by consumer
     return {
       ...detail,
@@ -129,7 +219,7 @@ export class GithubCliService {
       user: detail.author,
       html_url: detail.url,
       draft: detail.isDraft,
-      labels: (detail.labels || []).map(l => l.name)
+      labels: (detail.labels || []).map(l => l.name),
     };
   }
 
@@ -137,20 +227,27 @@ export class GithubCliService {
     this.logger.log(`[CLI] Adding ${event} review to ${repoName}#${prNumber}`);
     const flag = event.toLowerCase().replace(/_/g, '-');
     await this.execaVerbose('gh', [
-      'pr', 'review', prNumber.toString(),
-      '--repo', repoName,
-      '--body', body,
-      `--${flag}`
+      'pr',
+      'review',
+      prNumber.toString(),
+      '--repo',
+      repoName,
+      '--body',
+      body,
+      `--${flag}`,
     ]);
   }
 
   async mergePR(repoName: string, prNumber: number, method: string): Promise<void> {
     this.logger.log(`[CLI] Merging PR ${repoName}#${prNumber} via ${method}`);
     await this.execaVerbose('gh', [
-      'pr', 'merge', prNumber.toString(),
-      '--repo', repoName,
+      'pr',
+      'merge',
+      prNumber.toString(),
+      '--repo',
+      repoName,
       `--${method}`,
-      '--delete-branch'
+      '--delete-branch',
     ]);
   }
 
@@ -158,7 +255,7 @@ export class GithubCliService {
     this.logger.debug(`[CLI] Listing reviews for ${repoName}#${prNumber} via API fallback`);
     const { stdout } = await this.execaVerbose('gh', [
       'api',
-      `/repos/${repoName}/pulls/${prNumber}/reviews`
+      `/repos/${repoName}/pulls/${prNumber}/reviews`,
     ]);
     try {
       return JSON.parse(stdout || '[]');
@@ -167,13 +264,20 @@ export class GithubCliService {
     }
   }
 
-  async dismissReview(repoName: string, prNumber: number, reviewId: number, message: string): Promise<void> {
+  async dismissReview(
+    repoName: string,
+    prNumber: number,
+    reviewId: number,
+    message: string,
+  ): Promise<void> {
     this.logger.log(`[CLI] Dismissing review ${reviewId} for ${repoName}#${prNumber}`);
     await this.execaVerbose('gh', [
       'api',
-      '-X', 'PUT',
+      '-X',
+      'PUT',
       `/repos/${repoName}/pulls/${prNumber}/reviews/${reviewId}/dismissals`,
-      '-f', `message=${message}`
+      '-f',
+      `message=${message}`,
     ]);
   }
 
@@ -181,7 +285,7 @@ export class GithubCliService {
     this.logger.debug(`[CLI] Listing review comments for ${repoName}#${prNumber} via API fallback`);
     const { stdout } = await this.execaVerbose('gh', [
       'api',
-      `/repos/${repoName}/pulls/${prNumber}/comments`
+      `/repos/${repoName}/pulls/${prNumber}/comments`,
     ]);
     try {
       return JSON.parse(stdout || '[]');
@@ -192,18 +296,19 @@ export class GithubCliService {
 
   async updateBranch(repoName: string, prNumber: number): Promise<void> {
     this.logger.log(`[CLI] Updating branch for ${repoName}#${prNumber}`);
-    await this.execaVerbose('gh', [
-      'pr', 'update-branch', prNumber.toString(),
-      '--repo', repoName
-    ]);
+    await this.execaVerbose('gh', ['pr', 'update-branch', prNumber.toString(), '--repo', repoName]);
   }
 
   async getPRChecks(repoName: string, prNumber: number): Promise<any[]> {
     this.logger.debug(`[CLI] Checking PR status for ${repoName}#${prNumber}`);
     const { stdout } = await this.execaVerbose('gh', [
-      'pr', 'checks', prNumber.toString(),
-      '--repo', repoName,
-      '--json', 'name,status,conclusion,url'
+      'pr',
+      'checks',
+      prNumber.toString(),
+      '--repo',
+      repoName,
+      '--json',
+      'name,status,conclusion,url',
     ]);
     try {
       return JSON.parse(stdout || '[]');
@@ -213,11 +318,17 @@ export class GithubCliService {
   }
 
   async assignReviewers(repoName: string, prNumber: number, reviewers: string[]): Promise<void> {
-    this.logger.log(`[CLI] Assigning reviewers to ${repoName}#${prNumber}: ${reviewers.join(', ')}`);
+    this.logger.log(
+      `[CLI] Assigning reviewers to ${repoName}#${prNumber}: ${reviewers.join(', ')}`,
+    );
     await this.execaVerbose('gh', [
-      'pr', 'edit', prNumber.toString(),
-      '--repo', repoName,
-      '--add-reviewer', reviewers.join(',')
+      'pr',
+      'edit',
+      prNumber.toString(),
+      '--repo',
+      repoName,
+      '--add-reviewer',
+      reviewers.join(','),
     ]);
   }
 

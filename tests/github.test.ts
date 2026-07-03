@@ -1,25 +1,6 @@
 import { vi } from 'vitest';
-
-// Mock fs-extra BEFORE other imports
-vi.mock('fs-extra', () => {
-  const mock = {
-    pathExists: vi.fn().mockResolvedValue(false),
-    stat: vi.fn().mockResolvedValue({ isFile: () => true }),
-    readFile: vi.fn().mockResolvedValue(''),
-    remove: vi.fn().mockResolvedValue(undefined),
-    ensureDir: vi.fn().mockResolvedValue(undefined),
-    pathExistsSync: vi.fn().mockReturnValue(false),
-  };
-  return {
-    ...mock,
-    default: mock,
-    __esModule: true,
-  };
-});
-
-import { describe, it, expect, beforeEach, Mock } from 'vitest';
-import { GitHubClientService, PullRequest } from '../packages/backend/src/modules/github/github.service.js';
-import * as fs from 'fs-extra';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { GitHubClientService } from '../packages/backend/src/modules/github/github.service.js';
 
 describe('GitHubClientService', () => {
   let service: GitHubClientService;
@@ -33,6 +14,7 @@ describe('GitHubClientService', () => {
     excludeRepoOwners: ['ignored-owner'],
     workspaceDir: './test-workspace',
     autoMerge: true,
+    staleInvolvesReviewDays: 3,
   };
 
   beforeEach(() => {
@@ -69,29 +51,28 @@ describe('GitHubClientService', () => {
   });
 
   describe('fetchOpenPRs', () => {
-    it('should fetch PRs via API if token is available', async () => {
-      const mockPRs = {
-        items: [
-          {
-            number: 1,
-            title: 'Test PR',
-            repository_url: 'https://api.github.com/repos/owner/repo',
-            html_url: 'https://github.com/owner/repo/pull/1',
-            updated_at: '2026-03-11T00:00:00Z',
-            state: 'open',
-            user: { login: 'user' }
-          }
-        ]
-      };
-
-      githubApi.searchPRs.mockResolvedValue(mockPRs);
-      githubApi.getPRDetail.mockResolvedValue({ head: { ref: 'feature' }, base: { ref: 'main' } });
+    it('should fetch PRs via CLI search first', async () => {
+      githubCli.searchPRs.mockResolvedValue([
+        {
+          id: 'pr-1',
+          number: 1,
+          title: 'Test PR',
+          body: '',
+          state: 'open',
+          url: 'https://github.com/owner/repo/pull/1',
+          updatedAt: '2026-03-11T00:00:00Z',
+          createdAt: '2026-03-10T00:00:00Z',
+          repository: { nameWithOwner: 'owner/repo' },
+          author: { login: 'user' },
+          labels: [],
+        }
+      ]);
 
       const prs = await service.fetchOpenPRs();
 
       expect(prs).toHaveLength(1);
-      expect(githubApi.searchPRs).toHaveBeenCalled();
-      expect(githubCli.searchPRs).not.toHaveBeenCalled();
+      expect(githubCli.searchPRs).toHaveBeenCalled();
+      expect(githubApi.searchPRs).not.toHaveBeenCalled();
     });
 
     it('should fallback to CLI if API fails', async () => {
@@ -104,48 +85,92 @@ describe('GitHubClientService', () => {
     });
 
     it('should deduplicate PRs by URL', async () => {
-      const mockPRs = {
-        items: [
+      appConfig.getAppConfig.mockReturnValue({
+        ...mockAppConfig,
+        prScope: ['authored', 'assigned'],
+      });
+      githubCli.searchPRs
+        .mockResolvedValueOnce([
           {
+            id: 'pr-1',
             number: 1,
             title: 'Test PR',
-            repository_url: 'https://api.github.com/repos/owner/repo',
-            html_url: 'https://github.com/owner/repo/pull/1',
-            updated_at: '2026-03-11T00:00:00Z',
+            body: '',
             state: 'open',
-            user: { login: 'user' }
+            url: 'https://github.com/owner/repo/pull/1',
+            updatedAt: '2026-03-11T00:00:00Z',
+            createdAt: '2026-03-10T00:00:00Z',
+            repository: { nameWithOwner: 'owner/repo' },
+            author: { login: 'user' },
+            labels: [],
           }
-        ]
-      };
-
-      githubApi.searchPRs.mockResolvedValue(mockPRs);
-      githubApi.getPRDetail.mockResolvedValue({ head: { ref: 'feature' }, base: { ref: 'main' } });
+        ])
+        .mockResolvedValueOnce([
+          {
+            id: 'pr-1',
+            number: 1,
+            title: 'Test PR',
+            body: '',
+            state: 'open',
+            url: 'https://github.com/owner/repo/pull/1',
+            updatedAt: '2026-03-11T00:00:00Z',
+            createdAt: '2026-03-10T00:00:00Z',
+            repository: { nameWithOwner: 'owner/repo' },
+            author: { login: 'user' },
+            labels: [],
+          }
+        ]);
 
       const prs = await service.fetchOpenPRs();
       expect(prs).toHaveLength(1);
     });
-  });
 
-  describe('prepareRepository', () => {
-    const mockPR: PullRequest = {
-      number: 1,
-      title: 'Test PR',
-      repository: { nameWithOwner: 'owner/repo' },
-      url: 'https://github.com/owner/repo/pull/1',
-      updatedAt: '2026-03-11T00:00:00Z',
-      state: 'open',
-      headRefName: 'feature',
-      baseRefName: 'main',
-      author: { login: 'user' }
-    };
+    it('should merge matched scopes across duplicate PR discovery results', async () => {
+      appConfig.getAppConfig.mockReturnValue({
+        ...mockAppConfig,
+        prScope: ['assigned', 'involves'],
+      });
+      configService.get.mockImplementation((key: string) => {
+        if (key === 'GITHUB_TOKEN') return undefined;
+        if (key === 'GITHUB_USERNAME') return 'reviewer';
+        return undefined;
+      });
+      githubCli.searchPRs
+        .mockResolvedValueOnce([
+          {
+            id: 'pr-1',
+            number: 10,
+            title: 'Shared PR',
+            body: '',
+            state: 'open',
+            url: 'https://github.com/owner/repo/pull/10',
+            author: { login: 'user' },
+            labels: [],
+            createdAt: '2026-03-01T00:00:00Z',
+            updatedAt: '2026-03-02T00:00:00Z',
+            repository: { nameWithOwner: 'owner/repo' },
+          }
+        ])
+        .mockResolvedValueOnce([
+          {
+            id: 'pr-1',
+            number: 10,
+            title: 'Shared PR',
+            body: '',
+            state: 'open',
+            url: 'https://github.com/owner/repo/pull/10',
+            author: { login: 'user' },
+            labels: [],
+            createdAt: '2026-03-01T00:00:00Z',
+            updatedAt: '2026-03-02T00:00:00Z',
+            repository: { nameWithOwner: 'owner/repo' },
+          }
+        ]);
 
-    it('should clone repository if it does not exist', async () => {
-      (fs.pathExists as Mock).mockResolvedValue(false);
+      const prs = await service.fetchOpenPRs();
 
-      const repoDir = await service.prepareRepository(mockPR);
-
-      expect(repoDir).toContain('owner-repo');
-      expect(githubCli.execaVerbose).toHaveBeenCalledWith('git', expect.arrayContaining(['clone', 'git@github.com:owner/repo.git', expect.any(String)]));
+      expect(prs).toHaveLength(1);
+      expect(prs[0].matchedScopes).toEqual(['assigned', 'involves']);
     });
   });
 

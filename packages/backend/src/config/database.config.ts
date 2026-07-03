@@ -14,6 +14,8 @@ export interface DatabaseConfig {
   synchronize: boolean;
   logging: boolean;
   autoLoadEntities: boolean;
+  enableWAL: boolean;
+  busyTimeout: number;
 }
 
 export default registerAs('database', (): DatabaseConfig => ({
@@ -23,4 +25,6 @@ export default registerAs('database', (): DatabaseConfig => ({
   // logging: process.env.NODE_ENV === 'development',
   logging: false,
   autoLoadEntities: true,
+  enableWAL: true,
+  busyTimeout: 10000,
 }));
