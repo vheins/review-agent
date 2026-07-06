@@ -2,8 +2,10 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const CONFIG_DIR = path.dirname(fileURLToPath(import.meta.url));
-const DEFAULT_WORKSPACE_DIR = path.resolve(CONFIG_DIR, '../../../../workspace');
+const PROJECT_ROOT = path.resolve(CONFIG_DIR, '../../../../');
 
 export function resolveWorkspaceDir(): string {
-  return process.env.WORKSPACE_DIR || DEFAULT_WORKSPACE_DIR;
+  return process.env.WORKSPACE_DIR
+    ? path.resolve(PROJECT_ROOT, process.env.WORKSPACE_DIR)
+    : path.resolve(PROJECT_ROOT, 'workspace');
 }

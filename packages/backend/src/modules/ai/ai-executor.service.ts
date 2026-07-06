@@ -12,15 +12,15 @@ import { CommentParserService } from '../../common/parser/comment-parser.service
 
 /**
  * AiExecutorService - Service for AI-powered PR reviews
- * 
+ *
  * This service manages different AI executors and provides methods
  * to perform PR reviews and parse AI output.
- * 
+ *
  * Features:
  * - Strategy pattern for different AI executors
  * - Output parsing via CommentParserService
  * - Integration with AppConfigService for executor selection
- * 
+ *
  * Requirements: 8.1, 8.2, 8.3, 8.4, 8.5
  */
 @Injectable()
@@ -51,21 +51,27 @@ export class AiExecutorService {
     for (const executor of availableExecutors) {
       this.executors.set(executor.name, executor);
     }
-    
-    this.logger.log(`Registered ${this.executors.size} AI executors: ${Array.from(this.executors.keys()).join(', ')}`);
+
+    this.logger.log(
+      `Registered ${this.executors.size} AI executors: ${Array.from(this.executors.keys()).join(', ')}`,
+    );
   }
 
   /**
    * Execute review for a Pull Request
-   * 
+   *
    * @param pr - Pull Request to review
    * @param diff - Git diff content
    * @param repoDir - Local repository directory
    * @returns Parsed review comments
-   * 
+   *
    * Requirements: 8.3, 8.4
    */
-  async executeReview(pr: PullRequest, changedFiles: string[], repoDir: string): Promise<AiReviewComment[]> {
+  async executeReview(
+    pr: PullRequest,
+    changedFiles: string[],
+    repoDir: string,
+  ): Promise<AiReviewComment[]> {
     try {
       const executor = await this.selectExecutor(pr);
       this.logger.log(`🔍 Starting ${executor.name} review for PR #${pr.number}: "${pr.title}"`);
@@ -101,27 +107,51 @@ export class AiExecutorService {
   }
 
   async executePrompt(executorName: string, prompt: string, repoDir?: string): Promise<string> {
-    const executor = this.executors.get(executorName.toLowerCase()) || this.executors.get('gemini')!;
+    const executor =
+      this.executors.get(executorName.toLowerCase()) || this.executors.get('gemini')!;
     this.logger.log(`Executing custom prompt using ${executor.name}`);
     if (executor instanceof BaseAiExecutor) {
       const cwd = repoDir || process.cwd();
       const anyExec = executor as any;
-      
+
       switch (executor.name) {
         case 'opencode':
           return anyExec.execCli(
             process.env.OPENCODE_BIN || 'opencode',
-            ['run', '--dir', cwd, '--dangerously-skip-permissions', prompt],
+            [
+              'run',
+              '--dir',
+              cwd,
+              '--thinking',
+              '--dangerously-skip-permissions',
+              '--variant',
+              process.env.OPENCODE_VARIANT || 'max',
+              prompt,
+            ],
             { cwd, allowFail: true },
           );
         case 'kiro':
-          return anyExec.execCli('kiro-cli', ['chat', '--no-interactive', '--trust-all-tools'], { cwd, input: prompt });
+          return anyExec.execCli('kiro-cli', ['chat', '--no-interactive', '--trust-all-tools'], {
+            cwd,
+            input: prompt,
+          });
         case 'claude':
-          return anyExec.execCli('claude', ['-p', prompt, '--output-format', 'text', '--dangerously-skip-permissions'], { cwd });
+          return anyExec.execCli(
+            'claude',
+            ['-p', prompt, '--output-format', 'text', '--dangerously-skip-permissions'],
+            { cwd },
+          );
         case 'codex':
-          return anyExec.execCli('codex', ['exec', '-', '--dangerously-bypass-approvals-and-sandbox'], { cwd, input: prompt });
+          return anyExec.execCli(
+            'codex',
+            ['exec', '-', '--dangerously-bypass-approvals-and-sandbox'],
+            { cwd, input: prompt },
+          );
         case 'copilot':
-          return anyExec.execCli('copilot', ['--yolo', '--allow-all-tools'], { cwd, input: prompt });
+          return anyExec.execCli('copilot', ['--yolo', '--allow-all-tools'], {
+            cwd,
+            input: prompt,
+          });
         case 'gemini':
         default:
           return anyExec.execCli(executor.name, ['--yolo'], { cwd, input: prompt });
@@ -133,7 +163,10 @@ export class AiExecutorService {
   /**
    * Generate high-level insights for a Tech Lead
    */
-  async generateLeadInsights(pr: PullRequest, diff: string): Promise<{ summary: string; risk: number; impact: number; category: string }> {
+  async generateLeadInsights(
+    pr: PullRequest,
+    diff: string,
+  ): Promise<{ summary: string; risk: number; impact: number; category: string }> {
     try {
       const prompt = `As a Technical Lead, analyze this PR and provide:
 1. A 2-sentence executive summary.
@@ -149,16 +182,16 @@ Return JSON: { "summary": "...", "risk": 0, "impact": 0, "category": "..." }`;
 
       const text = await this.executePrompt('gemini', prompt);
       const jsonStr = text.match(/\{.*\}/s)?.[0];
-      
+
       if (jsonStr) {
         return JSON.parse(jsonStr);
       }
-      
+
       return {
         summary: 'Failed to generate summary',
         risk: 50,
         impact: 50,
-        category: 'unknown'
+        category: 'unknown',
       };
     } catch (error) {
       this.logger.error(`Lead insights failed: ${error.message}`);
@@ -166,37 +199,37 @@ Return JSON: { "summary": "...", "risk": 0, "impact": 0, "category": "..." }`;
         summary: 'Error generating insights',
         risk: 0,
         impact: 0,
-        category: 'error'
+        category: 'error',
       };
     }
   }
 
   /**
    * Select the best AI executor based on configuration
-   * 
+   *
    * @param pr - Pull Request
    * @returns Selected AI executor
-   * 
+   *
    * Requirements: 8.4
    */
   private async selectExecutor(pr: PullRequest): Promise<AiExecutor> {
     const repoConfig = await this.config.getRepositoryConfig(pr.repository.nameWithOwner);
     const preferred = repoConfig.executor.toLowerCase();
-    
+
     if (this.executors.has(preferred)) {
       return this.executors.get(preferred)!;
     }
-    
+
     this.logger.warn(`Preferred executor '${preferred}' not found, falling back to gemini`);
     return this.executors.get('gemini')!;
   }
 
   /**
    * Parse AI output into structured comments (Forward to parser service)
-   * 
+   *
    * @param output - Raw output from AI
    * @returns List of parsed comments
-   * 
+   *
    * Requirements: 8.5
    */
   parseOutput(output: string): AiReviewComment[] {

@@ -13,8 +13,17 @@ export class OpenCodeExecutor extends BaseAiExecutor {
     const prompt = this.buildReviewPrompt(pr, changedFiles);
 
     const opencodeBin = process.env.OPENCODE_BIN || 'opencode';
+    const variant = process.env.OPENCODE_VARIANT || 'max';
 
-    const args = ['run', '--dir', repoDir, '--dangerously-skip-permissions'];
+    const args = [
+      'run',
+      '--dir',
+      repoDir,
+      '--thinking',
+      '--dangerously-skip-permissions',
+      '--variant',
+      variant,
+    ];
     if (model !== 'auto') args.push('--model', model);
     if (agent) args.push('--agent', agent);
     args.push(prompt);

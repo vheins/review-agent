@@ -1,12 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
-import { KiroExecutor, OpenCodeExecutor } from '../packages/backend/src/modules/ai/executors/others.executor.js';
+import {
+  KiroExecutor,
+  OpenCodeExecutor,
+} from '../packages/backend/src/modules/ai/executors/others.executor.js';
 
 describe('KiroExecutor', () => {
   it('uses stdin in chat mode from the repository directory', async () => {
     const executor = new KiroExecutor();
-    const execSpy = vi
-      .spyOn(executor as any, 'execCli')
-      .mockResolvedValue('ok');
+    const execSpy = vi.spyOn(executor as any, 'execCli').mockResolvedValue('ok');
 
     delete process.env.KIRO_AGENT;
 
@@ -36,9 +37,7 @@ describe('KiroExecutor', () => {
 describe('OpenCodeExecutor', () => {
   it('runs against the repository directory and forwards configured agent/model', async () => {
     const executor = new OpenCodeExecutor();
-    const execSpy = vi
-      .spyOn(executor as any, 'execCli')
-      .mockResolvedValue('ok');
+    const execSpy = vi.spyOn(executor as any, 'execCli').mockResolvedValue('ok');
 
     process.env.OPENCODE_MODEL = 'openai/gpt-5';
     process.env.OPENCODE_AGENT = 'reviewer';
@@ -61,7 +60,10 @@ describe('OpenCodeExecutor', () => {
         'run',
         '--dir',
         '/tmp/repo',
+        '--thinking',
         '--dangerously-skip-permissions',
+        '--variant',
+        'max',
         '--model',
         'openai/gpt-5',
         '--agent',

@@ -85,7 +85,7 @@ export class RepositoryManagerService {
 
     const appConfig = this.config.getAppConfig();
     const workspaceDir = appConfig.workspaceDir;
-    const repoDir = path.join(workspaceDir, repoName.replace('/', '-'));
+    const repoDir = path.join(workspaceDir, repoName);
 
     await fs.ensureDir(workspaceDir);
 
@@ -146,7 +146,7 @@ export class RepositoryManagerService {
 
     const appConfig = this.config.getAppConfig();
     const workspaceDir = appConfig.workspaceDir;
-    const repoDir = path.join(workspaceDir, repoName.replace('/', '-'));
+    const repoDir = path.join(workspaceDir, repoName);
 
     await fs.ensureDir(workspaceDir);
 
