@@ -199,7 +199,13 @@ export class DiscordBotService implements OnModuleInit, OnModuleDestroy {
   async playTTS(text: string): Promise<boolean> {
     return this._generateTTS(
       text,
-      ['gemini/gemini-2.5-flash-preview-tts/Algieba', 'edge-tts/id-ID-ArdiNeural', 'google-tts/id'],
+      [
+        'gemini/gemini-2.5-flash-preview-tts/Algieba',
+        'gemini/gemini-3.1-flash-tts-preview',
+        'gemini/gemini-2.5-pro-preview-tts',
+        'edge-tts/id-ID-ArdiNeural',
+        'google-tts/id',
+      ],
       'id',
     );
   }
