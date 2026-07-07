@@ -201,8 +201,8 @@ export class DiscordBotService implements OnModuleInit, OnModuleDestroy {
       text,
       [
         'gemini/gemini-2.5-flash-preview-tts/Algieba',
-        'gemini/gemini-3.1-flash-tts-preview',
-        'gemini/gemini-2.5-pro-preview-tts',
+        'gemini/gemini-3.1-flash-tts-preview/Algieba',
+        'gemini/gemini-2.5-pro-preview-tts/Algieba',
         'edge-tts/id-ID-ArdiNeural',
         'google-tts/id',
       ],
