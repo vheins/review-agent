@@ -200,9 +200,9 @@ export class DiscordBotService implements OnModuleInit, OnModuleDestroy {
     return this._generateTTS(
       text,
       [
-        'gemini/gemini-2.5-flash-preview-tts/Algieba',
-        'gemini/gemini-3.1-flash-tts-preview/Algieba',
-        'gemini/gemini-2.5-pro-preview-tts/Algieba',
+        'gemini/gemini-2.5-flash-preview-tts/Algenib',
+        'gemini/gemini-3.1-flash-tts-preview/Algenib',
+        'gemini/gemini-2.5-pro-preview-tts/Algenib',
         'edge-tts/id-ID-ArdiNeural',
         'google-tts/id',
       ],
