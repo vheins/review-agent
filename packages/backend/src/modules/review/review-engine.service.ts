@@ -250,7 +250,7 @@ export class ReviewEngineService {
         }
       }
 
-      // 1.5 Read mergeability
+      // 1.6 Read mergeability
       const currentMergeableState = deepPR?.mergeable_state || pr.mergeable_state;
       if (!currentMergeableState || currentMergeableState === 'unknown') {
         const detail = await this.github.getPRDetail(pr.repository.nameWithOwner, pr.number);
@@ -757,6 +757,29 @@ export class ReviewEngineService {
           );
           return true;
         }
+      }
+
+      // Skip if only empty review commits since last review (infinite loop guard)
+      try {
+        const commits = await this.github.listPRCommits(pr.repository.nameWithOwner, pr.number);
+        const lastCommit = commits?.[commits.length - 1];
+        if (lastCommit) {
+          const msg = lastCommit.commit?.message || '';
+          const reviewPattern = new RegExp(`^review\\(pr-#${pr.number}\\):`, 'i');
+          if (reviewPattern.test(msg)) {
+            const isOnlyReviewCommitsNew = !submitted.some(
+              (r: any) => r.commit_id === lastCommit.sha,
+            );
+            if (isOnlyReviewCommitsNew) {
+              this.logger.log(
+                `PR #${pr.number} latest commit is a review commit — skipping to avoid loop.`,
+              );
+              return true;
+            }
+          }
+        }
+      } catch (e) {
+        this.logger.warn(`Could not check latest PR commit type: ${e.message}`);
       }
 
       this.logger.log(
