@@ -759,27 +759,32 @@ export class ReviewEngineService {
         }
       }
 
-      // Skip if only empty review commits since last review (infinite loop guard)
-      try {
-        const commits = await this.github.listPRCommits(pr.repository.nameWithOwner, pr.number);
-        const lastCommit = commits?.[commits.length - 1];
-        if (lastCommit) {
-          const msg = lastCommit.commit?.message || '';
-          const reviewPattern = new RegExp(`^review\\(pr-#${pr.number}\\):`, 'i');
-          if (reviewPattern.test(msg)) {
-            const isOnlyReviewCommitsNew = !submitted.some(
-              (r: any) => r.commit_id === lastCommit.sha,
-            );
-            if (isOnlyReviewCommitsNew) {
+      // Skip if latest commit is an empty review commit from agent (infinite loop guard)
+      if (headSha && lastReview.commit_id !== headSha) {
+        try {
+          const { stdout: commitJson } = await this.github.execaVerbose(
+            'gh',
+            [
+              'api',
+              `repos/${pr.repository.nameWithOwner}/commits/${headSha}`,
+              '--jq',
+              '{message: .commit.message, parents: [.parents[].sha] | length}',
+            ],
+            { allowFail: true },
+          );
+          if (commitJson) {
+            const { message, parents } = JSON.parse(commitJson);
+            const reviewPattern = new RegExp(`^review\\(pr-#${pr.number}\\):`, 'i');
+            if (reviewPattern.test(message) && parents <= 1) {
               this.logger.log(
-                `PR #${pr.number} latest commit is a review commit — skipping to avoid loop.`,
+                `PR #${pr.number} latest commit is an empty review commit — skipping to avoid loop.`,
               );
               return true;
             }
           }
+        } catch (e) {
+          this.logger.warn(`Could not check latest PR commit type: ${e.message}`);
         }
-      } catch (e) {
-        this.logger.warn(`Could not check latest PR commit type: ${e.message}`);
       }
 
       this.logger.log(
