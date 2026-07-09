@@ -389,6 +389,7 @@ export class GitHubClientService {
       baseSha: '', // PR view doesn't provide base OID by default, will be resolved via git
       author: { login: cliDetail.author?.login || cliDetail.author },
       labels: cliDetail.labels || [],
+      requested_reviewers: (cliDetail.reviewRequests || []).map((r: any) => r.login),
     } as PullRequest;
   }
 

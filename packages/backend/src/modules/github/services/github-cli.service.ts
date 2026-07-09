@@ -200,7 +200,7 @@ export class GithubCliService {
       '--repo',
       repoName,
       '--json',
-      'id,number,title,body,state,url,author,labels,headRefName,headRefOid,baseRefName,isDraft,mergeable,mergeStateStatus,mergedAt,closedAt,createdAt',
+      'id,number,title,body,state,url,author,labels,headRefName,headRefOid,baseRefName,isDraft,mergeable,mergeStateStatus,mergedAt,closedAt,createdAt,reviewRequests',
     ]);
 
     let detail;
