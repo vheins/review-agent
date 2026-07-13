@@ -172,19 +172,19 @@ gh api user --jq .login
 - Review body MUST contain only findings/fixes/follow-up. MUST NOT contain `## Summary` or PR summary.
 - If `LOCAL_MODE=direct-fix-only`, MUST NOT create a pending review or submit `REQUEST_CHANGES`; commit/push fixes and approve/merge when clear.
 - If findings exist:
-  1. Create pending review:
-     ```bash
-     gh api repos/{{repository}}/pulls/{{pr.number}}/reviews -f body=""
-     ```
-  2. Add inline comments on valid diff lines.
-  3. Submit review with `REQUEST_CHANGES`.
-  4. Record review activity with empty commit (deskripsikan domain/modul yang di-review dan temuan utama di body commit):
-     ```bash
-     git commit --allow-empty -m "review(pr-#{{pr.number}}): request changes" -m "- Domain: <domain/modul yang direview>
+   1. Record review activity with empty commit (deskripsikan domain/modul yang di-review dan temuan utama di body commit):
+      ```bash
+      git commit --allow-empty -m "review(pr-#{{pr.number}}): request changes" -m "- Domain: <domain/modul yang direview>
 - Findings: <jumlah CRITICAL/HIGH/MEDIUM/LOW>
 - Blocker: <blocker utama jika ada>"
-     git push origin HEAD
-     ```
+      git push origin HEAD
+      ```
+   2. Create pending review:
+      ```bash
+      gh api repos/{{repository}}/pulls/{{pr.number}}/reviews -f body=""
+      ```
+   3. Add inline comments on valid diff lines.
+   4. Submit review with `REQUEST_CHANGES`.
 - If no finding and no active actionable thread:
   - Approve if not approved on current HEAD. After approve, record activity (deskripsikan domain/modul yang di-review di body commit):
     ```bash
