@@ -646,10 +646,19 @@ export class ReviewEngineService {
             const repoConfig = await this.config.getRepositoryConfig(pr.repository.nameWithOwner);
             const effectiveRepoConfig = this.getEffectiveRepoConfig(pr, repoConfig);
             if (!effectiveRepoConfig.autoMerge && !takeover.enabled) {
-              this.logger.log(
-                `PR #${pr.number} unchanged since last completed local review — skipping GitHub status checks.`,
-              );
-              return true;
+              const metric = await this.metricsRepository.findOne({
+                where: { reviewId: latestCompletedReview.id },
+              });
+              if (!metric || (metric.commentsGenerated ?? 0) === 0) {
+                this.logger.log(
+                  `PR #${pr.number} has local completed review with 0 comments — re-reviewing.`,
+                );
+              } else {
+                this.logger.log(
+                  `PR #${pr.number} unchanged since last completed local review — skipping GitHub status checks.`,
+                );
+                return true;
+              }
             }
           }
         }
