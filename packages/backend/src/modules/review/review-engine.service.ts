@@ -628,7 +628,6 @@ export class ReviewEngineService {
         if (
           localPr?.head_sha &&
           (pr.headSha ? localPr.head_sha === pr.headSha : true) &&
-          localPr.updatedAt.getTime() >= incomingUpdatedAt.getTime() &&
           localPr.mergeable_state !== 'dirty'
         ) {
           const latestCompletedReview = await this.reviewRepository.findOne({
