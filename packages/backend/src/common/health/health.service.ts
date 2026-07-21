@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import * as os from 'os';
 import { GithubApiService } from '../../modules/github/services/github-api.service.js';
@@ -9,6 +10,7 @@ export class HealthService {
   private readonly logger = new Logger(HealthService.name);
 
   constructor(
+    @InjectDataSource()
     private readonly dataSource: DataSource,
     private readonly githubApi: GithubApiService,
     private readonly githubCli: GithubCliService,
@@ -24,7 +26,7 @@ export class HealthService {
         memory: this.checkMemory(),
         github: await this.checkGitHub(),
       },
-      overall: 'healthy'
+      overall: 'healthy',
     };
 
     const serviceStatuses = Object.values(status.services).map((s: any) => s.status);
@@ -62,7 +64,7 @@ export class HealthService {
 
     return {
       status: usedPercent > 90 ? 'degraded' : 'healthy',
-      used_percent: usedPercent.toFixed(1)
+      used_percent: usedPercent.toFixed(1),
     };
   }
 
@@ -83,13 +85,13 @@ export class HealthService {
     }
 
     const core = data.resources?.core || {};
-    
+
     return {
       status: core.remaining < 10 ? 'degraded' : 'healthy',
       remaining: core.remaining,
       limit: core.limit,
       reset: core.reset ? new Date(core.reset * 1000).toISOString() : null,
-      source
+      source,
     };
   }
 }

@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
+import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { Review } from '../../database/entities/review.entity.js';
 import { ReviewMetrics } from '../../database/entities/review-metrics.entity.js';
@@ -25,35 +25,45 @@ export class MetricsService {
     private readonly devMetricsRepository: Repository<DeveloperMetrics>,
     @InjectRepository(SecurityFinding)
     private readonly securityRepository: Repository<SecurityFinding>,
+    @InjectDataSource()
     private readonly dataSource: DataSource,
   ) {}
 
   async calculatePRHealthScore(prNumber: number, repository: string) {
     const findings = await this.securityRepository.find({
-      where: { prNumber, repository }
+      where: { prNumber, repository },
     });
 
     const reviews = await this.reviewRepository.find({
       where: { prNumber, repository },
-      relations: ['comments']
+      relations: ['comments'],
     });
 
     const allComments = reviews.flatMap(r => r.comments);
 
     // Simplified test score for now - check if there are test-related comments
-    const hasTestFailures = allComments.some(c => c.category === 'testing' && c.severity === 'error');
+    const hasTestFailures = allComments.some(
+      c => c.category === 'testing' && c.severity === 'error',
+    );
 
     const scores = this.calculateScores(findings, allComments, hasTestFailures);
 
-    await this.prRepository.update({ number: prNumber, repository }, {
-      risk_score: 100 - scores.finalScore,
-      updatedAt: new Date()
-    });
+    await this.prRepository.update(
+      { number: prNumber, repository },
+      {
+        risk_score: 100 - scores.finalScore,
+        updatedAt: new Date(),
+      },
+    );
 
     return scores;
   }
 
-  private calculateScores(securityFindings: any[], reviewComments: any[], hasTestFailures: boolean) {
+  private calculateScores(
+    securityFindings: any[],
+    reviewComments: any[],
+    hasTestFailures: boolean,
+  ) {
     // 1. Security Score (0-100)
     let securityScore = 100;
     for (const f of securityFindings) {
@@ -75,13 +85,13 @@ export class MetricsService {
     const testScore = hasTestFailures ? 0 : 100;
 
     // Weighted Final Score: Security 40%, Review 30%, Tests 30%
-    const finalScore = Math.round((securityScore * 0.4) + (reviewScore * 0.3) + (testScore * 0.3));
+    const finalScore = Math.round(securityScore * 0.4 + reviewScore * 0.3 + testScore * 0.3);
 
     return {
       securityScore,
       reviewScore,
       testScore,
-      finalScore: Math.max(0, Math.min(100, finalScore))
+      finalScore: Math.max(0, Math.min(100, finalScore)),
     };
   }
 
@@ -91,7 +101,7 @@ export class MetricsService {
 
   calculateQualityScore(comments: any[]): number {
     if (comments.length === 0) return 100;
-    const score = 100 - (comments.length * 5);
+    const score = 100 - comments.length * 5;
     return Math.max(0, score);
   }
 
@@ -122,7 +132,7 @@ export class MetricsService {
     return {
       total_reviews: 10,
       approval_rate: 80,
-      avg_duration: 3600
+      avg_duration: 3600,
     };
   }
 
@@ -131,7 +141,7 @@ export class MetricsService {
     return {
       approval_rate: 75,
       avg_review_time: 4000,
-      ...metrics
+      ...metrics,
     };
   }
 }

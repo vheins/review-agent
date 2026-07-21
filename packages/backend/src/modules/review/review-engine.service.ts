@@ -1,5 +1,5 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
+import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { GitHubClientService, PullRequest } from '../github/github.service.js';
 import { RepositoryManagerService } from '../github/services/repository-manager.service.js';
@@ -51,6 +51,7 @@ export class ReviewEngineService {
     private readonly autoFix: AutoFixService,
     private readonly gateway: ReviewGateway,
     private readonly config: AppConfigService,
+    @InjectDataSource()
     private readonly dataSource: DataSource,
     private readonly securityScanner: SecurityScannerService,
     private readonly dependencyScanner: DependencyScannerService,

@@ -1,5 +1,14 @@
-import { Controller, Get, Post, Param, Query, Body, NotFoundException, ParseIntPipe } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
+import {
+  Controller,
+  Get,
+  Post,
+  Param,
+  Query,
+  Body,
+  NotFoundException,
+  ParseIntPipe,
+} from '@nestjs/common';
+import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { Review } from '../../database/entities/review.entity.js';
 import { Comment } from '../../database/entities/comment.entity.js';
@@ -20,6 +29,7 @@ export class ReviewController {
     private readonly ruleEngine: RuleEngineService,
     private readonly falsePositiveService: FalsePositiveService,
     private readonly github: GitHubClientService,
+    @InjectDataSource()
     private readonly dataSource: DataSource,
     @InjectRepository(Review)
     private readonly reviewRepository: Repository<Review>,
@@ -59,16 +69,19 @@ export class ReviewController {
   @Post()
   async create(@Body() createReviewDto: CreateReviewDto) {
     const sanitizedDto = sanitizeObject(createReviewDto);
-    
+
     // Find PR metadata
     const prs = await this.github.fetchOpenPRs();
-    const pr = prs.find(p => 
-      p.number === sanitizedDto.prNumber && 
-      p.repository.nameWithOwner === sanitizedDto.repository
+    const pr = prs.find(
+      p =>
+        p.number === sanitizedDto.prNumber &&
+        p.repository.nameWithOwner === sanitizedDto.repository,
     );
 
     if (!pr) {
-      throw new NotFoundException(`Pull Request #${sanitizedDto.prNumber} not found in ${sanitizedDto.repository}`);
+      throw new NotFoundException(
+        `Pull Request #${sanitizedDto.prNumber} not found in ${sanitizedDto.repository}`,
+      );
     }
 
     // Trigger review
@@ -127,7 +140,7 @@ export class ReviewController {
   @Get(':id/comments')
   async getComments(@Param('id') id: string) {
     return this.commentRepository.find({
-      where: { reviewId: id }
+      where: { reviewId: id },
     });
   }
 
@@ -155,7 +168,7 @@ export class ReviewController {
     @Param('repo') repo: string,
     @Param('number', ParseIntPipe) number: number,
     @Param('reviewId', ParseIntPipe) reviewId: number,
-    @Body() data: { event: string; body?: string }
+    @Body() data: { event: string; body?: string },
   ) {
     const repoName = repo.replace('-', '/');
     return this.github.submitReview(repoName, number, reviewId, data.event, data.body);
@@ -166,7 +179,7 @@ export class ReviewController {
     @Param('repo') repo: string,
     @Param('number', ParseIntPipe) number: number,
     @Param('reviewId', ParseIntPipe) reviewId: number,
-    @Body('message') message: string
+    @Body('message') message: string,
   ) {
     const repoName = repo.replace('-', '/');
     return this.github.dismissReview(repoName, number, reviewId, message);
