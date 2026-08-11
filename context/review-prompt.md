@@ -37,15 +37,15 @@ STATE `S1_LOAD_STANDARDS`
 
 STATE `S2_INVOKE_SKILLS`
 - MUST use skills relevant to the PR domain. MUST NOT invoke all skills.
-- Use skill `senior-code-review` for non-trivial PRs.
+- Use skill `code-review` for non-trivial PRs.
 - Use skill `deep-audit` if PR touches many files, large resource/controller/service, query, complex UI schema, or architecture pattern.
-- Use skill `root-cause-analysis` if there are old review comments, repeated fixes, bugs across files, or previous suggestions that did not close the root cause.
-- Use skill `race-condition-detection` if there is transaction, lock, model event, job, queue, concurrent update, shared/static state, cache mutation, or read-sum-write validator.
-- Use skill `data-corruption-investigation` if PR touches migration, derived score/status/count, delete/restore, upload replacement, financial/procurement/compliance data, or data-integrity invariant.
-- Use skill `security-triage` if PR touches auth, policy, permission, tenant/procurement scope, file upload, user-controlled payload, hidden/disabled/dehydrated form field, secret/env, or external callback.
-- Use skill `performance-bottleneck-analysis` if PR adds query, loop, dashboard/widget, eager/lazy loading, cache, aggregate, or report.
-- Use skill `regression-test-suite-design` if there is bug fix, security/data-integrity/concurrency finding, or root cause that appeared in previous review rounds.
-- Use skill `test-coverage-analysis` if PR changes logic without tests for related branch/error path/edge case.
+- Use skill `analysis-rca` if there are old review comments, repeated fixes, bugs across files, or previous suggestions that did not close the root cause.
+- Use skill `concurrency-async` if there is transaction, lock, model event, job, queue, concurrent update, shared/static state, cache mutation, or read-sum-write validator.
+- Use skill `data-type-errors` if PR touches migration, derived score/status/count, delete/restore, upload replacement, financial/procurement/compliance data, or data-integrity invariant.
+- Use skill `security-audit` if PR touches auth, policy, permission, tenant/procurement scope, file upload, user-controlled payload, hidden/disabled/dehydrated form field, secret/env, or external callback.
+- Use skill `performance-memory` if PR adds query, loop, dashboard/widget, eager/lazy loading, cache, aggregate, or report.
+- Use skill `test-planning` if there is bug fix, security/data-integrity/concurrency finding, or root cause that appeared in previous review rounds.
+- Use skill `test-quality` if PR changes logic without tests for related branch/error path/edge case.
 - Internal notes only: `SKILLS_USED`, `SKILL_GATES`, `SKILL_GAPS`.
 - MUST NOT write `SKILLS_USED` to GitHub unless needed as blocker context.
 - IF relevant skill is unavailable, continue and include exactly this in `MESSAGE`: `SKILL_CONTEXT: <skill-name> unavailable; review used prompt rules and verified codebase patterns.`
