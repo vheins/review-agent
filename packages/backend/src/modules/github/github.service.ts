@@ -284,8 +284,10 @@ export class GitHubClientService {
     const uniquePRs = Array.from(prMap.values());
 
     this.logger.log(`► Processing ${uniquePRs.length} unique PRs...`);
+    const includeOwners = appConfig.includeRepoOwners || [];
+    const excludeOwners = appConfig.excludeRepoOwners || [];
     this.logger.debug(
-      `[Sync] Filter criteria - Excluded owners: ${JSON.stringify(appConfig.excludeRepoOwners || [])}`,
+      `[Sync] Filter criteria - Included owners: ${JSON.stringify(includeOwners)}, Excluded owners: ${JSON.stringify(excludeOwners)}`,
     );
 
     const filteredPRs = uniquePRs.filter(pr => {
@@ -294,8 +296,13 @@ export class GitHubClientService {
         return false;
       }
       const owner = pr.repository.nameWithOwner.split('/')[0];
-      const isExcluded = (appConfig.excludeRepoOwners || []).includes(owner);
-      if (isExcluded) {
+      if (includeOwners.length > 0 && !includeOwners.includes(owner)) {
+        this.logger.debug(
+          `[Sync] Filtering out PR #${pr.number}: owner "${owner}" is not in the include list`,
+        );
+        return false;
+      }
+      if (excludeOwners.includes(owner)) {
         this.logger.debug(`[Sync] Filtering out PR #${pr.number}: owner "${owner}" is excluded`);
         return false;
       }

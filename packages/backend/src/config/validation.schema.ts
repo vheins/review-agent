@@ -28,6 +28,7 @@ export const validationSchema = Joi.object({
   AUTO_MERGE: Joi.boolean().default(false),
   PR_SCOPE: Joi.string().default('authored,assigned,review-requested,involves'),
   STALE_INVOLVES_REVIEW_DAYS: Joi.number().min(1).default(3),
+  INCLUDE_REPO_OWNERS: Joi.string().allow('').default(''),
   EXCLUDE_REPO_OWNERS: Joi.string().allow('').default(''),
 
   // Issue Sync

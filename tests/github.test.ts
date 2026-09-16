@@ -11,6 +11,7 @@ describe('GitHubClientService', () => {
 
   const mockAppConfig = {
     prScope: ['authored', 'assigned'],
+    includeRepoOwners: [],
     excludeRepoOwners: ['ignored-owner'],
     workspaceDir: './test-workspace',
     autoMerge: true,
@@ -47,7 +48,12 @@ describe('GitHubClientService', () => {
       execaVerbose: vi.fn().mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 }),
     };
 
-    service = new GitHubClientService(configService as any, appConfig as any, githubApi as any, githubCli as any);
+    service = new GitHubClientService(
+      configService as any,
+      appConfig as any,
+      githubApi as any,
+      githubCli as any,
+    );
   });
 
   describe('fetchOpenPRs', () => {
@@ -65,7 +71,7 @@ describe('GitHubClientService', () => {
           repository: { nameWithOwner: 'owner/repo' },
           author: { login: 'user' },
           labels: [],
-        }
+        },
       ]);
 
       const prs = await service.fetchOpenPRs();
@@ -103,7 +109,7 @@ describe('GitHubClientService', () => {
             repository: { nameWithOwner: 'owner/repo' },
             author: { login: 'user' },
             labels: [],
-          }
+          },
         ])
         .mockResolvedValueOnce([
           {
@@ -118,7 +124,7 @@ describe('GitHubClientService', () => {
             repository: { nameWithOwner: 'owner/repo' },
             author: { login: 'user' },
             labels: [],
-          }
+          },
         ]);
 
       const prs = await service.fetchOpenPRs();
@@ -149,7 +155,7 @@ describe('GitHubClientService', () => {
             createdAt: '2026-03-01T00:00:00Z',
             updatedAt: '2026-03-02T00:00:00Z',
             repository: { nameWithOwner: 'owner/repo' },
-          }
+          },
         ])
         .mockResolvedValueOnce([
           {
@@ -164,13 +170,75 @@ describe('GitHubClientService', () => {
             createdAt: '2026-03-01T00:00:00Z',
             updatedAt: '2026-03-02T00:00:00Z',
             repository: { nameWithOwner: 'owner/repo' },
-          }
+          },
         ]);
 
       const prs = await service.fetchOpenPRs();
 
       expect(prs).toHaveLength(1);
       expect(prs[0].matchedScopes).toEqual(['assigned', 'involves']);
+    });
+
+    it('should filter PRs using includeRepoOwners whitelist when specified', async () => {
+      appConfig.getAppConfig.mockReturnValue({
+        ...mockAppConfig,
+        includeRepoOwners: ['allowed-org'],
+        excludeRepoOwners: [],
+      });
+      githubCli.searchPRs.mockResolvedValue([
+        {
+          id: 'pr-1',
+          number: 1,
+          title: 'Allowed PR',
+          body: '',
+          state: 'open',
+          url: 'https://github.com/allowed-org/repo/pull/1',
+          repository: { nameWithOwner: 'allowed-org/repo' },
+          author: { login: 'user' },
+          labels: [],
+        },
+        {
+          id: 'pr-2',
+          number: 2,
+          title: 'Disallowed PR',
+          body: '',
+          state: 'open',
+          url: 'https://github.com/other-org/repo/pull/2',
+          repository: { nameWithOwner: 'other-org/repo' },
+          author: { login: 'user' },
+          labels: [],
+        },
+      ]);
+
+      const prs = await service.fetchOpenPRs();
+
+      expect(prs).toHaveLength(1);
+      expect(prs[0].repository.nameWithOwner).toBe('allowed-org/repo');
+    });
+
+    it('should filter out PRs in excludeRepoOwners even if in includeRepoOwners', async () => {
+      appConfig.getAppConfig.mockReturnValue({
+        ...mockAppConfig,
+        includeRepoOwners: ['test-org'],
+        excludeRepoOwners: ['test-org'],
+      });
+      githubCli.searchPRs.mockResolvedValue([
+        {
+          id: 'pr-1',
+          number: 1,
+          title: 'Excluded PR',
+          body: '',
+          state: 'open',
+          url: 'https://github.com/test-org/repo/pull/1',
+          repository: { nameWithOwner: 'test-org/repo' },
+          author: { login: 'user' },
+          labels: [],
+        },
+      ]);
+
+      const prs = await service.fetchOpenPRs();
+
+      expect(prs).toHaveLength(0);
     });
   });
 

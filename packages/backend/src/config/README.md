@@ -24,6 +24,7 @@ interface AppConfig {
   reviewInterval: number;
   logLevel: string;
   workspaceDir: string;
+  includeRepoOwners: string[];
   excludeRepoOwners: string[];
   prScope: string[];
   autoMerge: boolean;
@@ -36,6 +37,7 @@ interface AppConfig {
 - `REVIEW_INTERVAL` - Review interval in seconds (default: 600)
 - `LOG_LEVEL` - Logging level (error, warn, info, debug)
 - `WORKSPACE_DIR` - Directory for cloned repositories
+- `INCLUDE_REPO_OWNERS` - Comma-separated list of repo owners to include (whitelist; when set, only these owners are reviewed)
 - `EXCLUDE_REPO_OWNERS` - Comma-separated list of repo owners to exclude
 - `PR_SCOPE` - Comma-separated PR scope (authored, assigned, review-requested)
 - `AUTO_MERGE` - Enable auto-merge (true/false)

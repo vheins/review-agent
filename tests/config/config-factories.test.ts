@@ -7,11 +7,11 @@ import databaseConfig from '../../packages/backend/src/config/database.config.js
 
 /**
  * Configuration Factory Tests
- * 
+ *
  * Tests for configuration factory functions that load environment variables.
  * These tests verify that environment variables are correctly parsed and
  * default values are applied when variables are not set.
- * 
+ *
  * Requirements: 9.1, 9.2, 9.5
  */
 describe('Configuration Factories', () => {
@@ -78,7 +78,7 @@ describe('Configuration Factories', () => {
 
       const config = appConfig();
 
-      expect(config.prScope).toEqual(['authored', 'assigned', 'review-requested']);
+      expect(config.prScope).toEqual(['authored', 'assigned', 'review-requested', 'involves']);
     });
 
     it('should parse EXCLUDE_REPO_OWNERS as array', () => {
@@ -88,6 +88,23 @@ describe('Configuration Factories', () => {
 
       expect(Array.isArray(config.excludeRepoOwners)).toBe(true);
       expect(config.excludeRepoOwners).toEqual(['owner1', 'owner2', 'owner3']);
+    });
+
+    it('should parse INCLUDE_REPO_OWNERS as array', () => {
+      process.env.INCLUDE_REPO_OWNERS = 'org1,org2,org3';
+
+      const config = appConfig();
+
+      expect(Array.isArray(config.includeRepoOwners)).toBe(true);
+      expect(config.includeRepoOwners).toEqual(['org1', 'org2', 'org3']);
+    });
+
+    it('should return empty array for INCLUDE_REPO_OWNERS when not set', () => {
+      delete process.env.INCLUDE_REPO_OWNERS;
+
+      const config = appConfig();
+
+      expect(config.includeRepoOwners).toEqual([]);
     });
 
     it('should return empty array for EXCLUDE_REPO_OWNERS when not set', () => {
