@@ -8,6 +8,11 @@ import { KiroExecutor } from './executors/kiro.executor.js';
 import { ClaudeExecutor } from './executors/claude.executor.js';
 import { CodexExecutor } from './executors/codex.executor.js';
 import { OpenCodeExecutor } from './executors/opencode.executor.js';
+import {
+  buildOpenCodeRunArgs,
+  resolveOpenCodeVersion,
+  OpenCodeVersionRunner,
+} from './executors/opencode.util.js';
 import { CommentParserService } from '../../common/parser/comment-parser.service.js';
 
 /**
@@ -115,21 +120,21 @@ export class AiExecutorService {
       const anyExec = executor as any;
 
       switch (executor.name) {
-        case 'opencode':
-          return anyExec.execCli(
-            process.env.OPENCODE_BIN || 'opencode',
-            [
-              'run',
-              '--dir',
-              cwd,
-              '--thinking',
-              '--dangerously-skip-permissions',
-              '--variant',
-              process.env.OPENCODE_VARIANT || 'max',
-              prompt,
-            ],
-            { cwd, allowFail: true },
-          );
+        case 'opencode': {
+          const bin = process.env.OPENCODE_BIN || 'opencode';
+          const versionRunner: OpenCodeVersionRunner = (cmd, cliArgs) =>
+            anyExec.execCli(cmd, cliArgs, { allowFail: true });
+          const version = await resolveOpenCodeVersion(bin, versionRunner);
+          const args = buildOpenCodeRunArgs({
+            version,
+            repoDir: cwd,
+            model: process.env.OPENCODE_MODEL || 'auto',
+            agent: process.env.OPENCODE_AGENT || 'build',
+            variant: process.env.OPENCODE_VARIANT || 'max',
+            prompt,
+          });
+          return anyExec.execCli(bin, args, { cwd });
+        }
         case 'kiro':
           return anyExec.execCli('kiro-cli', ['chat', '--no-interactive', '--trust-all-tools'], {
             cwd,

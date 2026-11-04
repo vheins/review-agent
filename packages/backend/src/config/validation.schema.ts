@@ -81,6 +81,7 @@ export const validationSchema = Joi.object({
   OPENCODE_YOLO: Joi.boolean().default(true),
   OPENCODE_BIN: Joi.string().allow('').default('opencode'),
   OPENCODE_VARIANT: Joi.string().default('max'),
+  OPENCODE_VERSION: Joi.string().valid('auto', 'v1', 'v2').default('auto'),
 
   // Discord Bot
   DISCORD_BOT_ENABLED: Joi.boolean().default(false),

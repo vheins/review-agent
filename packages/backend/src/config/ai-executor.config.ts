@@ -2,10 +2,10 @@ import { registerAs } from '@nestjs/config';
 
 /**
  * AI Executor Configuration
- * 
+ *
  * Typed configuration for AI executor settings.
  * Supports multiple AI executors: Gemini, Copilot, Kiro, Claude, Codex, OpenCode.
- * 
+ *
  * Requirements: 9.1, 9.2, 9.5
  */
 export interface ExecutorSettings {
@@ -13,6 +13,9 @@ export interface ExecutorSettings {
   model: string;
   yolo: boolean;
   agent?: string;
+  bin?: string;
+  variant?: string;
+  version?: string;
 }
 
 export interface AiExecutorConfig {
@@ -25,39 +28,45 @@ export interface AiExecutorConfig {
   opencode: ExecutorSettings;
 }
 
-export default registerAs('aiExecutor', (): AiExecutorConfig => ({
-  executor: process.env.AI_EXECUTOR || 'gemini',
-  gemini: {
-    enabled: process.env.GEMINI_ENABLED === 'true',
-    model: process.env.GEMINI_MODEL || 'auto-3',
-    yolo: process.env.GEMINI_YOLO !== 'false',
-  },
-  copilot: {
-    enabled: process.env.COPILOT_ENABLED === 'true',
-    model: process.env.COPILOT_MODEL || 'claude-haiku-4.5',
-    yolo: process.env.COPILOT_YOLO !== 'false',
-  },
-  kiro: {
-    enabled: process.env.KIRO_ENABLED === 'true',
-    model: process.env.KIRO_AGENT || 'auto',
-    yolo: process.env.KIRO_YOLO !== 'false',
-    agent: process.env.KIRO_AGENT,
-  },
-  claude: {
-    enabled: process.env.CLAUDE_ENABLED === 'true',
-    model: process.env.CLAUDE_MODEL || 'sonnet',
-    yolo: process.env.CLAUDE_YOLO !== 'false',
-    agent: process.env.CLAUDE_AGENT,
-  },
-  codex: {
-    enabled: process.env.CODEX_ENABLED === 'true',
-    model: process.env.CODEX_MODEL || 'auto',
-    yolo: process.env.CODEX_YOLO !== 'false',
-  },
-  opencode: {
-    enabled: process.env.OPENCODE_ENABLED === 'true',
-    model: process.env.OPENCODE_MODEL || 'auto',
-    yolo: process.env.OPENCODE_YOLO !== 'false',
-    agent: process.env.OPENCODE_AGENT,
-  },
-}));
+export default registerAs(
+  'aiExecutor',
+  (): AiExecutorConfig => ({
+    executor: process.env.AI_EXECUTOR || 'gemini',
+    gemini: {
+      enabled: process.env.GEMINI_ENABLED === 'true',
+      model: process.env.GEMINI_MODEL || 'auto-3',
+      yolo: process.env.GEMINI_YOLO !== 'false',
+    },
+    copilot: {
+      enabled: process.env.COPILOT_ENABLED === 'true',
+      model: process.env.COPILOT_MODEL || 'claude-haiku-4.5',
+      yolo: process.env.COPILOT_YOLO !== 'false',
+    },
+    kiro: {
+      enabled: process.env.KIRO_ENABLED === 'true',
+      model: process.env.KIRO_AGENT || 'auto',
+      yolo: process.env.KIRO_YOLO !== 'false',
+      agent: process.env.KIRO_AGENT,
+    },
+    claude: {
+      enabled: process.env.CLAUDE_ENABLED === 'true',
+      model: process.env.CLAUDE_MODEL || 'sonnet',
+      yolo: process.env.CLAUDE_YOLO !== 'false',
+      agent: process.env.CLAUDE_AGENT,
+    },
+    codex: {
+      enabled: process.env.CODEX_ENABLED === 'true',
+      model: process.env.CODEX_MODEL || 'auto',
+      yolo: process.env.CODEX_YOLO !== 'false',
+    },
+    opencode: {
+      enabled: process.env.OPENCODE_ENABLED === 'true',
+      model: process.env.OPENCODE_MODEL || 'auto',
+      yolo: process.env.OPENCODE_YOLO !== 'false',
+      agent: process.env.OPENCODE_AGENT,
+      bin: process.env.OPENCODE_BIN || 'opencode',
+      variant: process.env.OPENCODE_VARIANT || 'max',
+      version: process.env.OPENCODE_VERSION || 'auto',
+    },
+  }),
+);

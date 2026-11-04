@@ -142,6 +142,11 @@ Available Codex models:
 - Set `AI_EXECUTOR=opencode` and `OPENCODE_ENABLED=true`
 - Choose model with `OPENCODE_MODEL`
 - Optional agent with `OPENCODE_AGENT`
+- CLI version compatibility via `OPENCODE_VERSION`:
+  - `auto` (default) - Detect version from the installed binary
+  - `v1` - OpenCode 1.x (`--dir`, `--variant`, `--dangerously-skip-permissions`)
+  - `v2` - OpenCode 2.x (cwd-based, `--auto`, `model#variant`)
+- Optional explicit binary path with `OPENCODE_BIN` (defaults to `opencode` on PATH)
 
 Available OpenCode models:
 - `auto` (default) - Auto-select model
